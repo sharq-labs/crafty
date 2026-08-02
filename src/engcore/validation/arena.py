@@ -64,7 +64,10 @@ def run_problem_algorithms(
             final_target=final_target,
         )
 
-        if algorithm == "stacked":
+        if algorithm in {
+            "stacked",
+            "adaptive_stacked",
+        }:
             kwargs.update(
                 mode=stacked_mode,
                 screen_device=screen_device,
@@ -208,7 +211,7 @@ def write_results(
     lines = []
     lines.append("=" * 116)
     lines.append(
-        "Engineering AI Core V0.3.2.6 — Optimizer Validation Lab"
+        "Engineering AI Core V0.3.3 — Optimizer Validation Lab"
     )
     lines.append("=" * 116)
     lines.append(

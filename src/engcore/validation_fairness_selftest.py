@@ -478,6 +478,7 @@ def test_algorithms_registry():
         "ngopt",
         "cmaes",
         "stacked",
+        "adaptive_stacked",
     }
     _require(
         set(ALGORITHMS) == expected,
