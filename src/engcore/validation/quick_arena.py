@@ -93,8 +93,11 @@ def main():
             * problem.dimension
         )
 
+        # Factory contract: func_factory(algorithm=None) -> (func, cleanup).
+        # Local problems are stateless, so the algorithm key is ignored.
         def factory(
-            func=problem.func
+            algorithm=None,
+            func=problem.func,
         ):
             return func, (lambda: None)
 

@@ -34,7 +34,7 @@ def main():
 
     print("=" * 92)
     print(
-        "Engineering AI Core V0.3.2.5 — Validation Environment Doctor"
+        "Engineering AI Core V0.3.2.6 — Validation Environment Doctor"
     )
     print("=" * 92)
     print(

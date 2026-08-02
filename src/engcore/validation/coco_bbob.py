@@ -11,6 +11,15 @@ from .arena import (
 )
 
 
+# cocoex 2.8.2 Observer lifecycle evidence (inspected on the installed wheel):
+#   - Observer.free exists and is callable on the public class surface
+#   - calling Observer.free() raises:
+#       AttributeError: 'Observer' object has no attribute '__dealloc__'
+#   - therefore V0.3.2.6 does NOT call Observer.free()
+#   - required finalization is problem.free() (+ suite.free())
+#   - after problem.free(), COCO .info/.dat logs are present and readable
+
+
 def _import_coco():
     try:
         import cocoex
@@ -60,7 +69,7 @@ def _resolve_bbob_final_target(problem):
     generated documentation but missing from the actual compiled Problem
     object.
 
-    V0.3.2.5 deliberately avoids private Cython/C access and does not attempt
+    V0.3.2.6 deliberately avoids private Cython/C access and does not attempt
     to reconstruct fopt. If the public property is unavailable, target-based
     assessment is delegated to official COCO Observer logs + cocopp.
     """
@@ -186,6 +195,77 @@ def _sanitize_observer_name(value):
     return value or "engcore_bbob"
 
 
+def prepare_coco_observer_parents(
+    requested_folder: str | Path,
+) -> Path:
+    """
+    Create parent directories needed before constructing a cocoex Observer.
+
+    cocoex 2.8.2 typically materializes results under:
+        ./exdata/<requested_folder>
+    and may append a uniqueness suffix (e.g. -0001) to the leaf name.
+
+    We create parents for both the requested path and the exdata-prefixed
+    path. The leaf directory itself is left for COCO so existing experiment
+    data is not overwritten.
+    """
+    requested = Path(
+        str(requested_folder).replace("\\", "/")
+    )
+    candidates = [
+        requested.parent,
+        Path("exdata") / requested.parent,
+    ]
+
+    for parent in candidates:
+        if str(parent) in {".", ""}:
+            continue
+        parent.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
+    return requested
+
+
+def create_bbob_observer(
+    cocoex,
+    *,
+    requested_folder: str | Path,
+    algorithm_name: str,
+    algorithm_info: str = (
+        "Engineering AI Core V0.3.2.6 arena"
+    ),
+):
+    """
+    Construct a bbob Observer after ensuring nested parents exist.
+
+    Returns (observer, actual_result_folder_str).
+    Does not call Observer.free(); see module-level lifecycle note.
+    """
+    requested = prepare_coco_observer_parents(
+        requested_folder
+    )
+    # COCO option strings use forward slashes on all platforms.
+    folder_opt = requested.as_posix()
+    options = (
+        f"result_folder: {folder_opt} "
+        f"algorithm_name: {algorithm_name} "
+        f'algorithm_info: "{algorithm_info}"'
+    )
+    observer = cocoex.Observer(
+        "bbob",
+        options,
+    )
+
+    try:
+        actual = str(observer.result_folder)
+    except Exception:
+        actual = folder_opt
+
+    return observer, actual
+
+
 def arena_main():
     p = argparse.ArgumentParser()
     p.add_argument(
@@ -292,27 +372,17 @@ def arena_main():
             folder = (
                 f"{base}/coco_logs/{algorithm}"
             )
-            options = (
-                f"result_folder: {folder} "
-                f"algorithm_name: {algorithm} "
-                f'algorithm_info: "Engineering AI Core V0.3.2.5 arena"'
-            )
-            observer = cocoex.Observer(
-                "bbob",
-                options,
+            observer, actual_folder = (
+                create_bbob_observer(
+                    cocoex,
+                    requested_folder=folder,
+                    algorithm_name=algorithm,
+                )
             )
             observers[algorithm] = observer
-
-            try:
-                observer_folders[
-                    algorithm
-                ] = str(
-                    observer.result_folder
-                )
-            except Exception:
-                observer_folders[
-                    algorithm
-                ] = folder
+            observer_folders[
+                algorithm
+            ] = actual_folder
 
     traces = []
     total = (
@@ -458,6 +528,10 @@ def arena_main():
             print("=" * 116)
 
     finally:
+        # Required finalization is problem.free()/suite.free() in each
+        # factory cleanup. Observer.free() is intentionally NOT called:
+        # on cocoex 2.8.2 it is publicly present but raises AttributeError
+        # when invoked. Dropping references lets the binding manage lifetime.
         observers.clear()
 
 

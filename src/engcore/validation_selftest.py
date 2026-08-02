@@ -83,7 +83,7 @@ def main():
         ) == 3
 
     print(
-        "V0.3.2.5 Validation Lab self-test: PASS"
+        "V0.3.2.6 Validation Lab self-test: PASS"
     )
     for r in rows:
         print(

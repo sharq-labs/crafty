@@ -28,7 +28,7 @@ def main():
 
     print("=" * 96)
     print(
-        "Engineering AI Core V0.3.2.5 — Warning Recovery Check"
+        "Engineering AI Core V0.3.2.6 — Warning Recovery Check"
     )
     print("=" * 96)
 

@@ -28,6 +28,17 @@ def run_problem_algorithms(
     screen_device="auto",
     stacked_refinement_backend="torch",
 ):
+    """
+    Run every requested algorithm on one problem.
+
+    Factory contract (V0.3.2.6):
+      func_factory(algorithm=None) -> (func, cleanup)
+
+    `algorithm` is the Validation Lab algorithm key (e.g. "ngopt").
+    Factories that ignore the algorithm name must still accept the argument.
+    Do not catch TypeError around the factory call: a TypeError raised inside
+    a factory is a real bug and must propagate.
+    """
     traces = []
 
     for algorithm in algorithms:
@@ -39,12 +50,9 @@ def run_problem_algorithms(
         # Each solver gets a NEW black-box function object. This is critical
         # for COCO where evaluation counters and observer state live on the
         # problem instance.
-        try:
-            func, cleanup = func_factory(
-                algorithm
-            )
-        except TypeError:
-            func, cleanup = func_factory()
+        func, cleanup = func_factory(
+            algorithm=algorithm
+        )
 
         kwargs = dict(
             problem_id=problem_id,
@@ -190,6 +198,7 @@ def write_results(
         algorithms.items(),
         key=lambda kv: (
             kv[1]["mean_rank"],
+            -kv[1]["win_share"],
             -kv[1][
                 "mean_target_fraction"
             ],
@@ -199,12 +208,16 @@ def write_results(
     lines = []
     lines.append("=" * 116)
     lines.append(
-        "Engineering AI Core V0.3.2.5 — Optimizer Validation Lab"
+        "Engineering AI Core V0.3.2.6 — Optimizer Validation Lab"
     )
     lines.append("=" * 116)
     lines.append(
         "Ranking is per-problem, then averaged. "
-        "Lower mean rank is better."
+        "Exact ties use average ranks. Lower mean rank is better."
+    )
+    lines.append(
+        "WinShare = fractional credit 1/N when N algorithms share the exact "
+        "best score. Wins = sole-best count only."
     )
     lines.append(
         "Target fraction = fraction of standard target deltas "
@@ -216,6 +229,7 @@ def write_results(
         f"{'Algorithm':20s} "
         f"{'Runs':>5s} "
         f"{'MeanRank':>9s} "
+        f"{'WinShare':>8s} "
         f"{'Wins':>5s} "
         f"{'TargetFrac':>10s} "
         f"{'FinalHit':>8s} "
@@ -230,6 +244,7 @@ def write_results(
             f"{name:20s} "
             f"{s['runs']:5d} "
             f"{s['mean_rank']:9.3f} "
+            f"{s['win_share']:8.3f} "
             f"{s['wins']:5d} "
             f"{_fmt_metric(s['mean_target_fraction'], 10)} "
             f"{_fmt_metric(s['final_target_hit_rate'], 8)} "

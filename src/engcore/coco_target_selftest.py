@@ -37,7 +37,7 @@ def main():
     assert source2 == "unavailable_use_cocopp"
 
     print(
-        "V0.3.2.5 COCO target compatibility self-test: PASS"
+        "V0.3.2.6 COCO target compatibility self-test: PASS"
     )
     print(
         f"working public target : {target:.12g}"

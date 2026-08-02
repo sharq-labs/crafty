@@ -80,14 +80,87 @@ def target_fraction(
     return hits / len(deltas)
 
 
+def comparison_score(trace: Trace) -> float:
+    """
+    Scalar used for per-problem ordering.
+
+    Prefer log10 target gap when a final target is available; otherwise use
+    raw best_f. Exact equality of this scalar defines ties (no tolerance).
+    """
+    gap = log10_target_gap(trace)
+    if gap is not None:
+        return float(gap)
+    return float(trace.best_f)
+
+
+def average_ranks_for_scores(
+    scores: list[float],
+) -> list[float]:
+    """
+    Competition average ranks for a minimization score list.
+
+    Example: scores [1.0, 1.0, 2.0] -> ranks [1.5, 1.5, 3.0]
+    Ties use exact equality only.
+    """
+    n = len(scores)
+    if n == 0:
+        return []
+
+    order = sorted(
+        range(n),
+        key=lambda i: scores[i],
+    )
+    ranks = [0.0] * n
+    i = 0
+
+    while i < n:
+        j = i + 1
+        while (
+            j < n
+            and scores[order[j]]
+            == scores[order[i]]
+        ):
+            j += 1
+
+        # 1-based positions i+1 .. j share the mean rank.
+        mean_rank = 0.5 * (
+            (i + 1) + j
+        )
+        for k in range(i, j):
+            ranks[order[k]] = float(
+                mean_rank
+            )
+        i = j
+
+    return ranks
+
+
 def summarize_traces(
     traces: list[Trace],
     deltas=DEFAULT_TARGET_DELTAS,
 ):
+    """
+    Aggregate Validation Lab metrics.
+
+    Ranking is always computed per problem_id first, then averaged.
+
+    Win policy (V0.3.2.6):
+      - win_share: if N algorithms share the exact best score on a problem,
+        each receives fractional credit 1/N. This is the scientifically
+        meaningful win metric and is never algorithm-order dependent.
+      - wins / unique_wins: integer count of problems where one algorithm is
+        the sole best (exact unique minimum). Preserved for backward-
+        compatible integer reporting.
+    """
     if not traces:
         return {
             "algorithms": {},
             "per_problem_ranks": [],
+            "ranking_policy": {
+                "ranks": "average_ranks_exact_ties",
+                "win_share": "fractional_1_over_N_at_best",
+                "unique_wins": "sole_best_only",
+            },
         }
 
     by_problem = defaultdict(list)
@@ -95,32 +168,43 @@ def summarize_traces(
         by_problem[t.problem_id].append(t)
 
     ranks = []
-    wins = defaultdict(int)
+    unique_wins = defaultdict(int)
+    win_share = defaultdict(float)
 
     for problem_id, rows in by_problem.items():
-        sorted_rows = sorted(
-            rows,
-            key=lambda t: (
-                log10_target_gap(t)
-                if log10_target_gap(t)
-                is not None
-                else float(t.best_f)
-            ),
+        scores = [
+            comparison_score(t)
+            for t in rows
+        ]
+        avg_ranks = average_ranks_for_scores(
+            scores
         )
 
-        for rank, t in enumerate(
-            sorted_rows,
-            start=1,
+        for t, rank in zip(
+            rows,
+            avg_ranks,
         ):
             ranks.append({
                 "problem_id": problem_id,
                 "algorithm": t.algorithm,
-                "rank": rank,
+                "rank": float(rank),
+                "score": float(
+                    comparison_score(t)
+                ),
             })
 
-        if sorted_rows:
-            wins[
-                sorted_rows[0].algorithm
+        best = min(scores)
+        tied = [
+            t for t, s in zip(rows, scores)
+            if s == best
+        ]
+        share = 1.0 / len(tied)
+        for t in tied:
+            win_share[t.algorithm] += share
+
+        if len(tied) == 1:
+            unique_wins[
+                tied[0].algorithm
             ] += 1
 
     by_algorithm = defaultdict(list)
@@ -179,8 +263,13 @@ def summarize_traces(
                 float(np.median(row_ranks))
                 if row_ranks
                 else float("nan"),
+            # Backward-compatible integer: sole-best wins only.
             "wins":
-                int(wins[algorithm]),
+                int(unique_wins[algorithm]),
+            "unique_wins":
+                int(unique_wins[algorithm]),
+            "win_share":
+                float(win_share[algorithm]),
             "final_target_hit_rate":
                 float(hit_rate),
             "mean_target_fraction":
@@ -204,4 +293,9 @@ def summarize_traces(
     return {
         "algorithms": result,
         "per_problem_ranks": ranks,
+        "ranking_policy": {
+            "ranks": "average_ranks_exact_ties",
+            "win_share": "fractional_1_over_N_at_best",
+            "unique_wins": "sole_best_only",
+        },
     }

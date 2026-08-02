@@ -8,6 +8,20 @@ import numpy as np
 from .problem import ObjectiveRecorder, Trace
 
 
+def assert_exact_budget(recorder: ObjectiveRecorder, algorithm: str) -> None:
+    """
+    Central post-run invariant for every Validation Lab adapter.
+
+    Initialization evaluations count toward the budget. Adapters must not
+    silently under- or over-consume objective calls.
+    """
+    if recorder.evaluations != recorder.budget:
+        raise RuntimeError(
+            f"{algorithm} budget mismatch: "
+            f"{recorder.evaluations} != {recorder.budget}"
+        )
+
+
 def _trace(
     name,
     problem_id,
@@ -17,6 +31,8 @@ def _trace(
     wall_s,
     metadata=None,
 ):
+    assert_exact_budget(recorder, name)
+
     final_target = (
         None
         if final_target is None
@@ -602,13 +618,6 @@ def run_stacked(
     )
 
     wall = time.perf_counter() - t0
-
-    # Engine must consume exactly the objective budget.
-    if rec.evaluations != rec.budget:
-        raise RuntimeError(
-            "Stacked engine budget mismatch: "
-            f"{rec.evaluations} != {rec.budget}"
-        )
 
     return _trace(
         "stacked_v0301",
