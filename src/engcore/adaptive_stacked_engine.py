@@ -1,9 +1,19 @@
 """
 Adaptive Stacked GP-BO engine — V0.3.3 / adaptive_stacked_v033
 
-Extends StackedGPBOEngine without modifying stacked_v0301 semantics.
-Adds online diagnostics, a minimal adaptive knob policy, and a budget-safe
-rescue candidate source (acquisition-scored only).
+Architecture:
+  observations
+     → baseline model fit (stacked_v0301 schedule; no adaptive forced refit)
+     → diagnostics / proposer policy
+     → identity_proposal  (baseline search knobs on current observations)
+     → adaptive_proposal  (optional; same models, adapted search knobs)
+     → robust arbiter
+     → ONE objective evaluation of the chosen proposal
+
+identity_proposal means:
+  What stacked_v0301 search logic would propose from the CURRENT
+  adaptive-run observations using baseline search settings.
+  It is NOT a full stacked counterfactual trajectory after prior deviations.
 """
 
 from __future__ import annotations
@@ -15,6 +25,11 @@ import numpy as np
 from .adaptive_policy import (
     AdaptivePolicyController,
     apply_decision_to_knobs,
+    identity_knobs,
+)
+from .candidate_arbiter import (
+    ProposalView,
+    arbitrate_proposals,
 )
 from .landscape_diagnostics import (
     compute_landscape_diagnostics,
@@ -25,12 +40,6 @@ from .stacked_engine import StackedGPBOEngine
 
 
 class AdaptiveStackedGPBOEngine(StackedGPBOEngine):
-    """
-    Observation -> diagnostics -> stateful policy -> candidate allocation -> evaluate.
-
-    Baseline-by-default: with weak/early evidence, search knobs match stacked_v0301.
-    """
-
     ENGINE_ID = "adaptive_stacked_v033"
 
     def __init__(
@@ -49,19 +58,20 @@ class AdaptiveStackedGPBOEngine(StackedGPBOEngine):
             screen_device=screen_device,
             **kwargs,
         )
-        self.record_diagnostics = bool(
-            record_diagnostics
-        )
+        self.record_diagnostics = bool(record_diagnostics)
         self.diagnostic_history = []
         self.policy_history = []
+        self.arbiter_history = []
         self.policy_controller = AdaptivePolicyController()
         self.fit_diagnostics.update({
-            "adaptive_rescue_triggers": 0,
-            "adaptive_rescue_selected": 0,
-            "adaptive_exploration_mix_uses": 0,
             "adaptive_policy_updates": 0,
-            "adaptive_forced_refits": 0,
-            "adaptive_search_realloc_steps": 0,
+            "adaptive_proposals_generated": 0,
+            "adaptive_proposals_accepted": 0,
+            "adaptive_proposals_rejected": 0,
+            "adaptive_rescue_proposals": 0,
+            "adaptive_rescue_accepted": 0,
+            "adaptive_forced_refits": 0,  # always 0 in V0.3.3
+            "identity_proposals": 0,
         })
 
     def _scores_array(self):
@@ -73,15 +83,12 @@ class AdaptiveStackedGPBOEngine(StackedGPBOEngine):
     def _incumbent_x01(self):
         if not self.history:
             return np.full(
-                self.space.dim,
-                0.5,
-                dtype=np.float64,
+                self.space.dim, 0.5, dtype=np.float64
             )
         scores = self._scores_array()
         idx = int(np.argmax(scores))
         return np.asarray(
-            self.x01_history[idx],
-            dtype=np.float64,
+            self.x01_history[idx], dtype=np.float64
         ).copy()
 
     def _build_rescue_candidates(
@@ -92,18 +99,11 @@ class AdaptiveStackedGPBOEngine(StackedGPBOEngine):
         seed: int,
         sigma: float = 0.12,
     ):
-        """
-        Generic rescue sources (no objective calls):
-        - fresh space-filling Sobol
-        - incumbent-centered Gaussian perturbations clipped to [0,1]
-        """
         parts = []
         if n_global > 0:
             parts.append(
                 sobol_points(
-                    int(n_global),
-                    self.space.dim,
-                    int(seed),
+                    int(n_global), self.space.dim, int(seed)
                 )
             )
         if n_local > 0:
@@ -114,60 +114,30 @@ class AdaptiveStackedGPBOEngine(StackedGPBOEngine):
             )
             parts.append(np.clip(local, 0.0, 1.0))
         if not parts:
-            return np.zeros(
-                (0, self.space.dim),
-                dtype=np.float64,
-            )
+            return np.zeros((0, self.space.dim), dtype=np.float64)
         return np.vstack(parts)
 
     def _mix_exploration_starts(
-        self,
-        starts,
-        start_scores,
-        *,
-        mix: float,
-        seed: int,
+        self, starts, start_scores, *, mix: float, seed: int
     ):
-        """Replace a fraction of non-best starts with diverse Sobol points."""
         starts = np.asarray(starts, dtype=np.float64)
-        start_scores = np.asarray(
-            start_scores,
-            dtype=np.float64,
-        )
+        start_scores = np.asarray(start_scores, dtype=np.float64)
         if len(starts) <= 1 or mix <= 0.0:
             return starts, start_scores
-
-        n_replace = int(
-            round(mix * (len(starts) - 1))
-        )
-        n_replace = max(
-            0,
-            min(n_replace, len(starts) - 1),
-        )
+        n_replace = int(round(mix * (len(starts) - 1)))
+        n_replace = max(0, min(n_replace, len(starts) - 1))
         if n_replace == 0:
             return starts, start_scores
-
-        self.fit_diagnostics[
-            "adaptive_exploration_mix_uses"
-        ] += 1
-
         explorers = sobol_points(
-            n_replace,
-            self.space.dim,
-            int(seed),
+            n_replace, self.space.dim, int(seed)
         )
         out_x = starts.copy()
         out_s = start_scores.copy()
-        # Keep best start; replace from the end.
         out_x[-n_replace:] = explorers
         out_s[-n_replace:] = -np.inf
         return out_x, out_s
 
-    def _best_rescue_by_acquisition(
-        self,
-        cpu_acq,
-        candidates,
-    ):
+    def _best_rescue_by_acquisition(self, cpu_acq, candidates):
         best = None
         for x in candidates:
             x = np.asarray(x, dtype=np.float64).reshape(-1)
@@ -183,6 +153,168 @@ class AdaptiveStackedGPBOEngine(StackedGPBOEngine):
                     acquisition_value=float(value),
                 )
         return best
+
+    def _torch_rng_snapshot(self):
+        torch = self.torch
+        snap = {"cpu": torch.random.get_rng_state()}
+        if torch.cuda.is_available():
+            try:
+                snap["cuda"] = torch.cuda.get_rng_state_all()
+            except Exception:
+                snap["cuda"] = None
+        else:
+            snap["cuda"] = None
+        return snap
+
+    def _torch_rng_restore(self, snap):
+        torch = self.torch
+        torch.random.set_rng_state(snap["cpu"])
+        if snap.get("cuda") is not None:
+            try:
+                torch.cuda.set_rng_state_all(snap["cuda"])
+            except Exception:
+                pass
+
+    def _score_proposal_views(
+        self, x01, *, mixture_acq, rbf_acq, mat_acq
+    ):
+        return {
+            "mixture_acq": float(
+                self._acq_value_cpu(mixture_acq, x01)
+            ),
+            "rbf_acq": float(self._acq_value_cpu(rbf_acq, x01)),
+            "matern_acq": float(
+                self._acq_value_cpu(mat_acq, x01)
+            ),
+        }
+
+    def _generate_search_proposal(
+        self,
+        *,
+        knobs: dict,
+        screen_acq,
+        cpu_acq,
+        rbf_acq,
+        mat_acq,
+        step: int,
+        top_k: int,
+        screen_chunk_size: int,
+        refinement_timeout_sec: float,
+        pulse: bool,
+        severe_pulse: bool,
+        tag: str,
+        enable_rescue: bool,
+    ) -> ProposalView:
+        if severe_pulse:
+            active_pool = int(knobs["severe_screen_pool"])
+        elif pulse:
+            active_pool = int(knobs["pulse_screen_pool"])
+        else:
+            active_pool = int(knobs["screen_pool"])
+
+        pool = sobol_points(
+            active_pool,
+            self.space.dim,
+            self.seed + 100_000 + step,
+        )
+        scores = self._score_global_pool(
+            acq=screen_acq,
+            pool=pool,
+            chunk_size=int(screen_chunk_size),
+        )
+        starts, start_scores = self._select_informed_starts(
+            pool=pool,
+            scores=scores,
+            top_k=int(top_k),
+            diversity_radius=float(knobs["diversity_radius"]),
+        )
+        starts, start_scores = self._mix_exploration_starts(
+            starts,
+            start_scores,
+            mix=float(knobs["exploration_mix"]),
+            seed=self.seed + 700_000 + step,
+        )
+
+        discrete = CandidateSource(
+            name=f"{tag}_discrete",
+            x01=starts[0].copy(),
+            acquisition_value=float(start_scores[0]),
+        )
+        discrete.acquisition_value = self._acq_value_cpu(
+            cpu_acq, discrete.x01
+        )
+
+        refine_count = min(
+            int(knobs["refinement_top_k"]), len(starts)
+        )
+        refined = self._refine_informed_starts(
+            cpu_acq=cpu_acq,
+            starts=starts[:refine_count],
+            maxiter=int(knobs["refinement_maxiter"]),
+            timeout_sec=float(refinement_timeout_sec),
+            seed=self.seed + 900_000 + step,
+        )
+
+        chosen = discrete
+        source = discrete.name
+        is_rescue = False
+        if refined is not None:
+            refined.acquisition_value = self._acq_value_cpu(
+                cpu_acq, refined.x01
+            )
+            if (
+                not self._is_duplicate(refined.x01)
+                and refined.acquisition_value
+                > discrete.acquisition_value + 1e-12
+            ):
+                chosen = refined
+                source = f"{tag}_refined"
+
+        if enable_rescue:
+            self.fit_diagnostics["adaptive_rescue_proposals"] += 1
+            rescue_X = self._build_rescue_candidates(
+                n_global=max(32, 8 * self.space.dim),
+                n_local=max(16, 4 * self.space.dim),
+                seed=self.seed + 300_000 + step,
+            )
+            rescue = self._best_rescue_by_acquisition(
+                cpu_acq, rescue_X
+            )
+            if (
+                rescue is not None
+                and rescue.acquisition_value
+                > chosen.acquisition_value + 1e-12
+            ):
+                chosen = rescue
+                source = "adaptive_rescue"
+                is_rescue = True
+
+        if self._is_duplicate(chosen.x01):
+            for x, value in zip(starts[1:], start_scores[1:]):
+                if not self._is_duplicate(x):
+                    chosen = CandidateSource(
+                        name=f"{tag}_dup_recovery",
+                        x01=x.copy(),
+                        acquisition_value=float(value),
+                    )
+                    source = chosen.name
+                    is_rescue = False
+                    break
+
+        acq_scores = self._score_proposal_views(
+            chosen.x01,
+            mixture_acq=cpu_acq,
+            rbf_acq=rbf_acq,
+            mat_acq=mat_acq,
+        )
+        return ProposalView(
+            x01=np.asarray(chosen.x01, dtype=np.float64).copy(),
+            source=str(source),
+            mixture_acq=acq_scores["mixture_acq"],
+            rbf_acq=acq_scores["rbf_acq"],
+            matern_acq=acq_scores["matern_acq"],
+            is_rescue=bool(is_rescue),
+        )
 
     def run(
         self,
@@ -209,12 +341,11 @@ class AdaptiveStackedGPBOEngine(StackedGPBOEngine):
 
         self.diagnostic_history = []
         self.policy_history = []
+        self.arbiter_history = []
         self.policy_controller.reset()
 
         initial = sobol_points(
-            int(initial_trials),
-            self.space.dim,
-            self.seed,
+            int(initial_trials), self.space.dim, self.seed
         )
         for p in initial:
             self._evaluate01(p)
@@ -225,7 +356,7 @@ class AdaptiveStackedGPBOEngine(StackedGPBOEngine):
         stagnation = 0
         severe_used = False
 
-        base_knobs = dict(
+        base_knob_args = dict(
             screen_pool=int(screen_pool),
             pulse_screen_pool=int(pulse_screen_pool),
             severe_screen_pool=int(severe_screen_pool),
@@ -242,9 +373,7 @@ class AdaptiveStackedGPBOEngine(StackedGPBOEngine):
                 x01_history=self.x01_history,
                 scores=self._scores_array(),
                 best_score=float(best),
-                evaluations_since_improve=int(
-                    stagnation
-                ),
+                evaluations_since_improve=int(stagnation),
                 total_budget=total_budget,
                 dimension=self.space.dim,
                 weight_rbf=self.stacking_weight_rbf,
@@ -252,69 +381,36 @@ class AdaptiveStackedGPBOEngine(StackedGPBOEngine):
             )
             decision = self.policy_controller.update(
                 diagnostics,
-                base_stagnation_trigger=int(
-                    stagnation_trigger
-                ),
+                base_stagnation_trigger=int(stagnation_trigger),
                 step=step,
             )
-            knobs = apply_decision_to_knobs(
-                decision,
-                **base_knobs,
+            adapt_knobs = apply_decision_to_knobs(
+                decision, **base_knob_args
             )
-            self.fit_diagnostics[
-                "adaptive_policy_updates"
-            ] += 1
-            if knobs["enable_search_realloc"]:
-                self.fit_diagnostics[
-                    "adaptive_search_realloc_steps"
-                ] += 1
+            id_knobs = identity_knobs(**base_knob_args)
+            self.fit_diagnostics["adaptive_policy_updates"] += 1
 
             if record_diagnostics:
                 self.diagnostic_history.append({
                     "step": step,
-                    "evaluation": int(
-                        len(self.history)
-                    ),
+                    "evaluation": int(len(self.history)),
                     **diagnostics.as_dict(),
                 })
                 self.policy_history.append({
                     "step": step,
-                    "evaluation": int(
-                        len(self.history)
-                    ),
-                    "intervention_start_step": int(
-                        self.policy_controller.intervention_start_step
-                    ),
+                    "evaluation": int(len(self.history)),
                     **decision.as_dict(),
-                    **{
-                        k: knobs[k]
-                        for k in (
-                            "screen_pool",
-                            "diversity_radius",
-                            "refinement_top_k",
-                            "refinement_maxiter",
-                            "exploration_mix",
-                            "enable_search_realloc",
-                            "force_model_refit",
-                            "enable_rescue_inject",
-                            "reason",
-                        )
-                    },
                 })
 
+            # ---- stacked_v0301 refit schedule (no adaptive forced refit)
             pulse = (
-                stagnation
-                >= int(stagnation_trigger)
-                and (
-                    stagnation
-                    - int(stagnation_trigger)
-                )
+                stagnation >= int(stagnation_trigger)
+                and (stagnation - int(stagnation_trigger))
                 % max(1, int(pulse_interval))
                 == 0
             )
             severe_pulse = (
-                stagnation
-                >= int(severe_stagnation_trigger)
+                stagnation >= int(severe_stagnation_trigger)
                 and not severe_used
             )
             if severe_pulse:
@@ -323,37 +419,33 @@ class AdaptiveStackedGPBOEngine(StackedGPBOEngine):
                     "severe_stagnation_pulses"
                 ] += 1
             if pulse or severe_pulse:
-                self.fit_diagnostics[
-                    "stagnation_pulses"
-                ] += 1
+                self.fit_diagnostics["stagnation_pulses"] += 1
 
-            # Forced refit is independent of rescue candidate injection.
             optimize_models = (
                 step == 0
                 or int(refit_interval) <= 1
                 or step % int(refit_interval) == 0
                 or pulse
                 or severe_pulse
-                or knobs["force_model_refit"]
             )
-            if knobs["force_model_refit"] and optimize_models:
-                self.fit_diagnostics[
-                    "adaptive_forced_refits"
-                ] += 1
 
             rbf_cpu, mat_cpu = self._fit_pair(
                 optimize=optimize_models
             )
             if optimize_models:
-                self._update_stacking_weight(
-                    rbf_cpu,
-                    mat_cpu,
-                )
+                self._update_stacking_weight(rbf_cpu, mat_cpu)
 
+            # Member + mixture acquisitions on the same fitted models.
+            rbf_acq, rbf_mode = self._build_acquisition(rbf_cpu)
+            mat_acq, mat_mode = self._build_acquisition(mat_cpu)
+            if rbf_mode != mat_mode:
+                raise RuntimeError(
+                    "Member acquisition modes disagree: "
+                    f"{rbf_mode} vs {mat_mode}"
+                )
             cpu_acq, acquisition_mode = (
                 self._build_stacked_acquisition(
-                    rbf_cpu,
-                    mat_cpu,
+                    rbf_cpu, mat_cpu
                 )
             )
 
@@ -362,196 +454,158 @@ class AdaptiveStackedGPBOEngine(StackedGPBOEngine):
             else:
                 t0 = time.perf_counter()
                 rbf_screen = self._clone_member_to_screen(
-                    rbf_cpu,
-                    "rbf",
+                    rbf_cpu, "rbf"
                 )
                 mat_screen = self._clone_member_to_screen(
-                    mat_cpu,
-                    "matern25",
+                    mat_cpu, "matern25"
                 )
                 self.torch.cuda.synchronize()
                 self.timings[
                     "screen_model_build_s"
                 ] += time.perf_counter() - t0
-                screen_acq, _ = (
-                    self._build_stacked_acquisition(
-                        rbf_screen,
-                        mat_screen,
-                    )
+                screen_acq, _ = self._build_stacked_acquisition(
+                    rbf_screen, mat_screen
                 )
 
-            if severe_pulse:
-                active_pool = int(
-                    knobs["severe_screen_pool"]
-                )
-            elif pulse:
-                active_pool = int(
-                    knobs["pulse_screen_pool"]
-                )
-            else:
-                active_pool = int(
-                    knobs["screen_pool"]
-                )
-
-            t0 = time.perf_counter()
-            pool = sobol_points(
-                active_pool,
-                self.space.dim,
-                self.seed + 100_000 + step,
-            )
-            self.timings[
-                "screen_pool_generation_s"
-            ] += time.perf_counter() - t0
-
-            scores = self._score_global_pool(
-                acq=screen_acq,
-                pool=pool,
-                chunk_size=int(screen_chunk_size),
-            )
-
-            t0 = time.perf_counter()
-            starts, start_scores = (
-                self._select_informed_starts(
-                    pool=pool,
-                    scores=scores,
-                    top_k=int(top_k),
-                    diversity_radius=float(
-                        knobs["diversity_radius"]
-                    ),
-                )
-            )
-            self.timings[
-                "topk_selection_s"
-            ] += time.perf_counter() - t0
-
-            starts, start_scores = (
-                self._mix_exploration_starts(
-                    starts,
-                    start_scores,
-                    mix=float(
-                        knobs["exploration_mix"]
-                    ),
-                    seed=self.seed + 700_000 + step,
-                )
-            )
-
-            discrete = CandidateSource(
-                name="adaptive_discrete",
-                x01=starts[0].copy(),
-                acquisition_value=float(
-                    start_scores[0]
-                ),
-            )
-            discrete.acquisition_value = (
-                self._acq_value_cpu(
-                    cpu_acq,
-                    discrete.x01,
-                )
-            )
-
-            refine_count = min(
-                int(knobs["refinement_top_k"]),
-                len(starts),
-            )
-            refined = self._refine_informed_starts(
+            # A) identity_proposal — baseline knobs, current observations
+            identity = self._generate_search_proposal(
+                knobs=id_knobs,
+                screen_acq=screen_acq,
                 cpu_acq=cpu_acq,
-                starts=starts[:refine_count],
-                maxiter=int(
-                    knobs["refinement_maxiter"]
-                ),
-                timeout_sec=float(
+                rbf_acq=rbf_acq,
+                mat_acq=mat_acq,
+                step=step,
+                top_k=int(top_k),
+                screen_chunk_size=int(screen_chunk_size),
+                refinement_timeout_sec=float(
                     refinement_timeout_sec
                 ),
-                seed=self.seed + 900_000 + step,
+                pulse=pulse,
+                severe_pulse=severe_pulse,
+                tag="identity",
+                enable_rescue=False,
+            )
+            self.fit_diagnostics["identity_proposals"] += 1
+
+            # B) adaptive_proposal — same models; isolated torch RNG so
+            # rejected adaptive proposals cannot perturb identity path RNG.
+            adaptive = None
+            if decision.enable_adaptive_proposal:
+                rng_snap = self._torch_rng_snapshot()
+                adaptive = self._generate_search_proposal(
+                    knobs=adapt_knobs,
+                    screen_acq=screen_acq,
+                    cpu_acq=cpu_acq,
+                    rbf_acq=rbf_acq,
+                    mat_acq=mat_acq,
+                    step=step,
+                    top_k=int(top_k),
+                    screen_chunk_size=int(screen_chunk_size),
+                    refinement_timeout_sec=float(
+                        refinement_timeout_sec
+                    ),
+                    pulse=pulse,
+                    severe_pulse=severe_pulse,
+                    tag="adaptive",
+                    enable_rescue=bool(
+                        decision.enable_rescue_proposal
+                    ),
+                )
+                self._torch_rng_restore(rng_snap)
+                self.fit_diagnostics[
+                    "adaptive_proposals_generated"
+                ] += 1
+
+            chosen_view, arb = arbitrate_proposals(
+                identity,
+                adaptive,
+                adaptive_enabled=bool(
+                    decision.enable_adaptive_proposal
+                ),
+            )
+            if arb.choose_adaptive:
+                self.fit_diagnostics[
+                    "adaptive_proposals_accepted"
+                ] += 1
+                if chosen_view.is_rescue:
+                    self.fit_diagnostics[
+                        "adaptive_rescue_accepted"
+                    ] += 1
+            elif adaptive is not None:
+                self.fit_diagnostics[
+                    "adaptive_proposals_rejected"
+                ] += 1
+
+            if record_diagnostics:
+                self.arbiter_history.append({
+                    "step": step,
+                    "evaluation": int(len(self.history)),
+                    "identity_x01": identity.x01.tolist(),
+                    "adaptive_x01": (
+                        None
+                        if adaptive is None
+                        else adaptive.x01.tolist()
+                    ),
+                    "executed_x01": chosen_view.x01.tolist(),
+                    "identity_source": identity.source,
+                    "adaptive_source": (
+                        None
+                        if adaptive is None
+                        else adaptive.source
+                    ),
+                    "executed_source": chosen_view.source,
+                    "arbiter_decision": arb.choose_adaptive,
+                    "arbiter_reason": arb.reason,
+                    "identity_mixture_acq": identity.mixture_acq,
+                    "adaptive_mixture_acq": (
+                        None
+                        if adaptive is None
+                        else adaptive.mixture_acq
+                    ),
+                    "identity_rbf_acq": identity.rbf_acq,
+                    "adaptive_rbf_acq": (
+                        None
+                        if adaptive is None
+                        else adaptive.rbf_acq
+                    ),
+                    "identity_matern_acq": identity.matern_acq,
+                    "adaptive_matern_acq": (
+                        None
+                        if adaptive is None
+                        else adaptive.matern_acq
+                    ),
+                    "component_disagreement": (
+                        arb.component_disagreement
+                    ),
+                    "evidence_score": float(
+                        decision.evidence_score
+                    ),
+                    "consecutive_evidence": int(
+                        decision.consecutive_evidence
+                    ),
+                    "adaptation_enabled": bool(
+                        decision.enable_adaptive_proposal
+                    ),
+                    "rescue_proposal_enabled": bool(
+                        decision.enable_rescue_proposal
+                    ),
+                    "proposal_level": decision.proposal_level,
+                })
+
+            # Duplicate recovery using identity starts if needed is already
+            # handled inside proposal generation; execute chosen once.
+            chosen = CandidateSource(
+                name=chosen_view.source,
+                x01=chosen_view.x01.copy(),
+                acquisition_value=float(
+                    chosen_view.mixture_acq
+                ),
             )
 
-            chosen = discrete
-            if refined is not None:
-                refined.acquisition_value = (
-                    self._acq_value_cpu(
-                        cpu_acq,
-                        refined.x01,
-                    )
-                )
-                if (
-                    not self._is_duplicate(
-                        refined.x01
-                    )
-                    and refined.acquisition_value
-                    > discrete.acquisition_value
-                    + 1e-12
-                ):
-                    refined.name = "adaptive_refined"
-                    chosen = refined
-                    self.fit_diagnostics[
-                        "refinement_selected"
-                    ] += 1
-                else:
-                    self.fit_diagnostics[
-                        "discrete_selected"
-                    ] += 1
+            if "refined" in chosen.name:
+                self.fit_diagnostics["refinement_selected"] += 1
             else:
-                self.fit_diagnostics[
-                    "discrete_selected"
-                ] += 1
-
-            # C) Rescue candidate injection — strongest intervention only.
-            if knobs["enable_rescue_inject"]:
-                self.fit_diagnostics[
-                    "adaptive_rescue_triggers"
-                ] += 1
-                rescue_X = self._build_rescue_candidates(
-                    n_global=max(
-                        32,
-                        8 * self.space.dim,
-                    ),
-                    n_local=max(
-                        16,
-                        4 * self.space.dim,
-                    ),
-                    seed=self.seed + 300_000 + step,
-                )
-                rescue = self._best_rescue_by_acquisition(
-                    cpu_acq,
-                    rescue_X,
-                )
-                if (
-                    rescue is not None
-                    and rescue.acquisition_value
-                    > chosen.acquisition_value
-                    + 1e-12
-                ):
-                    chosen = rescue
-                    self.fit_diagnostics[
-                        "adaptive_rescue_selected"
-                    ] += 1
-
-            if self._is_duplicate(chosen.x01):
-                self.fit_diagnostics[
-                    "duplicate_candidates"
-                ] += 1
-                replacement = None
-                for x, value in zip(
-                    starts[1:],
-                    start_scores[1:],
-                ):
-                    if not self._is_duplicate(x):
-                        replacement = CandidateSource(
-                            name="adaptive_duplicate_recovery",
-                            x01=x.copy(),
-                            acquisition_value=float(
-                                value
-                            ),
-                        )
-                        break
-                if replacement is None:
-                    raise RuntimeError(
-                        "All adaptive top candidates duplicate history."
-                    )
-                chosen = replacement
-                self.fit_diagnostics[
-                    "duplicate_recoveries"
-                ] += 1
+                self.fit_diagnostics["discrete_selected"] += 1
 
             previous_best = best
             result = self._evaluate01(chosen.x01)
@@ -563,12 +617,8 @@ class AdaptiveStackedGPBOEngine(StackedGPBOEngine):
             else:
                 stagnation += 1
 
-            iteration_s = (
-                time.perf_counter() - iter_t0
-            )
-            self.timings[
-                "total_iteration_s"
-            ] += iteration_s
+            iteration_s = time.perf_counter() - iter_t0
+            self.timings["total_iteration_s"] += iteration_s
 
             self.events.append({
                 "step": step,
@@ -578,113 +628,68 @@ class AdaptiveStackedGPBOEngine(StackedGPBOEngine):
                 "source": chosen.name,
                 "pulse": bool(pulse),
                 "severe_pulse": bool(severe_pulse),
-                "pool": active_pool,
-                "policy_reason": knobs["reason"],
-                "rescue_inject": bool(
-                    knobs["enable_rescue_inject"]
-                ),
-                "force_model_refit": bool(
-                    knobs["force_model_refit"]
-                ),
-                "search_realloc": bool(
-                    knobs["enable_search_realloc"]
-                ),
-                "evidence_score": float(
-                    knobs["evidence_score"]
-                ),
-                "adaptation_strength": float(
-                    knobs["adaptation_strength"]
-                ),
-                "intervention_type": str(
-                    knobs["intervention_type"]
-                ),
-                "cooldown_remaining": int(
-                    knobs["cooldown_remaining"]
-                ),
-                "weight_rbf": float(
-                    self.stacking_weight_rbf
-                ),
+                "arbiter_reason": arb.reason,
+                "choose_adaptive": bool(arb.choose_adaptive),
+                "evidence_score": float(decision.evidence_score),
+                "proposal_level": decision.proposal_level,
+                "weight_rbf": float(self.stacking_weight_rbf),
                 "score": float(result.score),
                 "best": float(best),
                 "stagnation": int(stagnation),
-                "stagnation_score": float(
-                    diagnostics.stagnation_score
-                ),
-                "model_reliability": float(
-                    diagnostics.model_reliability
-                ),
                 "iteration_s": float(iteration_s),
             })
 
             if verbose and (
                 step == 0
                 or (step + 1) % 5 == 0
-                or knobs["enable_rescue_inject"]
+                or arb.choose_adaptive
                 or step == total_steps - 1
             ):
                 print(
                     f"[{self.ENGINE_ID} {step+1:02d}/{total_steps}] "
-                    f"src={chosen.name:<24s} "
-                    f"reason={knobs['reason']:<32s} "
+                    f"exec={arb.executed_source:<8s} "
+                    f"arb={arb.reason:<28s} "
                     f"best={best:.4f} "
                     f"stag={stagnation:02d}"
                 )
 
             if self.screen_device.type == "cuda":
                 del screen_acq
-                if "rbf_screen" in locals():
-                    del rbf_screen
-                    del mat_screen
+                del rbf_screen
+                del mat_screen
 
-        feasible = [
-            r for r in self.history if r.feasible
-        ] or list(self.history)
-        feasible.sort(
-            key=lambda r: r.score,
-            reverse=True,
-        )
+        feasible = [r for r in self.history if r.feasible]
+        if not feasible:
+            feasible = list(self.history)
+        feasible.sort(key=lambda r: r.score, reverse=True)
 
         gpu_memory = {}
         if self.screen_device.type == "cuda":
             gpu_memory = {
-                "allocated_mb":
-                    self.torch.cuda.memory_allocated(
-                        self.screen_device
-                    ) / 1024**2,
-                "reserved_mb":
-                    self.torch.cuda.memory_reserved(
-                        self.screen_device
-                    ) / 1024**2,
+                "allocated_mb": self.torch.cuda.memory_allocated()
+                / (1024 ** 2),
+                "reserved_mb": self.torch.cuda.memory_reserved()
+                / (1024 ** 2),
             }
 
         return {
-            "engine_id": self.ENGINE_ID,
-            "trials_run": len(self.history),
             "best": feasible[0],
-            "top": feasible[:8],
-            "events": list(self.events),
-            "timings": dict(self.timings),
-            "fit_diagnostics": dict(
-                self.fit_diagnostics
-            ),
-            "weight_history": list(
-                self.weight_history
-            ),
-            "diagnostic_history": list(
-                self.diagnostic_history
-            ),
-            "policy_history": list(
-                self.policy_history
-            ),
-            "final_weight_rbf": float(
-                self.stacking_weight_rbf
-            ),
+            "top": feasible[:5],
+            "history": self.history,
+            "events": self.events,
+            "trials_run": len(self.history),
+            "timings": self.timings,
+            "fit_diagnostics": self.fit_diagnostics,
+            "diagnostic_history": self.diagnostic_history,
+            "policy_history": self.policy_history,
+            "arbiter_history": self.arbiter_history,
+            "weight_history": self.weight_history,
+            "final_weight_rbf": float(self.stacking_weight_rbf),
             "final_weight_matern": float(
                 1.0 - self.stacking_weight_rbf
             ),
             "fit_device": "cpu",
-            "screen_device": str(
-                self.screen_device
-            ),
+            "screen_device": str(self.screen_device),
             "gpu_memory": gpu_memory,
+            "engine_id": self.ENGINE_ID,
         }

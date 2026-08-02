@@ -878,26 +878,32 @@ def run_adaptive_stacked(
             "final_weight_matern": result[
                 "final_weight_matern"
             ],
-            "adaptive_rescue_triggers": result[
+            "adaptive_proposals_generated": result[
                 "fit_diagnostics"
-            ]["adaptive_rescue_triggers"],
-            "adaptive_rescue_selected": result[
+            ].get("adaptive_proposals_generated", 0),
+            "adaptive_proposals_accepted": result[
                 "fit_diagnostics"
-            ]["adaptive_rescue_selected"],
+            ].get("adaptive_proposals_accepted", 0),
+            "adaptive_proposals_rejected": result[
+                "fit_diagnostics"
+            ].get("adaptive_proposals_rejected", 0),
+            "adaptive_rescue_proposals": result[
+                "fit_diagnostics"
+            ].get("adaptive_rescue_proposals", 0),
+            "adaptive_rescue_accepted": result[
+                "fit_diagnostics"
+            ].get("adaptive_rescue_accepted", 0),
             "adaptive_forced_refits": result[
                 "fit_diagnostics"
             ].get("adaptive_forced_refits", 0),
-            "adaptive_search_realloc_steps": result[
-                "fit_diagnostics"
-            ].get(
-                "adaptive_search_realloc_steps",
-                0,
-            ),
             "adaptive_policy_updates": result[
                 "fit_diagnostics"
             ]["adaptive_policy_updates"],
             "diagnostic_history_len": len(
                 result["diagnostic_history"]
+            ),
+            "arbiter_history_len": len(
+                result.get("arbiter_history", [])
             ),
         },
     )
