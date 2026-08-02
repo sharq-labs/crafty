@@ -1,0 +1,84 @@
+========================================================================================
+Engineering AI Core V0.2.5 — Statistical Hard Benchmark
+========================================================================================
+Runs                         : 20
+Budget / method / run        : 60
+Candidate pool / smart step  : 100,000
+GPU chunk                    : 1,024
+Refit interval               : 4
+Total benchmark wall time    : 252.681 s
+
+FINAL SCORE
+Random mean                  : 99.680363
+Sobol mean                   : 100.233510
+Smart mean                   : 149.523917
+
+Random median                : 97.270050
+Sobol median                 : 98.379459
+Smart median                 : 156.482282
+
+Random std                   : 20.560487
+Sobol std                    : 18.152069
+Smart std                    : 27.582910
+
+WIN RATE
+Smart wins                   : 18/20 (90.0%)
+Random wins                  : 2/20 (10.0%)
+Sobol wins                   : 0/20 (0.0%)
+Ties                         : 0/20
+
+PAIRED ADVANTAGE
+Mean Smart - Random          : +49.843554
+Median Smart - Random        : +54.669962
+95% CI Smart - Random        : [+34.717487, +63.823984]
+
+Mean Smart - Sobol           : +49.290408
+Median Smart - Sobol         : +44.405787
+95% CI Smart - Sobol         : [+37.718988, +60.412465]
+
+99% TARGET HIT RATE
+Random                       : 10.0%
+Sobol                        : 0.0%
+Smart                        : 90.0%
+
+PENALIZED EXPERIMENTS TO TARGET
+(failure = budget + 1 = 61)
+Random mean                  : 58.30
+Sobol mean                   : 61.00
+Smart mean                   : 48.90
+
+Random median                : 61.00
+Sobol median                 : 61.00
+Smart median                 : 52.00
+
+CONVERGENCE AUC
+Random mean AUC              : 84.457497
+Sobol mean AUC               : 86.490316
+Smart mean AUC               : 105.707301
+
+STATISTICAL TESTS
+Smart > Random Wilcoxon stat : 206.0
+Smart > Random p-value       : 6.67572021484375e-06
+Smart > Sobol Wilcoxon stat  : 209.0
+Smart > Sobol p-value        : 1.9073486328125e-06
+
+SMART ENGINE PERFORMANCE
+Mean smart wall time         : 12.631 s
+Median smart wall time       : 12.607 s
+Mean candidate throughput    : 411,271 / sec
+Median candidate throughput  : 412,118 / sec
+Mean model time              : 2.748 s
+Mean candidate scoring time  : 9.733 s
+SciPy warnings total         : 0
+Fallback fits total          : 0
+
+PASS GUIDANCE FOR THIS SYNTHETIC BENCHMARK
+- Smart win rate >= 80%
+- Both 95% paired confidence intervals entirely above 0
+- Both one-sided Wilcoxon p-values < 0.05
+- Smart target-hit rate clearly above both baselines
+- No recurring GP fitting instability
+
+NOTE: these are project benchmark gates, not universal scientific thresholds.
+NOTE: synthetic benchmark only; not validated engineering physics.
+========================================================================================

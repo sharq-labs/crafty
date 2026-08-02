@@ -1,0 +1,16 @@
+====================================================================================================================
+Engineering AI Core V0.3.2 — Optimizer Validation Lab
+====================================================================================================================
+Ranking is per-problem, then averaged. Lower mean rank is better.
+Target fraction = fraction of standard target deltas [1e2 ... 1e-6] reached within budget.
+
+Algorithm             Runs  MeanRank  Wins TargetFrac FinalHit  MedLogGap   Wall(s)
+-----------------------------------------------------------------------------------
+stacked_v0301           24     1.583    10      0.470    0.000     -0.152    40.632
+ngopt                   24     2.125    13      0.506    0.167      0.207     0.111
+cmaes                   24     3.500     0      0.256    0.000      0.491     0.012
+de_rand1bin             24     3.875     0      0.292    0.000      0.780     0.004
+sobol                   24     3.917     1      0.244    0.000      0.763     0.002
+
+NOTE: This lab measures optimizer behavior. It does not validate engineering physics.
+====================================================================================================================

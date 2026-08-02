@@ -1,0 +1,50 @@
+{
+  "multimodal": {
+    "robust_mean": 104.43066504688909,
+    "legacy_mean": 111.88201898798361,
+    "random_mean": 123.93892006369884,
+    "sobol_mean": 73.51158018430561,
+    "robust_win_rate": 0.0,
+    "robust_vs_legacy_mean": -7.451353941094524
+  },
+  "narrow_optimum": {
+    "robust_mean": 66.92660769664506,
+    "legacy_mean": 70.16799143518308,
+    "random_mean": 68.00962783944847,
+    "sobol_mean": 57.909507538843975,
+    "robust_win_rate": 33.33333333333333,
+    "robust_vs_legacy_mean": -3.2413837385380284
+  },
+  "constrained_islands": {
+    "robust_mean": 67.85762381786776,
+    "legacy_mean": 93.17239074761903,
+    "random_mean": 50.04301847985126,
+    "sobol_mean": 70.70984387183988,
+    "robust_win_rate": 0.0,
+    "robust_vs_legacy_mean": -25.314766929751272
+  },
+  "deceptive_local": {
+    "robust_mean": 86.75419570341062,
+    "legacy_mean": 122.96002095702316,
+    "random_mean": 87.25336494686913,
+    "sobol_mean": 73.51472934651137,
+    "robust_win_rate": 0.0,
+    "robust_vs_legacy_mean": -36.205825253612524
+  },
+  "flat_plateau": {
+    "robust_mean": 93.08098779515205,
+    "legacy_mean": 118.43006045685438,
+    "random_mean": 133.7600624915934,
+    "sobol_mean": 89.2636404236478,
+    "robust_win_rate": 0.0,
+    "robust_vs_legacy_mean": -25.349072661702323
+  },
+  "mixed_sensitivity": {
+    "robust_mean": 64.37518741058598,
+    "legacy_mean": 75.68224217575721,
+    "random_mean": 110.50272974335049,
+    "sobol_mean": 67.9331241136045,
+    "robust_win_rate": 0.0,
+    "robust_vs_legacy_mean": -11.307054765171223
+  }
+}

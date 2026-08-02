@@ -1,0 +1,4 @@
+# Install a CUDA-enabled PyTorch build FIRST using the official PyTorch selector.
+# Then install this file.
+botorch>=0.17.1
+gpytorch>=1.14

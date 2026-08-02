@@ -1,0 +1,11 @@
+# V0.3.2 Optimizer Validation Lab
+#
+# Core local arena uses only the existing project requirements.
+#
+# Optional external baselines:
+nevergrad
+cma
+
+# Official COCO/BBOB:
+# cocoex is normally built from the official numbbo/coco repository.
+# Do not add a random PyPI package with a similar name.

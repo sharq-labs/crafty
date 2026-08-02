@@ -1,0 +1,13 @@
+[project]
+name = "engineering-ai-core"
+version = "0.1.0"
+description = "Smart experiment engine proof of concept"
+requires-python = ">=3.11"
+dependencies = [
+  "numpy>=1.26",
+  "scipy>=1.11",
+  "scikit-learn>=1.4"
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
