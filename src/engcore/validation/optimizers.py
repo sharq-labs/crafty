@@ -884,6 +884,15 @@ def run_adaptive_stacked(
             "adaptive_rescue_selected": result[
                 "fit_diagnostics"
             ]["adaptive_rescue_selected"],
+            "adaptive_forced_refits": result[
+                "fit_diagnostics"
+            ].get("adaptive_forced_refits", 0),
+            "adaptive_search_realloc_steps": result[
+                "fit_diagnostics"
+            ].get(
+                "adaptive_search_realloc_steps",
+                0,
+            ),
             "adaptive_policy_updates": result[
                 "fit_diagnostics"
             ]["adaptive_policy_updates"],

@@ -13,8 +13,8 @@ import time
 import numpy as np
 
 from .adaptive_policy import (
+    AdaptivePolicyController,
     apply_decision_to_knobs,
-    decide_adaptive_policy,
 )
 from .landscape_diagnostics import (
     compute_landscape_diagnostics,
@@ -26,7 +26,9 @@ from .stacked_engine import StackedGPBOEngine
 
 class AdaptiveStackedGPBOEngine(StackedGPBOEngine):
     """
-    Observation -> diagnostics -> policy -> candidate allocation -> evaluate.
+    Observation -> diagnostics -> stateful policy -> candidate allocation -> evaluate.
+
+    Baseline-by-default: with weak/early evidence, search knobs match stacked_v0301.
     """
 
     ENGINE_ID = "adaptive_stacked_v033"
@@ -52,11 +54,14 @@ class AdaptiveStackedGPBOEngine(StackedGPBOEngine):
         )
         self.diagnostic_history = []
         self.policy_history = []
+        self.policy_controller = AdaptivePolicyController()
         self.fit_diagnostics.update({
             "adaptive_rescue_triggers": 0,
             "adaptive_rescue_selected": 0,
             "adaptive_exploration_mix_uses": 0,
             "adaptive_policy_updates": 0,
+            "adaptive_forced_refits": 0,
+            "adaptive_search_realloc_steps": 0,
         })
 
     def _scores_array(self):
@@ -204,6 +209,7 @@ class AdaptiveStackedGPBOEngine(StackedGPBOEngine):
 
         self.diagnostic_history = []
         self.policy_history = []
+        self.policy_controller.reset()
 
         initial = sobol_points(
             int(initial_trials),
@@ -244,11 +250,12 @@ class AdaptiveStackedGPBOEngine(StackedGPBOEngine):
                 weight_rbf=self.stacking_weight_rbf,
                 weight_history=self.weight_history,
             )
-            decision = decide_adaptive_policy(
+            decision = self.policy_controller.update(
                 diagnostics,
                 base_stagnation_trigger=int(
                     stagnation_trigger
                 ),
+                step=step,
             )
             knobs = apply_decision_to_knobs(
                 decision,
@@ -257,14 +264,27 @@ class AdaptiveStackedGPBOEngine(StackedGPBOEngine):
             self.fit_diagnostics[
                 "adaptive_policy_updates"
             ] += 1
+            if knobs["enable_search_realloc"]:
+                self.fit_diagnostics[
+                    "adaptive_search_realloc_steps"
+                ] += 1
 
             if record_diagnostics:
                 self.diagnostic_history.append({
                     "step": step,
+                    "evaluation": int(
+                        len(self.history)
+                    ),
                     **diagnostics.as_dict(),
                 })
                 self.policy_history.append({
                     "step": step,
+                    "evaluation": int(
+                        len(self.history)
+                    ),
+                    "intervention_start_step": int(
+                        self.policy_controller.intervention_start_step
+                    ),
                     **decision.as_dict(),
                     **{
                         k: knobs[k]
@@ -274,7 +294,9 @@ class AdaptiveStackedGPBOEngine(StackedGPBOEngine):
                             "refinement_top_k",
                             "refinement_maxiter",
                             "exploration_mix",
-                            "enable_rescue",
+                            "enable_search_realloc",
+                            "force_model_refit",
+                            "enable_rescue_inject",
                             "reason",
                         )
                     },
@@ -305,14 +327,19 @@ class AdaptiveStackedGPBOEngine(StackedGPBOEngine):
                     "stagnation_pulses"
                 ] += 1
 
+            # Forced refit is independent of rescue candidate injection.
             optimize_models = (
                 step == 0
                 or int(refit_interval) <= 1
                 or step % int(refit_interval) == 0
                 or pulse
                 or severe_pulse
-                or knobs["enable_rescue"]
+                or knobs["force_model_refit"]
             )
+            if knobs["force_model_refit"] and optimize_models:
+                self.fit_diagnostics[
+                    "adaptive_forced_refits"
+                ] += 1
 
             rbf_cpu, mat_cpu = self._fit_pair(
                 optimize=optimize_models
@@ -468,7 +495,8 @@ class AdaptiveStackedGPBOEngine(StackedGPBOEngine):
                     "discrete_selected"
                 ] += 1
 
-            if knobs["enable_rescue"]:
+            # C) Rescue candidate injection — strongest intervention only.
+            if knobs["enable_rescue_inject"]:
                 self.fit_diagnostics[
                     "adaptive_rescue_triggers"
                 ] += 1
@@ -552,8 +580,26 @@ class AdaptiveStackedGPBOEngine(StackedGPBOEngine):
                 "severe_pulse": bool(severe_pulse),
                 "pool": active_pool,
                 "policy_reason": knobs["reason"],
-                "rescue": bool(
-                    knobs["enable_rescue"]
+                "rescue_inject": bool(
+                    knobs["enable_rescue_inject"]
+                ),
+                "force_model_refit": bool(
+                    knobs["force_model_refit"]
+                ),
+                "search_realloc": bool(
+                    knobs["enable_search_realloc"]
+                ),
+                "evidence_score": float(
+                    knobs["evidence_score"]
+                ),
+                "adaptation_strength": float(
+                    knobs["adaptation_strength"]
+                ),
+                "intervention_type": str(
+                    knobs["intervention_type"]
+                ),
+                "cooldown_remaining": int(
+                    knobs["cooldown_remaining"]
                 ),
                 "weight_rbf": float(
                     self.stacking_weight_rbf
@@ -573,7 +619,7 @@ class AdaptiveStackedGPBOEngine(StackedGPBOEngine):
             if verbose and (
                 step == 0
                 or (step + 1) % 5 == 0
-                or knobs["enable_rescue"]
+                or knobs["enable_rescue_inject"]
                 or step == total_steps - 1
             ):
                 print(
