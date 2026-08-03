@@ -33,6 +33,12 @@ class ObjectiveRecorder:
 
     Reference target information is kept outside the optimization path and is
     used only after a run to compute benchmark metrics.
+
+    Validation behavior is intentionally observable:
+      - non-finite candidate coordinates fail fast;
+      - out-of-bounds coordinates are clipped only as a last numerical guard
+        and counted;
+      - non-finite objective values are converted to +inf and counted.
     """
 
     def __init__(
@@ -61,6 +67,12 @@ class ObjectiveRecorder:
         self.best_f = float("inf")
         self.best_x: np.ndarray | None = None
 
+        # Audit counters. These are validation metadata only and never alter
+        # an optimizer's legal observation budget.
+        self.candidate_nonfinite_count = 0
+        self.candidate_clipped_count = 0
+        self.objective_nonfinite_count = 0
+
     @property
     def dimension(self) -> int:
         return int(self.lower.size)
@@ -72,6 +84,19 @@ class ObjectiveRecorder:
     @property
     def remaining(self) -> int:
         return self.budget - self.evaluations
+
+    def audit_metadata(self) -> dict[str, int]:
+        return {
+            "candidate_nonfinite_count": int(
+                self.candidate_nonfinite_count
+            ),
+            "candidate_clipped_count": int(
+                self.candidate_clipped_count
+            ),
+            "objective_nonfinite_count": int(
+                self.objective_nonfinite_count
+            ),
+        }
 
     def evaluate(self, x) -> float:
         if self.evaluations >= self.budget:
@@ -85,12 +110,22 @@ class ObjectiveRecorder:
                 f"x shape {x.shape} != expected {self.lower.shape}"
             )
 
+        if not np.all(np.isfinite(x)):
+            self.candidate_nonfinite_count += 1
+            raise ValueError(
+                "Optimizer proposed non-finite candidate coordinates"
+            )
+
         # Algorithms in the arena are responsible for respecting bounds.
-        # We clip only as a last numerical guard and report how often it occurs.
+        # Clip only as a last numerical guard and retain an auditable count.
         x_eval = np.clip(x, self.lower, self.upper)
+        if not np.array_equal(x_eval, x):
+            self.candidate_clipped_count += 1
+
         value = float(self.func(x_eval))
 
         if not np.isfinite(value):
+            self.objective_nonfinite_count += 1
             value = float("inf")
 
         self.values.append(value)
