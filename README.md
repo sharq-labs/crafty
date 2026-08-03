@@ -1,52 +1,100 @@
-# Engineering AI Core V0.3.2.6 — Validation Fairness Hardening
+# Engineering AI Core V0.3.3 — Research Adaptive Optimizer
 
-Validation-infrastructure release only. Optimizer search behavior is unchanged
-from V0.3.2.5 / stacked_v0301.
+Branch: `research/v0.3.3-adaptive`  
+Baseline tag: `v0.3.2.6-stacked_v0301` (immutable)
 
-## Changes
+## Goal
 
-1. **Local arena factory contract**
-   - `func_factory(algorithm=None) -> (func, cleanup)`
-   - Local quick arena no longer binds the algorithm name as the objective
-   - Arena no longer swallows `TypeError` from factories
+Add a **separately selectable** adaptive stacked optimizer that:
 
-2. **Strict budget assertion for every adapter**
-   - Central `assert_exact_budget()` runs inside `_trace(...)`
-   - Applies to random, sobol, de, ngopt, cmaes, stacked
+- infers search state only from black-box observations
+- adapts exploration / exploitation / rescue continuously
+- preserves `stacked_v0301` unchanged
 
-3. **Exact-tie ranking**
-   - Average ranks for exact score ties
-   - `win_share`: fractional credit `1/N` among exact bests
-   - `wins` / `unique_wins`: integer sole-best count only
+This is **not** a BBOB memorizer.
 
-4. **COCO nested result directories**
-   - Parent directories are created before `cocoex.Observer(...)`
-   - Actual `observer.result_folder` is recorded (COCO uniqueness retained)
+## Architecture audit (stacked_v0301 baseline)
 
-5. **Observer lifecycle policy (cocoex 2.8.2 evidence)**
-   - `Observer.free` exists and is callable on the public class
-   - Calling it raises `AttributeError: ... no attribute '__dealloc__'`
-   - Therefore V0.3.2.6 does **not** call `Observer.free()`
-   - Required finalization remains `problem.free()` (+ `suite.free()`)
-   - After `problem.free()`, COCO `.info` / `.dat` logs are present and readable
+| Stage | Behavior |
+|---|---|
+| Init | Sobol DOE in unit cube; all init evals count |
+| Models | RBF ARD GP + Matern-2.5 ARD GP, bounded nugget |
+| Fit | CPU `fit_gpytorch_mll`, warm-state between refits |
+| Stacking | LOO predictive log densities → mixture weight |
+| Acquisition | Stacked LogEI (`logaddexp` mixture) |
+| Candidates | Large Sobol screen (GPU if available), diverse Top-K |
+| Refinement | CPU continuous refine from informed starts |
+| Fallback | Discrete vs refined by CPU acq; duplicate recovery |
+| Stagnation | Pulse / severe pulse increases screen pool |
+| Devices | Fit+refine CPU; screen optional CUDA |
+| Budget | Exactly `initial_trials + smart_trials` objective calls |
 
-## Fairness self-test
+## New modules
+
+1. `landscape_diagnostics.py` — online features only from X/y/budget/model stack stats  
+2. `adaptive_policy.py` — continuous knob policy (no landscape class labels)  
+3. `adaptive_stacked_engine.py` — `AdaptiveStackedGPBOEngine` / `adaptive_stacked_v033`
+
+## Adaptive policy (minimal)
+
+Uses diagnostics every BO step:
+
+- reliable + improving → modest exploitation (smaller screen, more refine)
+- unreliable / disagreeing models → more global diversity
+- stagnation + concentration → expand exploration + rescue
+- late budget + reliable model → exploit
+- tiny-N → conservative defaults
+
+## Rescue mechanism
+
+Triggers from policy (stagnation / unreliable model), not benchmark IDs.
+
+- fresh Sobol space-filling candidates
+- incumbent-centered Gaussian perturbations
+- scored by acquisition only (no extra objective calls)
+- selected only if acquisition beats current discrete/refined choice
+
+## Performance
+
+No semantic changes to `stacked_v0301` screening/refinement.
+
+Adaptive engine remains dual-GP heavy by design; wall-clock optimization for cheap
+objectives is secondary to sample efficiency. Implementation opts in the adaptive
+path are limited to avoiding extra objective work in rescue/diagnostics.
+
+## Validation registry
+
+Algorithms now include:
+
+`cmaes, ngopt, stacked, adaptive_stacked`
+
+## Tests
 
 ```powershell
+.\.venv\Scripts\python.exe -m src.engcore.adaptive_stacked_selftest
 .\.venv\Scripts\python.exe -m src.engcore.validation_fairness_selftest
 ```
 
-Also:
+## Short smoke comparison (user/local)
 
 ```powershell
-.\.venv\Scripts\python.exe -m src.engcore.validation_selftest
-.\.venv\Scripts\python.exe -m src.engcore.coco_target_selftest
-.\.venv\Scripts\python.exe -m src.engcore.coco_check
+.\.venv\Scripts\python.exe -m src.engcore.validation_quick --dimensions 2 --instances 1 --budget-multiplier 10 --algorithms random,sobol,stacked,adaptive_stacked --stacked-mode fast --screen-device cpu --out validation_results/adaptive_smoke_v033
 ```
 
-## Explicitly unchanged
+## Full COCO validation (manual; do not auto-run)
 
-- GP kernels, LOO stacking, LogEI
-- Screen pools, refinement, stagnation pulses, stacked modes
-- NGOpt / CMA search configuration
-- Optimizer architecture
+```powershell
+.\.venv\Scripts\python.exe -m src.engcore.coco_arena --functions all --dimensions 2 --instances 1,2,3,4,5 --budget-multiplier 20 --algorithms cmaes,ngopt,stacked,adaptive_stacked --stacked-mode fast --screen-device auto --stacked-refinement-backend torch --out validation_results/bbob_full_d2_v033
+
+.\.venv\Scripts\python.exe -m src.engcore.coco_arena --functions all --dimensions 5 --instances 1,2,3,4,5 --budget-multiplier 20 --algorithms cmaes,ngopt,stacked,adaptive_stacked --stacked-mode fast --screen-device auto --stacked-refinement-backend torch --out validation_results/bbob_full_d5_v033
+```
+
+## Guardrail statements
+
+| Check | Value |
+|---|---|
+| BASELINE STACKED_v0301 MODIFIED | **NO** |
+| SEARCH BEHAVIOR CHANGED IN NEW OPTIMIZER | **YES** |
+| BENCHMARK-SPECIFIC LOGIC ADDED | **NO** |
+| HIDDEN OBJECTIVE EVALUATIONS ADDED | **NO** |
+| STRICT BUDGET PRESERVED | **YES** |
