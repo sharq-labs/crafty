@@ -1,0 +1,127 @@
+name: Logic Hardening Checks
+
+on:
+  pull_request:
+    paths:
+      - 'src/engcore/**'
+      - '.github/workflows/logic-hardening-checks.yml'
+  push:
+    branches:
+      - 'research/v0.3.4-logic-hardening'
+
+jobs:
+  syntax-and-pure-logic:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Compile Python sources
+        run: python -m compileall -q src
+
+      - name: Install lightweight dependency
+        run: python -m pip install --disable-pip-version-check numpy
+
+      - name: Run pure-logic regression probes
+        shell: bash
+        run: |
+          python - <<'PY'
+          import numpy as np
+
+          from src.engcore.adaptive_policy import decide_adaptive_policy
+          from src.engcore.candidate_arbiter import ProposalView, arbitrate_proposals
+          from src.engcore.landscape_diagnostics import compute_landscape_diagnostics
+          from src.engcore.models import DesignSpace, Variable
+          from src.engcore.validation.metrics import summarize_traces
+          from src.engcore.validation.problem import ObjectiveRecorder, Trace
+
+          # Design-space validation.
+          try:
+              Variable('x', 1.0, 1.0)
+              raise AssertionError('invalid variable bounds accepted')
+          except ValueError:
+              pass
+
+          space = DesignSpace([Variable('x0', -1, 1), Variable('x1', -1, 1)])
+          try:
+              space.as_dict([0.0])
+              raise AssertionError('wrong vector dimension accepted')
+          except ValueError:
+              pass
+
+          # Objective recorder auditability.
+          rec = ObjectiveRecorder(
+              lambda x: float('nan') if x[0] > 0.9 else float(np.sum(x * x)),
+              [-1.0, -1.0], [1.0, 1.0], 2,
+          )
+          rec.evaluate([2.0, 0.0])
+          assert rec.candidate_clipped_count == 1
+          assert rec.objective_nonfinite_count == 1
+          try:
+              rec.evaluate([float('nan'), 0.0])
+              raise AssertionError('nonfinite candidate accepted')
+          except ValueError:
+              pass
+
+          # Trace matrix must be matched and unique.
+          def tr(a, p, v):
+              return Trace(a, p, 2, 5, 1, float(v), 5)
+
+          try:
+              summarize_traces([tr('A', 'p1', 1), tr('A', 'p1', 2), tr('B', 'p1', 3)])
+              raise AssertionError('duplicate trace row accepted')
+          except ValueError:
+              pass
+
+          try:
+              summarize_traces([tr('A', 'p1', 1), tr('B', 'p1', 2), tr('A', 'p2', 3)])
+              raise AssertionError('unmatched trace matrix accepted')
+          except ValueError:
+              pass
+
+          # Arbiter should reject numerical dust, accept material consensus.
+          ident = ProposalView(np.array([0.1, 0.2]), 'id', -10.0, -10.0, -10.0)
+          dust = ProposalView(
+              np.array([0.3, 0.4]), 'ad',
+              -10.0 + 1e-9, -10.0 + 1e-9, -10.0 + 1e-9,
+          )
+          _, dec = arbitrate_proposals(ident, dust, adaptive_enabled=True)
+          assert not dec.choose_adaptive
+
+          strong = ProposalView(np.array([0.3, 0.4]), 'ad', -9.0, -9.2, -9.3)
+          _, dec = arbitrate_proposals(ident, strong, adaptive_enabled=True)
+          assert dec.choose_adaptive
+
+          # Stateful policy helper must not silently create a fresh controller.
+          X = np.array([[0.1, 0.2], [0.3, 0.4], [0.5, 0.6]])
+          y = np.array([-3.0, -2.0, -1.0])
+          d1 = compute_landscape_diagnostics(
+              x01_history=X, scores=y, best_score=-1.0,
+              evaluations_since_improve=1, total_budget=20, dimension=2,
+              weight_rbf=0.6,
+              weight_history=[{'weight_rbf': 0.6, 'mean_logp_rbf': -2.0, 'mean_logp_matern': -3.0}],
+          )
+          d2 = compute_landscape_diagnostics(
+              x01_history=X, scores=y, best_score=-1.0,
+              evaluations_since_improve=1, total_budget=20, dimension=2,
+              weight_rbf=0.6,
+              weight_history=[{'weight_rbf': 0.6, 'mean_logp_rbf': -102.0, 'mean_logp_matern': -103.0}],
+          )
+          assert abs(d1.model_agreement - d2.model_agreement) < 1e-12
+          assert abs(d1.model_reliability - d2.model_reliability) < 1e-12
+
+          try:
+              decide_adaptive_policy(d1)
+              raise AssertionError('stateless policy helper accepted')
+          except ValueError:
+              pass
+
+          print('pure logic probes: PASS')
+          PY
