@@ -63,11 +63,21 @@ Residual nondeterminism, declared: the tag-frozen `fast` mode dictionary sets
 `optimize_acqf`. Removing it would alter the frozen research treatment, so it
 stays. Observability without modifying frozen code: per-run refinement
 telemetry (`refinement_attempts`, `refinement_s_total`,
-`refinement_s_mean`) is recorded into every trace's metadata by the
-apparatus-layer adapters and journaled; a per-attempt mean approaching
-2.0 s is the registered warning signal. Exact per-call timeout-hit
-detection is **not** possible without editing frozen engine files and is
-therefore not claimed. The manifest records the numerical threading
+`refinement_s_mean`, and per-call `refinement_s_max` via a
+behavior-neutral apparatus-layer timing subclass that only wraps the
+frozen method in wall-clock measurement) is recorded into every trace's
+metadata and journaled; `refinement_s_max` approaching 2.0 s is the
+registered warning signal. The timing wrapper's neutrality is verified by
+the full-trajectory golden parity harness. Exact detection of botorch's
+internal timeout event is **not** possible without editing frozen engine
+files and is not claimed; `refinement_s_max ≈ timeout` plus replay
+divergence are the registered detectors.
+
+Replay determinism is verified per arm before RC: A (cross-tree vs main
+and repeat), B and C (same-tree repeat, full trajectories including
+deterministic trace metadata, with the campaign's **COCO observer
+attached** so the audit runs under the registered observer
+configuration). The manifest records the numerical threading
 environment (OMP/MKL/OpenBLAS/NumExpr thread settings, torch thread count,
 CPU count).
 
@@ -90,16 +100,26 @@ D=5 / budget-100 / >=3-seeds-per-case tier (not scheduled).
 committed and tagged with the apparatus. Its output
 (`ablation_analysis.json`) is the only analysis feeding these rules.
 
-**Primary endpoints (matched complete cases — every arm completed):**
-for **(B vs A)** and **(C vs B)**, on paired per-problem `best_f`:
+**Primary endpoints are FUNCTION-CLUSTERED** (matched complete cases —
+every arm completed). The 120 cases are 24 functions × 5 instances;
+instances of one function are not independent, so case-level counts are
+never treated as n=120 independent evidence. For **(B vs A)** and
+**(C vs B)**:
 
-- wins / losses / ties (tie = exact `best_f` equality, lab convention),
-  win-share (ties split fractionally);
-- exact two-sided paired **sign test** on non-ties;
+- per function: the five instance-level paired outcomes (win/loss/tie on
+  `best_f`, tie = exact equality); `function_score = (wins − losses) /
+  (wins + losses)` when non-ties exist; direction POSITIVE (>0) /
+  NEGATIVE (<0) / TIE (=0) / ALL_TIED (no non-tied instances);
+- the **24 function directions are the primary inferential sample**:
+  positive / negative / tied / all-tied function counts;
+- exact two-sided **sign test on non-tied functions**;
 - **Holm correction** across the two primary contrasts (family alpha 0.05);
-- **Clopper–Pearson CI for the win probability among non-ties at the
+- **Clopper–Pearson CI for the function-level win probability at the
   Bonferroni-adjusted 97.5% level** (family 95%);
-- effect size: win probability and rank-biserial delta = 2·p̂ − 1.
+- effect size: function-level win probability and rank-biserial 2·p̂ − 1.
+
+Case-level wins / losses / ties / win-share and rank metrics remain
+**descriptive secondary results**, explicitly labeled non-independent.
 
 **Pre-registered decision semantics (per contrast):**
 

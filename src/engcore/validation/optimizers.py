@@ -22,7 +22,32 @@ def assert_exact_budget(recorder: ObjectiveRecorder, algorithm: str) -> None:
         )
 
 
-def _refinement_telemetry(result):
+def _instrument_refinement_timing(base_cls):
+    """Behavior-neutral apparatus-layer timing wrapper.
+
+    Subclasses the engine and times each _refine_informed_starts call
+    around a plain super() delegation. Adds NO logic, NO RNG interaction,
+    and touches no frozen file; it only observes wall-clock durations so
+    refinement_s_max can be journaled (timeout-hit audit). Neutrality is
+    verified by the full-trajectory golden parity harness.
+    """
+    class _TimedRefinement(base_cls):
+        def _refine_informed_starts(self, *args, **kwargs):
+            t0 = time.perf_counter()
+            try:
+                return super()._refine_informed_starts(*args, **kwargs)
+            finally:
+                durations = getattr(self, "_refinement_call_s", None)
+                if durations is None:
+                    durations = []
+                    self._refinement_call_s = durations
+                durations.append(time.perf_counter() - t0)
+
+    _TimedRefinement.__name__ = f"Timed{base_cls.__name__}"
+    return _TimedRefinement
+
+
+def _refinement_telemetry(result, engine=None):
     """Wall-clock refinement telemetry (timeout-risk observability).
 
     Observation-only: reads the engine's returned timings and
@@ -35,7 +60,7 @@ def _refinement_telemetry(result):
     diags = result.get("fit_diagnostics", {}) or {}
     attempts = int(diags.get("refinement_attempts", 0))
     total_s = float(timings.get("refinement_s", 0.0))
-    return {
+    telemetry = {
         "refinement_attempts": attempts,
         "refinement_failures": int(
             diags.get("refinement_failures", 0)
@@ -45,6 +70,11 @@ def _refinement_telemetry(result):
             (total_s / attempts) if attempts else 0.0
         ),
     }
+    durations = getattr(engine, "_refinement_call_s", None)
+    if durations:
+        telemetry["refinement_calls"] = len(durations)
+        telemetry["refinement_s_max"] = float(max(durations))
+    return telemetry
 
 
 def _trace(
@@ -581,7 +611,7 @@ def run_stacked(
             "refinement_backend must be 'torch' or 'scipy'"
         )
 
-    EngineClass = (
+    EngineClass = _instrument_refinement_timing(
         _TorchRefinementStackedGPBOEngine.build()
         if refinement_backend == "torch"
         else StackedGPBOEngine
@@ -626,7 +656,7 @@ def run_stacked(
             "discrete_selected": result[
                 "fit_diagnostics"
             ]["discrete_selected"],
-            **_refinement_telemetry(result),
+            **_refinement_telemetry(result, engine),
         },
     )
 
@@ -768,9 +798,11 @@ def run_adaptive_stacked(
                 )
                 return result
 
-        EngineClass = _TorchAdaptive
+        EngineClass = _instrument_refinement_timing(_TorchAdaptive)
     else:
-        EngineClass = AdaptiveStackedGPBOEngine
+        EngineClass = _instrument_refinement_timing(
+            AdaptiveStackedGPBOEngine
+        )
 
     engine = EngineClass(
         design_space=space,
@@ -804,7 +836,7 @@ def run_adaptive_stacked(
             "engine_id": result["engine_id"],
             "final_weight_rbf": result["final_weight_rbf"],
             "final_weight_matern": result["final_weight_matern"],
-            **_refinement_telemetry(result),
+            **_refinement_telemetry(result, engine),
             "adaptive_proposals_generated": result[
                 "fit_diagnostics"
             ].get("adaptive_proposals_generated", 0),

@@ -351,7 +351,9 @@ def run_stacked_fresh_weights(
             "refinement_backend must be 'torch' or 'scipy'"
         )
 
-    EngineClass = (
+    from .validation.optimizers import _instrument_refinement_timing
+
+    EngineClass = _instrument_refinement_timing(
         _torch_refinement_engine(FreshWeightsStackedGPBOEngine)
         if refinement_backend == "torch"
         else FreshWeightsStackedGPBOEngine
@@ -406,7 +408,7 @@ def run_stacked_fresh_weights(
             "matern25_warm_only_fits": result["fit_diagnostics"].get(
                 "matern25_warm_only_fits", 0
             ),
-            **_refinement_telemetry(result),
+            **_refinement_telemetry(result, engine),
         },
     )
 

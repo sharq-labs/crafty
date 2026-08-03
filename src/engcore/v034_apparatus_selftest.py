@@ -96,6 +96,12 @@ def test_apparatus_happy_path(out_dir):
             for l in runs),
         "refinement telemetry missing from run metadata",
     )
+    _require(
+        all("refinement_s_max" in l["metadata"]
+            for l in runs
+            if l["metadata"].get("refinement_attempts", 0) > 0),
+        "refinement_s_max missing despite refinement attempts",
+    )
     acct = complete[0]["per_arm_accounting"]
     _require(
         all(acct[a]["attempted"] == 1 and acct[a]["completed"] == 1
@@ -169,72 +175,108 @@ def _synthetic_journal(tmp, spec):
     return path
 
 
-def test_analysis_primary_stats(tmp):
-    from src.engcore.v034_ablation_analysis import analyze
-    # 10 cases: B beats A on 8, loses 2 (no ties); C ties B everywhere.
-    spec = []
-    for i in range(10):
-        a = 100.0
-        b = 90.0 if i < 8 else 110.0
-        spec.append((f"p{i:02d}", {ARMS[0]: a, ARMS[1]: b, ARMS[2]: b}))
-    report = analyze(_synthetic_journal(tmp, spec))
-    ba = report["primary_matched_paired"]["B_vs_A"]
-    _require(ba["wins"] == 8 and ba["losses"] == 2 and ba["ties"] == 0,
-             f"B_vs_A W/L/T wrong: {ba}")
-    # exact two-sided sign test, 8/10: p = 2 * P(X>=8) = 0.109375
-    _require(abs(ba["p_value"] - 0.109375) < 1e-9,
-             f"sign-test p wrong: {ba['p_value']}")
-    _require(ba["ci_low"] < 0.5 < ba["ci_high"],
-             "CI should cross 0.5 at 8/10 with 97.5% CI")
-    _require(ba["verdict"].startswith("INCONCLUSIVE"),
-             f"verdict wrong: {ba['verdict']}")
-    cb = report["primary_matched_paired"]["C_vs_B"]
-    _require(cb["ties"] == 10 and cb["n_nonties"] == 0,
-             f"C_vs_B should be all ties: {cb}")
-    _require(cb["verdict"].startswith("INCONCLUSIVE"), "all-tie verdict")
+def _pid(fn, inst):
+    return f"bbob_f{fn:03d}_i{inst:02d}_d02"
 
 
-def test_analysis_decisive_and_holm(tmp):
+def _fn_spec(fn, b_deltas, c_delta=0.0):
+    """One function, five instances; b_deltas[i] applied to arm B
+    relative to A=100 (negative = B wins under minimization)."""
+    rows = []
+    for inst, d in enumerate(b_deltas, start=1):
+        b = 100.0 + d
+        rows.append((_pid(fn, inst),
+                     {ARMS[0]: 100.0, ARMS[1]: b, ARMS[2]: b + c_delta}))
+    return rows
+
+
+def test_clustered_directions(tmp):
+    """Required scenarios: unanimous 5-0, 3-2 majority, 2-2+tie, all
+    ties — with correct sign-test sample size."""
     from src.engcore.v034_ablation_analysis import analyze
-    # 20 cases: B beats A on 19/20 (decisive); C beats B on 15/20.
     spec = []
-    for i in range(20):
-        a = 100.0
-        b = 90.0 if i != 0 else 110.0
-        c = b - 1.0 if i < 15 else b + 1.0
-        spec.append((f"p{i:02d}", {ARMS[0]: a, ARMS[1]: b, ARMS[2]: c}))
+    spec += _fn_spec(1, [-1, -1, -1, -1, -1])       # 5-0  -> POSITIVE
+    spec += _fn_spec(2, [-1, -1, -1, +1, +1])       # 3-2  -> POSITIVE
+    spec += _fn_spec(3, [-1, -1, +1, +1, 0])        # 2-2+tie -> TIE
+    spec += _fn_spec(4, [0, 0, 0, 0, 0])            # all tied -> ALL_TIED
+    spec += _fn_spec(5, [+1, +1, +1, -1, -1])       # 2-3  -> NEGATIVE
     report = analyze(_synthetic_journal(tmp, spec))
-    ba = report["primary_matched_paired"]["B_vs_A"]
-    cb = report["primary_matched_paired"]["C_vs_B"]
-    _require(ba["verdict"] == "POSITIVE evidence",
-             f"19/20 should be positive: {ba}")
+    ba = report["primary_function_clustered"]["B_vs_A"]
+    dirs = {e["function"]: e["direction"] for e in ba["per_function"]}
+    _require(dirs == {1: "POSITIVE", 2: "POSITIVE", 3: "TIE",
+                      4: "ALL_TIED", 5: "NEGATIVE"},
+             f"directions wrong: {dirs}")
+    scores = {e["function"]: e["function_score"]
+              for e in ba["per_function"]}
+    _require(scores[2] == 0.2 and scores[3] == 0.0
+             and scores[4] is None and scores[5] == -0.2,
+             f"function scores wrong: {scores}")
+    _require(ba["positive_functions"] == 2
+             and ba["negative_functions"] == 1
+             and ba["tied_functions"] == 1
+             and ba["all_tied_functions"] == 1,
+             f"direction counts wrong: {ba}")
+    # sign-test sample = non-tied FUNCTIONS only: n = 2 + 1 = 3
+    _require(ba["n_nonties"] == 3,
+             f"sign-test n must be 3 non-tied functions: {ba['n_nonties']}")
+    # two-sided sign test, 2 of 3: p = 1.0
+    _require(abs(ba["p_value"] - 1.0) < 1e-12,
+             f"p wrong for 2/3: {ba['p_value']}")
+    _require(ba["verdict"].startswith("INCONCLUSIVE"), ba["verdict"])
+
+
+def test_clustered_decisive_and_holm(tmp):
+    from src.engcore.v034_ablation_analysis import analyze
+    # 12 functions, B wins all 5 instances of each (decisive);
+    # C beats B on 4 of 5 instances of 8 functions, loses all of 4.
+    spec = []
+    for fn in range(1, 13):
+        c_rows = _fn_spec(fn, [-1] * 5,
+                          c_delta=(-0.5 if fn <= 8 else +0.5))
+        spec += c_rows
+    report = analyze(_synthetic_journal(tmp, spec))
+    ba = report["primary_function_clustered"]["B_vs_A"]
+    cb = report["primary_function_clustered"]["C_vs_B"]
+    _require(ba["positive_functions"] == 12 and ba["n_nonties"] == 12,
+             f"B_vs_A cluster counts wrong: {ba}")
+    # 12/12: p = 2 * 0.5^12 = 0.00048828125
+    _require(abs(ba["p_value"] - 2 * 0.5 ** 12) < 1e-12,
+             f"decisive p wrong: {ba['p_value']}")
     _require(ba["ci_low"] > 0.5, "decisive CI should clear 0.5")
-    # Holm: smaller p doubled; larger p max(smaller*2, p2*1)
-    _require(ba["p_value_holm"] >= ba["p_value"], "holm must not shrink p")
-    _require(cb["p_value_holm"] >= cb["p_value"], "holm must not shrink p")
-    _require(ba["p_value_holm"] <= 1.0 and cb["p_value_holm"] <= 1.0,
-             "holm p out of range")
+    _require(ba["verdict"] == "POSITIVE evidence", ba["verdict"])
+    _require(cb["positive_functions"] == 8
+             and cb["negative_functions"] == 4,
+             f"C_vs_B clusters wrong: {cb}")
+    # Holm on two p-values: smaller doubled, larger = max(2*smaller, larger)
+    p_small, p_large = sorted([ba["p_value"], cb["p_value"]])
+    holms = sorted([ba["p_value_holm"], cb["p_value_holm"]])
+    _require(abs(holms[0] - min(1.0, 2 * p_small)) < 1e-12,
+             f"holm smaller wrong: {holms[0]}")
+    _require(abs(holms[1] - max(min(1.0, 2 * p_small),
+                                min(1.0, p_large))) < 1e-12,
+             f"holm larger wrong: {holms[1]}")
 
 
 def test_analysis_robustness_failure_as_loss(tmp):
     from src.engcore.v034_ablation_analysis import analyze
-    # 4 cases; B fails on the last one. Matched = 3, attempted = 4.
-    spec = [
-        ("p00", {ARMS[0]: 100.0, ARMS[1]: 90.0, ARMS[2]: 95.0}),
-        ("p01", {ARMS[0]: 100.0, ARMS[1]: 90.0, ARMS[2]: 95.0}),
-        ("p02", {ARMS[0]: 100.0, ARMS[1]: 110.0, ARMS[2]: 95.0}),
-        ("p03", {ARMS[0]: 100.0, ARMS[2]: 95.0}),  # B failed here
-    ]
+    # Function 1: B fails on instance 5; matched excludes that case,
+    # robustness counts it as a loss for B.
+    spec = _fn_spec(1, [-1, -1, -1, +1])            # 4 complete cases
+    spec.append((_pid(1, 5), {ARMS[0]: 100.0, ARMS[2]: 95.0}))  # B failed
     report = analyze(_synthetic_journal(tmp, spec))
-    _require(report["matched_cases"] == 3, "matched should exclude p03")
-    _require(report["attempted_cases"] == 4, "attempted should include p03")
-    ba_m = report["primary_matched_paired"]["B_vs_A"]
-    _require(ba_m["wins"] == 2 and ba_m["losses"] == 1,
-             f"matched B_vs_A wrong: {ba_m}")
+    _require(report["matched_cases"] == 4, "matched should exclude i05")
+    _require(report["attempted_cases"] == 5, "attempted should include i05")
+    ba_d = report["secondary_case_level_descriptive"]["B_vs_A"]
+    _require(ba_d["wins"] == 3 and ba_d["losses"] == 1,
+             f"case-level descriptive wrong: {ba_d}")
     ba_r = report["secondary_all_case_robustness"]["B_vs_A"]
-    _require(ba_r["wins"] == 2 and ba_r["losses"] == 2,
+    _require(ba_r["wins"] == 3 and ba_r["losses"] == 2,
              f"robustness must count B's failure as a loss: {ba_r}")
-    _require(report["failed_cases"] == ["p03"], "failed case list wrong")
+    _require("not independent" in
+             report["secondary_case_level_descriptive"]["note"],
+             "case-level results must carry the non-independence label")
+    _require(report["failed_cases"] == [_pid(1, 5)],
+             "failed case list wrong")
 
 
 def main():
@@ -250,10 +292,12 @@ def main():
                   lambda: test_apparatus_happy_path(happy)))
     tests.append(("apparatus failure tolerance (injected arm failure)",
                   lambda: test_apparatus_failure_tolerance(broken)))
-    tests.append(("analysis primary stats (exact sign test, CI)",
-                  lambda: test_analysis_primary_stats(tmp_root / "a1")))
-    tests.append(("analysis decisive verdict + Holm",
-                  lambda: test_analysis_decisive_and_holm(tmp_root / "a2")))
+    tests.append(("clustered directions (5-0, 3-2, 2-2+tie, all-tied, "
+                  "sign-test n)",
+                  lambda: test_clustered_directions(tmp_root / "a1")))
+    tests.append(("clustered decisive verdict + Holm",
+                  lambda: test_clustered_decisive_and_holm(
+                      tmp_root / "a2")))
     tests.append(("analysis robustness: failure counts as loss",
                   lambda: test_analysis_robustness_failure_as_loss(
                       tmp_root / "a3")))
