@@ -5,19 +5,14 @@ from pathlib import Path
 
 import numpy as np
 
-from .arena import (
-    run_problem_algorithms,
-    write_results,
-)
+from .arena import run_problem_algorithms, write_results
 
 
 # cocoex 2.8.2 Observer lifecycle evidence (inspected on the installed wheel):
 #   - Observer.free exists and is callable on the public class surface
-#   - calling Observer.free() raises:
-#       AttributeError: 'Observer' object has no attribute '__dealloc__'
-#   - therefore V0.3.2.6 does NOT call Observer.free()
+#   - calling Observer.free() raises AttributeError on this wheel
+#   - therefore this arena does NOT call Observer.free()
 #   - required finalization is problem.free() (+ suite.free())
-#   - after problem.free(), COCO .info/.dat logs are present and readable
 
 
 def _import_coco():
@@ -32,24 +27,12 @@ def _import_coco():
         ) from exc
 
 
-def _get_problem(
-    cocoex,
-    function,
-    dimension,
-    instance,
-):
-    suite = cocoex.Suite(
-        "bbob",
-        "",
-        "",
-    )
-    problem = (
-        suite
-        .get_problem_by_function_dimension_instance(
-            int(function),
-            int(dimension),
-            int(instance),
-        )
+def _get_problem(cocoex, function, dimension, instance):
+    suite = cocoex.Suite("bbob", "", "")
+    problem = suite.get_problem_by_function_dimension_instance(
+        int(function),
+        int(dimension),
+        int(instance),
     )
     if problem is None:
         suite.free()
@@ -60,24 +43,16 @@ def _get_problem(
     return suite, problem
 
 
-
 def _resolve_bbob_final_target(problem):
     """
     Best-effort target lookup for reporting only.
 
-    On some coco-experiment 2.8.2 wheels, `final_target_fvalue1` is listed in
-    generated documentation but missing from the actual compiled Problem
-    object.
-
-    V0.3.2.6 deliberately avoids private Cython/C access and does not attempt
-    to reconstruct fopt. If the public property is unavailable, target-based
-    assessment is delegated to official COCO Observer logs + cocopp.
+    If the public final-target property is unavailable, target-based assessment
+    is delegated to official COCO Observer logs + cocopp. No private fopt
+    reconstruction is attempted.
     """
     try:
-        value = getattr(
-            problem,
-            "final_target_fvalue1",
-        )
+        value = getattr(problem, "final_target_fvalue1")
     except Exception:
         value = None
 
@@ -85,23 +60,15 @@ def _resolve_bbob_final_target(problem):
         try:
             value = float(value)
             if np.isfinite(value):
-                return (
-                    value,
-                    "final_target_fvalue1",
-                )
+                return value, "final_target_fvalue1"
         except (TypeError, ValueError):
             pass
 
-    return (
-        None,
-        "unavailable_use_cocopp",
-    )
-
+    return None, "unavailable_use_cocopp"
 
 
 def check_main():
     cocoex = _import_coco()
-
     suite, problem = _get_problem(
         cocoex,
         function=1,
@@ -110,73 +77,37 @@ def check_main():
     )
 
     try:
-        target, target_source = (
-            _resolve_bbob_final_target(
-                problem
-            )
-        )
-
-        x = np.asarray(
-            problem.initial_solution,
-            dtype=np.float64,
-        )
+        target, target_source = _resolve_bbob_final_target(problem)
+        x = np.asarray(problem.initial_solution, dtype=np.float64)
         y = float(problem(x))
 
-        # Verify only the public API actually required by the arena.
-        _ = np.asarray(
-            problem.lower_bounds,
-            dtype=np.float64,
-        )
-        _ = np.asarray(
-            problem.upper_bounds,
-            dtype=np.float64,
-        )
+        _ = np.asarray(problem.lower_bounds, dtype=np.float64)
+        _ = np.asarray(problem.upper_bounds, dtype=np.float64)
         _ = int(problem.dimension)
         _ = str(problem.id)
         _ = int(problem.evaluations)
 
         print("=" * 96)
-        print(
-            "COCO/BBOB integration check: PASS"
-        )
+        print("COCO/BBOB integration check: PASS")
         print("=" * 96)
         print(
             f"cocoex version  : "
             f"{getattr(cocoex, '__version__', 'unknown')}"
         )
-        print(
-            f"problem id      : {problem.id}"
-        )
-        print(
-            f"dimension       : {problem.dimension}"
-        )
-        print(
-            f"initial f       : {y:.12g}"
-        )
-        print(
-            f"evaluations     : {problem.evaluations}"
-        )
+        print(f"problem id      : {problem.id}")
+        print(f"dimension       : {problem.dimension}")
+        print(f"initial f       : {y:.12g}")
+        print(f"evaluations     : {problem.evaluations}")
 
         if target is None:
-            print(
-                "final target    : unavailable via this Python binding"
-            )
-            print(
-                "target source   : unavailable_use_cocopp"
-            )
-            print(
-                "official metrics: COCO Observer + cocopp"
-            )
+            print("final target    : unavailable via this Python binding")
+            print("target source   : unavailable_use_cocopp")
+            print("official metrics: COCO Observer + cocopp")
         else:
-            print(
-                f"final target    : {target:.12g}"
-            )
-            print(
-                f"target source   : {target_source}"
-            )
+            print(f"final target    : {target:.12g}")
+            print(f"target source   : {target_source}")
 
         print("=" * 96)
-
     finally:
         problem.free()
         suite.free()
@@ -187,31 +118,24 @@ def _sanitize_observer_name(value):
 
     value = str(value).replace("\\", "/")
     value = value.strip().strip("/")
-    value = re.sub(
-        r"[^A-Za-z0-9_./-]+",
-        "_",
-        value,
-    )
+    value = re.sub(r"[^A-Za-z0-9_./-]+", "_", value)
     return value or "engcore_bbob"
+
+
+def _observer_algorithm_id(algorithm: str) -> str:
+    """Stable scientific IDs for COCO provenance."""
+    mapping = {
+        "stacked": "stacked_v0301",
+        "adaptive_stacked": "adaptive_stacked_v034",
+    }
+    return mapping.get(str(algorithm), str(algorithm))
 
 
 def prepare_coco_observer_parents(
     requested_folder: str | Path,
 ) -> Path:
-    """
-    Create parent directories needed before constructing a cocoex Observer.
-
-    cocoex 2.8.2 typically materializes results under:
-        ./exdata/<requested_folder>
-    and may append a uniqueness suffix (e.g. -0001) to the leaf name.
-
-    We create parents for both the requested path and the exdata-prefixed
-    path. The leaf directory itself is left for COCO so existing experiment
-    data is not overwritten.
-    """
-    requested = Path(
-        str(requested_folder).replace("\\", "/")
-    )
+    """Create parent directories needed before constructing a COCO Observer."""
+    requested = Path(str(requested_folder).replace("\\", "/"))
     candidates = [
         requested.parent,
         Path("exdata") / requested.parent,
@@ -220,10 +144,7 @@ def prepare_coco_observer_parents(
     for parent in candidates:
         if str(parent) in {".", ""}:
             continue
-        parent.mkdir(
-            parents=True,
-            exist_ok=True,
-        )
+        parent.mkdir(parents=True, exist_ok=True)
 
     return requested
 
@@ -234,29 +155,22 @@ def create_bbob_observer(
     requested_folder: str | Path,
     algorithm_name: str,
     algorithm_info: str = (
-        "Engineering AI Core V0.3.2.6 arena"
+        "Engineering AI Core V0.3.4 logic-hardening research arena"
     ),
 ):
     """
-    Construct a bbob Observer after ensuring nested parents exist.
+    Construct a BBOB Observer after ensuring nested parents exist.
 
-    Returns (observer, actual_result_folder_str).
-    Does not call Observer.free(); see module-level lifecycle note.
+    Returns (observer, actual_result_folder_str). Does not call Observer.free().
     """
-    requested = prepare_coco_observer_parents(
-        requested_folder
-    )
-    # COCO option strings use forward slashes on all platforms.
+    requested = prepare_coco_observer_parents(requested_folder)
     folder_opt = requested.as_posix()
     options = (
         f"result_folder: {folder_opt} "
         f"algorithm_name: {algorithm_name} "
         f'algorithm_info: "{algorithm_info}"'
     )
-    observer = cocoex.Observer(
-        "bbob",
-        options,
-    )
+    observer = cocoex.Observer("bbob", options)
 
     try:
         actual = str(observer.result_folder)
@@ -271,50 +185,26 @@ def arena_main():
     p.add_argument(
         "--functions",
         default="1,3,6,8,9,10,15,21,24",
-        help=(
-            "Comma-separated BBOB function IDs. "
-            "Use all for 1..24."
-        ),
+        help="Comma-separated BBOB function IDs. Use all for 1..24.",
     )
-    p.add_argument(
-        "--dimensions",
-        default="2,5",
-    )
-    p.add_argument(
-        "--instances",
-        default="1,2,3",
-    )
+    p.add_argument("--dimensions", default="2,5")
+    p.add_argument("--instances", default="1,2,3")
     p.add_argument(
         "--budget-multiplier",
         type=int,
         default=20,
         help="budget = multiplier * dimension",
     )
-    p.add_argument(
-        "--algorithms",
-        default="sobol,de,stacked",
-    )
-    p.add_argument(
-        "--seed",
-        type=int,
-        default=123,
-    )
+    p.add_argument("--algorithms", default="sobol,de,stacked")
+    p.add_argument("--seed", type=int, default=123)
     p.add_argument(
         "--stacked-mode",
-        choices=[
-            "fast",
-            "balanced",
-            "quality",
-        ],
+        choices=["fast", "balanced", "quality"],
         default="fast",
     )
     p.add_argument(
         "--screen-device",
-        choices=[
-            "cpu",
-            "cuda",
-            "auto",
-        ],
+        choices=["cpu", "cuda", "auto"],
         default="auto",
     )
     p.add_argument(
@@ -345,51 +235,38 @@ def arena_main():
         ]
 
     dimensions = [
-        int(x)
-        for x in args.dimensions.split(",")
-        if x.strip()
+        int(x) for x in args.dimensions.split(",") if x.strip()
     ]
     instances = [
-        int(x)
-        for x in args.instances.split(",")
-        if x.strip()
+        int(x) for x in args.instances.split(",") if x.strip()
     ]
     algorithms = [
-        x.strip()
-        for x in args.algorithms.split(",")
-        if x.strip()
+        x.strip() for x in args.algorithms.split(",") if x.strip()
     ]
 
     observers = {}
     observer_folders = {}
 
     if args.coco_observer == "on":
-        base = _sanitize_observer_name(
-            args.out
-        )
+        base = _sanitize_observer_name(args.out)
 
         for algorithm in algorithms:
-            folder = (
-                f"{base}/coco_logs/{algorithm}"
-            )
-            observer, actual_folder = (
-                create_bbob_observer(
-                    cocoex,
-                    requested_folder=folder,
-                    algorithm_name=algorithm,
-                )
+            folder = f"{base}/coco_logs/{algorithm}"
+            scientific_id = _observer_algorithm_id(algorithm)
+            observer, actual_folder = create_bbob_observer(
+                cocoex,
+                requested_folder=folder,
+                algorithm_name=scientific_id,
+                algorithm_info=(
+                    "Engineering AI Core V0.3.4 logic-hardening; "
+                    f"arena_key={algorithm}; scientific_id={scientific_id}"
+                ),
             )
             observers[algorithm] = observer
-            observer_folders[
-                algorithm
-            ] = actual_folder
+            observer_folders[algorithm] = actual_folder
 
     traces = []
-    total = (
-        len(functions)
-        * len(dimensions)
-        * len(instances)
-    )
+    total = len(functions) * len(dimensions) * len(instances)
     case_no = 0
 
     try:
@@ -397,10 +274,7 @@ def arena_main():
             for function in functions:
                 for instance in instances:
                     case_no += 1
-                    budget = int(
-                        args.budget_multiplier
-                        * dim
-                    )
+                    budget = int(args.budget_multiplier * dim)
 
                     suite0, p0 = _get_problem(
                         cocoex,
@@ -418,11 +292,8 @@ def arena_main():
                             p0.upper_bounds,
                             dtype=np.float64,
                         ).copy()
-                        (
-                            final_target,
-                            target_source,
-                        ) = _resolve_bbob_final_target(
-                            p0
+                        final_target, target_source = (
+                            _resolve_bbob_final_target(p0)
                         )
                     finally:
                         p0.free()
@@ -434,20 +305,13 @@ def arena_main():
                         d=dim,
                         i=instance,
                     ):
-                        suite, problem = _get_problem(
-                            cocoex,
-                            f,
-                            d,
-                            i,
-                        )
+                        suite, problem = _get_problem(cocoex, f, d, i)
 
                         if (
                             algorithm is not None
                             and algorithm in observers
                         ):
-                            problem.observe_with(
-                                observers[algorithm]
-                            )
+                            problem.observe_with(observers[algorithm])
 
                         def func(x):
                             return float(problem(x))
@@ -480,25 +344,20 @@ def arena_main():
                     )
                     traces.extend(rows)
 
-                    best_row = min(
-                        rows,
-                        key=lambda t: t.best_f,
-                    )
+                    best_row = min(rows, key=lambda t: t.best_f)
 
                     print(
                         f"[{case_no:03d}/{total:03d}] "
                         f"{problem_id:24s} "
                         f"budget={budget:4d} "
-                        f"winner={best_row.algorithm:16s} "
+                        f"winner={best_row.algorithm:20s} "
                         f"f={best_row.best_f:.6g} "
                         f"target={target_source}"
                     )
 
-        _, summary_text, csv_path, _, _ = (
-            write_results(
-                traces,
-                Path(args.out),
-            )
+        _, summary_text, csv_path, _, _ = write_results(
+            traces,
+            Path(args.out),
         )
 
         print("")
@@ -508,30 +367,22 @@ def arena_main():
         if observer_folders:
             print("")
             print("=" * 116)
-            print(
-                "Official COCO observer data"
-            )
+            print("Official COCO observer data")
             print("=" * 116)
 
-            for algorithm, folder in (
-                observer_folders.items()
-            ):
-                print(
-                    f"{algorithm:20s}: {folder}"
-                )
+            for algorithm, folder in observer_folders.items():
+                print(f"{algorithm:20s}: {folder}")
 
             print("")
             print(
-                "Use cocopp on these folders for official "
-                "target / ERT / ECDF post-processing."
+                "Use cocopp on these folders for official target / ERT / "
+                "ECDF post-processing."
             )
             print("=" * 116)
 
     finally:
-        # Required finalization is problem.free()/suite.free() in each
-        # factory cleanup. Observer.free() is intentionally NOT called:
-        # on cocoex 2.8.2 it is publicly present but raises AttributeError
-        # when invoked. Dropping references lets the binding manage lifetime.
+        # Required finalization is problem.free()/suite.free() in each factory
+        # cleanup. Observer.free() is intentionally not called on cocoex 2.8.2.
         observers.clear()
 
 
