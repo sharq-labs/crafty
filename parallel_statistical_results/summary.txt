@@ -1,0 +1,39 @@
+==============================================================================
+Engineering AI Core V0.2.2 — Parallel Statistical Benchmark
+==============================================================================
+Runs                    : 2
+Budget / method / run   : 20
+Parallel workers        : 2
+Wall time               : 5.175 s
+
+FINAL SCORE
+Random mean             : 103.518761
+Smart mean              : 166.635214
+Random median           : 103.518761
+Smart median            : 166.635214
+
+PAIRED PERFORMANCE
+Average smart advantage : +63.116453
+Median smart advantage  : +63.116453
+Smart wins              : 2/2 (100.0%)
+Random wins             : 0/2 (0.0%)
+Ties                    : 0/2
+
+CORRECTED TARGET METRICS
+Random target hit rate  : 0.0%
+Smart target hit rate   : 100.0%
+Random penalized mean   : 21.00 experiments
+Smart penalized mean    : 15.00 experiments
+Random penalized median : 21.00 experiments
+Smart penalized median  : 15.00 experiments
+
+CONVERGENCE
+Random mean AUC         : 101.148265
+Smart mean AUC          : 100.621017
+
+STATISTICAL TEST
+One-sided Wilcoxon p    : 0.25
+
+NOTE: A failed target hit is counted as budget + 1 in the penalized metric.
+NOTE: synthetic benchmark only; not validated engineering physics.
+==============================================================================

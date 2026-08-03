@@ -17,14 +17,6 @@ ppdata/
 # Local research scratch / one-off diagnostics
 _diag_tmp/
 
-# Generated benchmark / suite result dumps
-*_results/
-*_suite_results/
-benchmark_results/
-parallel_statistical_results/
-statistical_results/
-demo-output.txt
-
 # Editor / OS noise
 .DS_Store
 Thumbs.db
