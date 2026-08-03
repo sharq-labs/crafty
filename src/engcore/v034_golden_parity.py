@@ -124,7 +124,9 @@ def main():
     else:
         functions = [int(x) for x in args.functions.split(",") if x.strip()]
 
-    out_dir = Path(args.out)
+    # Absolute: children run with cwd set to the target tree, so a
+    # relative --out would resolve against the wrong directory.
+    out_dir = Path(args.out).resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
     python = sys.executable
 
