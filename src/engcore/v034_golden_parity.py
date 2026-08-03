@@ -191,7 +191,9 @@ def main():
     def _obs(tag):
         if args.coco_observer != "on":
             return "off"
-        return str(out_dir / f"coco_{tag}")
+        # cocoex prefixes exdata/ and requires a RELATIVE folder name
+        # (resolved against the child's cwd = the target tree root).
+        return f"parity_obs/{out_dir.name}_{args.arm}_{tag}"
 
     for fn in functions:
         seed = args.base_seed + 10000 * args.instance + 100 * fn + 2
