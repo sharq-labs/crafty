@@ -1,0 +1,7 @@
+# Default repository ownership
+* @sharq-labs
+
+# Scientific optimizer and validation areas
+/src/engcore/ @sharq-labs
+/docs/validation/ @sharq-labs
+/docs/architecture/ @sharq-labs
