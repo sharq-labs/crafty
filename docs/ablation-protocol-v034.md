@@ -52,7 +52,7 @@ single otherwise-idle machine, using the repository venv:
   must be rerun for any reason, the entire campaign is rerun; partial mixes
   across apparatus or configuration versions are prohibited.
 
-## 3. Determinism classification
+## 3. Determinism classification and apparatus-validity rule
 
 **Strongly controlled causal ablation.** All sampling, fitting, screening,
 and refinement seeds are deterministic functions of (seed, step, fit_round);
@@ -61,9 +61,23 @@ device is fixed to CPU; configuration is identical across arms.
 Residual nondeterminism, declared: the tag-frozen `fast` mode dictionary sets
 `refinement_timeout_sec = 2.0`, a wall-clock cutoff inside
 `optimize_acqf`. Removing it would alter the frozen research treatment, so it
-stays. Mitigation: idle machine, and a pre-campaign determinism spot check
-(one case run twice; `best_f` sequences must be identical) recorded alongside
-the goldens.
+stays. Observability without modifying frozen code: per-run refinement
+telemetry (`refinement_attempts`, `refinement_s_total`,
+`refinement_s_mean`) is recorded into every trace's metadata by the
+apparatus-layer adapters and journaled; a per-attempt mean approaching
+2.0 s is the registered warning signal. Exact per-call timeout-hit
+detection is **not** possible without editing frozen engine files and is
+therefore not claimed. The manifest records the numerical threading
+environment (OMP/MKL/OpenBLAS/NumExpr thread settings, torch thread count,
+CPU count).
+
+**Pre-registered apparatus-validity rule:** if the pre-campaign
+full-trajectory determinism replay fails, or if refinement telemetry or
+trajectory checks indicate that wall-clock truncation altered execution
+between repeats or asymmetrically across arms, the campaign is **INVALID AS
+AN APPARATUS RUN** and must not be interpreted. Remediate the apparatus and
+rerun the complete campaign. This is apparatus failure, not performance
+re-rolling.
 
 With one seed per case at D=2, the campaign is **directional causal evidence
 only**. It supports attribution decisions for the merge; it does not support
@@ -72,21 +86,52 @@ D=5 / budget-100 / >=3-seeds-per-case tier (not scheduled).
 
 ## 4. Primary endpoints and pre-declared decision rules
 
-Primary endpoints: pairwise fractional win-share over the matched problem
-set (exact ties split fractionally), for **(B vs A)** and **(C vs B)**.
+**Registered analysis code:** `src/engcore/v034_ablation_analysis.py`,
+committed and tagged with the apparatus. Its output
+(`ablation_analysis.json`) is the only analysis feeding these rules.
 
-Dead zone: win-share in **[42%, 58%]** = "no attribution possible" for that
-contrast. Declared before running; not adjustable afterwards.
+**Primary endpoints (matched complete cases — every arm completed):**
+for **(B vs A)** and **(C vs B)**, on paired per-problem `best_f`:
+
+- wins / losses / ties (tie = exact `best_f` equality, lab convention),
+  win-share (ties split fractionally);
+- exact two-sided paired **sign test** on non-ties;
+- **Holm correction** across the two primary contrasts (family alpha 0.05);
+- **Clopper–Pearson CI for the win probability among non-ties at the
+  Bonferroni-adjusted 97.5% level** (family 95%);
+- effect size: win probability and rank-biserial delta = 2·p̂ − 1.
+
+**Pre-registered decision semantics (per contrast):**
+
+- CI entirely above 0.50 → **positive evidence**
+- CI entirely below 0.50 → **harmful evidence**
+- CI crossing 0.50 → **inconclusive**
+
+The Holm-adjusted p-values are reported alongside; if CI position and
+Holm-adjusted significance ever disagree at the margin, the CI position
+governs, as registered here. Win-share within [0.42, 0.58] is reported as a
+**secondary descriptive** "small practical effect at this design size"
+band; it has **no decision authority**.
 
 | # | Outcome | Pre-declared action |
 |---|---|---|
-| R1 | B > A above dead zone | Per-step weight refresh is the active ingredient. Document; fresh-weights engine becomes a recorded research finding (still no superiority claim). |
-| R2 | A > B above dead zone (refresh harmful) | Amend the branch to revert per-step refresh in `adaptive_stacked_v034` **before** merge. Gates: re-run `adaptive_stacked_selftest` (recorded in README-V0.3.4), re-run arm C at the amended tip, re-tag `v0.3.4-rc2`. |
-| R3 | C > B above dead zone | Adaptive machinery earns its complexity beyond fresh weights. Document; merge as-is. |
-| R4 | Any endpoint in dead zone | No attribution for that contrast. Merge as-is with `adaptive_stacked_v034` explicitly labeled *behaviorally changed, performance-unvalidated* in README-V0.3.4 and in any future solver descriptor. The open question files as a follow-up hypothesis for the deferred multi-seed tier. |
+| R1 | B vs A positive | Per-step weight refresh is the active ingredient. Document; fresh-weights engine becomes a recorded research finding (still no superiority claim). |
+| R2 | B vs A harmful (refresh harmful) | Amend the branch to revert per-step refresh in `adaptive_stacked_v034`. **Any registered-evidence-driven algorithm change invalidates the old results as validation of the new algorithm**: create `v0.3.4-rc2` and rerun the **complete three-arm matched campaign** under the one rc2 apparatus. Never combine arms across RC apparatus versions into one causal dataset. The rc1 campaign is archived as evidence about the rc1 treatments only. |
+| R3 | C vs B positive | Adaptive machinery earns its complexity beyond fresh weights. Document; merge as-is. |
+| R4 | Inconclusive endpoint(s) | No attribution for that contrast. Merge as-is with `adaptive_stacked_v034` explicitly labeled *behaviorally changed, performance-unvalidated* in README-V0.3.4 and in any future solver descriptor. The open question files as a follow-up hypothesis for the deferred multi-seed tier. |
 
-The campaign runs **once**. No re-rolls, no post-hoc endpoint changes.
-The merge decision itself remains with the product owner in all branches.
+Rule R2's rerun requirement applies to **any** treatment-changing
+modification triggered by registered evidence, not only weight-refresh
+reversion. The campaign runs **once per RC apparatus**. No re-rolls, no
+post-hoc endpoint changes. The merge decision itself remains with the
+product owner in all branches.
+
+**Secondary endpoint — all-case robustness:** the same two contrasts over
+**all attempted cases**, with a failed arm scored as a loss against a
+completed arm (two failures tie). A treatment-dependent failure is evidence
+about that treatment; failure-dependent cases must not disappear from the
+final judgment. Descriptive, reported with the same statistics, never
+decision-driving.
 
 ## 5. Exploratory-evidence disclosure
 
@@ -105,23 +150,42 @@ never combined with the registered dataset.
 ## 6. Evidence handling
 
 - `manifest.json`: git commit + dirty state, full configuration, package
-  versions, platform — written at campaign start.
+  versions, platform, numerical threading environment — written at
+  campaign start.
 - `progress.jsonl`: append-only fsync'd journal; one record per completed
   run (including the per-run convergence curve, which `runs.csv` does not
-  carry) and one per failure. A crash loses at most the in-flight run.
-- Failure policy: a case with any failed arm is excluded from ALL arms in
-  the matched summary (paired contrasts stay paired); the failure and any
-  completed sibling runs remain in `progress.jsonl`. Excluded-case count is
-  reported in the summary output and the completion record.
+  carry, and per-run refinement telemetry) and one per failure with arm
+  identity and reason. A crash loses at most the in-flight run.
+- **Failures are first-class scientific outcomes.** The registered report
+  must include, per arm: attempted cases, successful valid cases, failed
+  cases with reasons, and cases excluded from the matched set
+  (NON_CONVERGED: not applicable — the legacy lab evaluator contract has
+  no such status). The arena emits this per-arm accounting in its
+  completion record and console summary; the registered analysis
+  reproduces it in `ablation_analysis.json`.
+- Matched-case policy: a case with any failed arm is excluded from the
+  matched **paired-performance** endpoint for ALL arms (contrasts stay
+  paired), but that case fully participates in the all-case robustness
+  endpoint, and the failure itself is reported. Failure-dependent cases
+  never disappear from the final judgment.
 - Official COCO observer logs are written per arm with scientific IDs for
   cocopp post-processing.
+- Apparatus verification is versioned with the apparatus:
+  `src/engcore/v034_apparatus_selftest.py` (arena persistence, failure
+  tolerance, per-arm accounting, registered-analysis statistics) and
+  `src/engcore/v034_golden_parity.py` (full-trajectory baseline parity).
 
 ## 7. Apparatus-equivalence goldens (precondition)
 
-Before tagging `v0.3.4-rc`, record goldens for `stacked_v0301` on a small
-fixed case set under the registered configuration (scipy / cpu / fast), on
-**both** `main` and the branch tip, and diff `best_f` per case. The branch
-rewrote the validation adapter layer; these goldens are the evidence that
-arm A is the same experiment as the published baseline. A mismatch is a
-merge-review item and must be adjudicated before the campaign is
-interpreted.
+Before tagging `v0.3.4-rc`, run `v034_golden_parity` for `stacked_v0301`
+on **all 24 BBOB functions**, D=2, **instance 1** (disjoint from the
+registered campaign instances), budget 40, registered configuration
+(scipy / cpu / fast), same seed formula — on **both** the `main` tree and
+the branch tip, comparing the **full evaluation trajectories** (every
+evaluated x vector and every returned f), not only final objective values,
+plus a tree-B repeat pass for full-trajectory determinism. The branch
+rewrote the validation adapter layer; this parity run is the evidence that
+arm A is the same experiment as the published baseline. Any mismatch is
+reported exactly (first divergent evaluation index) and must be adjudicated
+before the campaign is interpreted. If parity or the determinism repeat
+fails, the apparatus-validity rule of §3 applies.

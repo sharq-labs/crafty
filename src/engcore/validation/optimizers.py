@@ -22,6 +22,31 @@ def assert_exact_budget(recorder: ObjectiveRecorder, algorithm: str) -> None:
         )
 
 
+def _refinement_telemetry(result):
+    """Wall-clock refinement telemetry (timeout-risk observability).
+
+    Observation-only: reads the engine's returned timings and
+    fit_diagnostics after the run completes. It cannot detect an
+    individual optimize_acqf timeout hit exactly without modifying
+    frozen engine code; the registered warning signal is a per-attempt
+    mean duration approaching the mode's refinement_timeout_sec.
+    """
+    timings = result.get("timings", {}) or {}
+    diags = result.get("fit_diagnostics", {}) or {}
+    attempts = int(diags.get("refinement_attempts", 0))
+    total_s = float(timings.get("refinement_s", 0.0))
+    return {
+        "refinement_attempts": attempts,
+        "refinement_failures": int(
+            diags.get("refinement_failures", 0)
+        ),
+        "refinement_s_total": total_s,
+        "refinement_s_mean": (
+            (total_s / attempts) if attempts else 0.0
+        ),
+    }
+
+
 def _trace(
     name,
     problem_id,
@@ -601,6 +626,7 @@ def run_stacked(
             "discrete_selected": result[
                 "fit_diagnostics"
             ]["discrete_selected"],
+            **_refinement_telemetry(result),
         },
     )
 
@@ -778,6 +804,7 @@ def run_adaptive_stacked(
             "engine_id": result["engine_id"],
             "final_weight_rbf": result["final_weight_rbf"],
             "final_weight_matern": result["final_weight_matern"],
+            **_refinement_telemetry(result),
             "adaptive_proposals_generated": result[
                 "fit_diagnostics"
             ].get("adaptive_proposals_generated", 0),

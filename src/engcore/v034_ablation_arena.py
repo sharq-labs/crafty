@@ -35,6 +35,7 @@ from .validation.coco_bbob import (
     create_bbob_observer,
 )
 from .validation.optimizers import (
+    _refinement_telemetry,
     _trace,
     run_adaptive_stacked,
     run_stacked,
@@ -105,6 +106,27 @@ def _git_state():
     }
 
 
+def _threading_state():
+    """Numerical threading environment relevant to wall-clock behavior."""
+    env_keys = (
+        "OMP_NUM_THREADS",
+        "MKL_NUM_THREADS",
+        "OPENBLAS_NUM_THREADS",
+        "NUMEXPR_NUM_THREADS",
+    )
+    state = {k: os.environ.get(k) for k in env_keys}
+    try:
+        import torch
+        state["torch_num_threads"] = int(torch.get_num_threads())
+    except Exception:
+        state["torch_num_threads"] = None
+    try:
+        state["cpu_count"] = os.cpu_count()
+    except Exception:
+        state["cpu_count"] = None
+    return state
+
+
 def _write_manifest(out_dir, args, functions, dimensions, instances):
     """Write manifest.json linking campaign output to code + environment."""
     expected_cases = len(functions) * len(dimensions) * len(instances)
@@ -132,6 +154,7 @@ def _write_manifest(out_dir, args, functions, dimensions, instances):
         "environment": {
             "python": sys.version,
             "platform": platform.platform(),
+            "threading": _threading_state(),
             "packages": {
                 name: _package_version(name)
                 for name in (
@@ -383,6 +406,7 @@ def run_stacked_fresh_weights(
             "matern25_warm_only_fits": result["fit_diagnostics"].get(
                 "matern25_warm_only_fits", 0
             ),
+            **_refinement_telemetry(result),
         },
     )
 
@@ -602,6 +626,38 @@ def main():
         matched_traces = [
             t for t in traces if t.problem_id not in failed_cases
         ]
+
+        # Per-arm accounting: failures are first-class scientific
+        # outcomes and must not disappear from the final judgment.
+        per_arm = {
+            sci_id: {
+                "attempted": 0,
+                "completed": 0,
+                "failed": 0,
+                "excluded_by_matching": 0,
+                "failure_reasons": [],
+            }
+            for sci_id in SCIENTIFIC_IDS.values()
+        }
+        for t in traces:
+            per_arm[t.algorithm]["attempted"] += 1
+            per_arm[t.algorithm]["completed"] += 1
+            if t.problem_id in failed_cases:
+                per_arm[t.algorithm]["excluded_by_matching"] += 1
+        setup_failures = []
+        for pid, arms in failed_cases.items():
+            for entry in arms:
+                if entry["arm"] == "_setup":
+                    setup_failures.append(
+                        {"problem_id": pid, "error": entry["error"]}
+                    )
+                else:
+                    per_arm[entry["arm"]]["attempted"] += 1
+                    per_arm[entry["arm"]]["failed"] += 1
+                    per_arm[entry["arm"]]["failure_reasons"].append(
+                        {"problem_id": pid, "error": entry["error"]}
+                    )
+
         journal.write({
             "kind": "campaign_complete",
             "completed_runs": len(traces),
@@ -609,14 +665,31 @@ def main():
             "failed_cases": {
                 pid: arms for pid, arms in failed_cases.items()
             },
+            "per_arm_accounting": per_arm,
+            "setup_failures": setup_failures,
         })
+
+        print("")
+        print("Per-arm accounting "
+              "(failures are first-class outcomes; see progress.jsonl):")
+        print(f"{'arm':30s} {'attempted':>9s} {'completed':>9s} "
+              f"{'failed':>6s} {'excluded':>8s}")
+        for sci_id, acct in per_arm.items():
+            print(f"{sci_id:30s} {acct['attempted']:9d} "
+                  f"{acct['completed']:9d} {acct['failed']:6d} "
+                  f"{acct['excluded_by_matching']:8d}")
+        if setup_failures:
+            print(f"setup failures (no arm attempted): "
+                  f"{len(setup_failures)}")
 
         if failed_cases:
             print("")
             print(
                 f"WARNING: {len(failed_cases)} case(s) had failures and "
-                "are EXCLUDED from the matched summary "
-                "(full detail in progress.jsonl):"
+                "are EXCLUDED from the matched paired-performance "
+                "endpoint (full detail in progress.jsonl; the all-case "
+                "robustness endpoint in v034_ablation_analysis "
+                "includes them):"
             )
             for pid, arms in failed_cases.items():
                 print(f"  {pid}: {[a['arm'] for a in arms]}")
