@@ -1,0 +1,2367 @@
+{
+  "algorithms": {
+    "adaptive_stacked_v033": {
+      "final_target_hit_rate": NaN,
+      "mean_evaluations": 60.0,
+      "mean_rank": 2.046875,
+      "mean_target_fraction": NaN,
+      "mean_wall_s": 41.99172553021102,
+      "median_log10_final_gap": NaN,
+      "median_rank": 2.0,
+      "runs": 96,
+      "unique_wins": 16,
+      "win_share": 29.0,
+      "wins": 16
+    },
+    "cmaes": {
+      "final_target_hit_rate": NaN,
+      "mean_evaluations": 60.0,
+      "mean_rank": 3.2916666666666665,
+      "mean_target_fraction": NaN,
+      "mean_wall_s": 0.010442847916541117,
+      "median_log10_final_gap": NaN,
+      "median_rank": 4.0,
+      "runs": 96,
+      "unique_wins": 8,
+      "win_share": 8.0,
+      "wins": 8
+    },
+    "ngopt": {
+      "final_target_hit_rate": NaN,
+      "mean_evaluations": 60.0,
+      "mean_rank": 2.53125,
+      "mean_target_fraction": NaN,
+      "mean_wall_s": 0.07216280729032103,
+      "median_log10_final_gap": NaN,
+      "median_rank": 3.0,
+      "runs": 96,
+      "unique_wins": 34,
+      "win_share": 34.0,
+      "wins": 34
+    },
+    "stacked_v0301": {
+      "final_target_hit_rate": NaN,
+      "mean_evaluations": 60.0,
+      "mean_rank": 2.1302083333333335,
+      "mean_target_fraction": NaN,
+      "mean_wall_s": 29.139842884375565,
+      "median_log10_final_gap": NaN,
+      "median_rank": 2.0,
+      "runs": 96,
+      "unique_wins": 12,
+      "win_share": 25.0,
+      "wins": 12
+    }
+  },
+  "per_problem_ranks": [
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f001_i72_d03",
+      "rank": 4.0,
+      "score": 184.23948902041
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f001_i72_d03",
+      "rank": 1.0,
+      "score": 183.52000002165565
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f001_i72_d03",
+      "rank": 2.5,
+      "score": 183.52003432104908
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f001_i72_d03",
+      "rank": 2.5,
+      "score": 183.52003432104908
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f001_i73_d03",
+      "rank": 4.0,
+      "score": -593.792238308345
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f001_i73_d03",
+      "rank": 1.0,
+      "score": -593.8399999987139
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f001_i73_d03",
+      "rank": 2.0,
+      "score": -593.8389626412364
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f001_i73_d03",
+      "rank": 3.0,
+      "score": -593.8379366743814
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f001_i74_d03",
+      "rank": 4.0,
+      "score": -999.0664073806108
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f001_i74_d03",
+      "rank": 1.0,
+      "score": -999.9999999963092
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f001_i74_d03",
+      "rank": 2.0,
+      "score": -999.9998917994562
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f001_i74_d03",
+      "rank": 3.0,
+      "score": -999.9998593213346
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f001_i75_d03",
+      "rank": 4.0,
+      "score": -24.818828835237376
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f001_i75_d03",
+      "rank": 1.0,
+      "score": -25.309999733705453
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f001_i75_d03",
+      "rank": 2.5,
+      "score": -25.307949819607476
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f001_i75_d03",
+      "rank": 2.5,
+      "score": -25.307949819607476
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f002_i72_d03",
+      "rank": 3.0,
+      "score": 5069.109287849507
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f002_i72_d03",
+      "rank": 4.0,
+      "score": 29721.024280462647
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f002_i72_d03",
+      "rank": 1.5,
+      "score": -359.9517962223286
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f002_i72_d03",
+      "rank": 1.5,
+      "score": -359.9517962223286
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f002_i73_d03",
+      "rank": 3.0,
+      "score": 7947.356049602496
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f002_i73_d03",
+      "rank": 4.0,
+      "score": 10060.958482113141
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f002_i73_d03",
+      "rank": 1.5,
+      "score": 3.8731723188669953
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f002_i73_d03",
+      "rank": 1.5,
+      "score": 3.8731723188669953
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f002_i74_d03",
+      "rank": 4.0,
+      "score": 50354.3451490784
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f002_i74_d03",
+      "rank": 3.0,
+      "score": 180.19509362423017
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f002_i74_d03",
+      "rank": 1.5,
+      "score": 177.6327505077392
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f002_i74_d03",
+      "rank": 1.5,
+      "score": 177.6327505077392
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f002_i75_d03",
+      "rank": 4.0,
+      "score": 4927.154374080542
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f002_i75_d03",
+      "rank": 3.0,
+      "score": -438.3147983616418
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f002_i75_d03",
+      "rank": 1.5,
+      "score": -563.734366858916
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f002_i75_d03",
+      "rank": 1.5,
+      "score": -563.734366858916
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f003_i72_d03",
+      "rank": 3.0,
+      "score": 54.71385440363619
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f003_i72_d03",
+      "rank": 1.0,
+      "score": 44.950081304845604
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f003_i72_d03",
+      "rank": 2.0,
+      "score": 50.06012845201158
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f003_i72_d03",
+      "rank": 4.0,
+      "score": 64.27973278266293
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f003_i73_d03",
+      "rank": 4.0,
+      "score": 312.95422976856094
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f003_i73_d03",
+      "rank": 2.0,
+      "score": 300.1627281394949
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f003_i73_d03",
+      "rank": 3.0,
+      "score": 305.1301416416017
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f003_i73_d03",
+      "rank": 1.0,
+      "score": 295.6268004315873
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f003_i74_d03",
+      "rank": 2.0,
+      "score": -17.788646418312272
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f003_i74_d03",
+      "rank": 4.0,
+      "score": 9.620568144901242
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f003_i74_d03",
+      "rank": 3.0,
+      "score": -8.034351119383487
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f003_i74_d03",
+      "rank": 1.0,
+      "score": -20.000219291284733
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f003_i75_d03",
+      "rank": 3.0,
+      "score": -43.5781461367647
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f003_i75_d03",
+      "rank": 1.0,
+      "score": -50.62029040895724
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f003_i75_d03",
+      "rank": 4.0,
+      "score": -43.08093548233303
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f003_i75_d03",
+      "rank": 2.0,
+      "score": -44.39466857687515
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f004_i72_d03",
+      "rank": 4.0,
+      "score": 94.89756215343303
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f004_i72_d03",
+      "rank": 1.0,
+      "score": 66.9227161227732
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f004_i72_d03",
+      "rank": 3.0,
+      "score": 72.06100939033685
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f004_i72_d03",
+      "rank": 2.0,
+      "score": 69.44166786955829
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f004_i73_d03",
+      "rank": 3.0,
+      "score": 304.99353894525905
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f004_i73_d03",
+      "rank": 2.0,
+      "score": 295.60919852221394
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f004_i73_d03",
+      "rank": 4.0,
+      "score": 312.3408122377698
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f004_i73_d03",
+      "rank": 1.0,
+      "score": 293.9414708796147
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f004_i74_d03",
+      "rank": 2.0,
+      "score": 3.1489399066890513
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f004_i74_d03",
+      "rank": 4.0,
+      "score": 75.65241020465112
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f004_i74_d03",
+      "rank": 1.0,
+      "score": -10.437924905130082
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f004_i74_d03",
+      "rank": 3.0,
+      "score": 5.113041983291652
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f004_i75_d03",
+      "rank": 1.0,
+      "score": -47.22602794547754
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f004_i75_d03",
+      "rank": 4.0,
+      "score": -4.85230268305272
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f004_i75_d03",
+      "rank": 2.0,
+      "score": -19.8223064922214
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f004_i75_d03",
+      "rank": 3.0,
+      "score": -19.782059459306822
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f005_i72_d03",
+      "rank": 3.0,
+      "score": -220.91601287438584
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f005_i72_d03",
+      "rank": 4.0,
+      "score": -206.20897715374534
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f005_i72_d03",
+      "rank": 1.5,
+      "score": -226.01
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f005_i72_d03",
+      "rank": 1.5,
+      "score": -226.01
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f005_i73_d03",
+      "rank": 3.0,
+      "score": 1005.203776568483
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f005_i73_d03",
+      "rank": 4.0,
+      "score": 1035.1345777643562
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f005_i73_d03",
+      "rank": 1.5,
+      "score": 1000.0
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f005_i73_d03",
+      "rank": 1.5,
+      "score": 1000.0
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f005_i74_d03",
+      "rank": 3.0,
+      "score": -176.93872162023843
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f005_i74_d03",
+      "rank": 4.0,
+      "score": -168.1746366294211
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f005_i74_d03",
+      "rank": 1.5,
+      "score": -183.02
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f005_i74_d03",
+      "rank": 1.5,
+      "score": -183.02
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f005_i75_d03",
+      "rank": 3.0,
+      "score": -100.6031911390579
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f005_i75_d03",
+      "rank": 4.0,
+      "score": -91.71361811427789
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f005_i75_d03",
+      "rank": 1.5,
+      "score": -102.62
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f005_i75_d03",
+      "rank": 1.5,
+      "score": -102.62
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f006_i72_d03",
+      "rank": 3.0,
+      "score": 35.45116488955251
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f006_i72_d03",
+      "rank": 1.0,
+      "score": 32.207733927072276
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f006_i72_d03",
+      "rank": 2.0,
+      "score": 34.476968415401736
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f006_i72_d03",
+      "rank": 4.0,
+      "score": 43.54613066016031
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f006_i73_d03",
+      "rank": 3.0,
+      "score": -1.0723983370455041
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f006_i73_d03",
+      "rank": 4.0,
+      "score": 17.433747551444842
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f006_i73_d03",
+      "rank": 1.5,
+      "score": -10.668620359577712
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f006_i73_d03",
+      "rank": 1.5,
+      "score": -10.668620359577712
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f006_i74_d03",
+      "rank": 1.0,
+      "score": 545.353591995333
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f006_i74_d03",
+      "rank": 2.0,
+      "score": 545.5145342473978
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f006_i74_d03",
+      "rank": 4.0,
+      "score": 569.574963224438
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f006_i74_d03",
+      "rank": 3.0,
+      "score": 562.2397599838652
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f006_i75_d03",
+      "rank": 1.0,
+      "score": -102.96705715126589
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f006_i75_d03",
+      "rank": 4.0,
+      "score": -25.57292865040675
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f006_i75_d03",
+      "rank": 2.5,
+      "score": -93.29778374046444
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f006_i75_d03",
+      "rank": 2.5,
+      "score": -93.29778374046444
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f007_i72_d03",
+      "rank": 4.0,
+      "score": 168.4761102825673
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f007_i72_d03",
+      "rank": 3.0,
+      "score": 167.88562836641367
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f007_i72_d03",
+      "rank": 2.0,
+      "score": 164.2160483126376
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f007_i72_d03",
+      "rank": 1.0,
+      "score": 164.13617617357878
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f007_i73_d03",
+      "rank": 3.0,
+      "score": -164.1282588470016
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f007_i73_d03",
+      "rank": 4.0,
+      "score": -155.22587884932682
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f007_i73_d03",
+      "rank": 1.5,
+      "score": -164.8428713335147
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f007_i73_d03",
+      "rank": 1.5,
+      "score": -164.8428713335147
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f007_i74_d03",
+      "rank": 4.0,
+      "score": 97.00518522163219
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f007_i74_d03",
+      "rank": 3.0,
+      "score": 94.07025743714432
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f007_i74_d03",
+      "rank": 1.5,
+      "score": 92.85705967367585
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f007_i74_d03",
+      "rank": 1.5,
+      "score": 92.85705967367585
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f007_i75_d03",
+      "rank": 4.0,
+      "score": -361.4598258376593
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f007_i75_d03",
+      "rank": 3.0,
+      "score": -362.89785910613665
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f007_i75_d03",
+      "rank": 2.0,
+      "score": -367.033072460067
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f007_i75_d03",
+      "rank": 1.0,
+      "score": -367.158422818059
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f008_i72_d03",
+      "rank": 4.0,
+      "score": 510.2380941625677
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f008_i72_d03",
+      "rank": 1.0,
+      "score": -187.46913682244306
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f008_i72_d03",
+      "rank": 2.5,
+      "score": -186.71403677878402
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f008_i72_d03",
+      "rank": 2.5,
+      "score": -186.71403677878402
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f008_i73_d03",
+      "rank": 4.0,
+      "score": 8.616226435788729
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f008_i73_d03",
+      "rank": 3.0,
+      "score": -20.21439761689485
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f008_i73_d03",
+      "rank": 1.5,
+      "score": -25.22742801648431
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f008_i73_d03",
+      "rank": 1.5,
+      "score": -25.22742801648431
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f008_i74_d03",
+      "rank": 4.0,
+      "score": 21.20269901044216
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f008_i74_d03",
+      "rank": 1.0,
+      "score": 7.285947687478229
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f008_i74_d03",
+      "rank": 2.0,
+      "score": 7.814048871997634
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f008_i74_d03",
+      "rank": 3.0,
+      "score": 8.011623327729097
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f008_i75_d03",
+      "rank": 4.0,
+      "score": -38.410444443283865
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f008_i75_d03",
+      "rank": 3.0,
+      "score": -41.68054941543545
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f008_i75_d03",
+      "rank": 2.0,
+      "score": -43.421414632577836
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f008_i75_d03",
+      "rank": 1.0,
+      "score": -43.970218037789
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f009_i72_d03",
+      "rank": 4.0,
+      "score": -50.49426368367258
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f009_i72_d03",
+      "rank": 1.0,
+      "score": -62.6326403648867
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f009_i72_d03",
+      "rank": 2.5,
+      "score": -52.200906768029476
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f009_i72_d03",
+      "rank": 2.5,
+      "score": -52.200906768029476
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f009_i73_d03",
+      "rank": 4.0,
+      "score": 1030.189903955847
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f009_i73_d03",
+      "rank": 3.0,
+      "score": 1000.3706806294307
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f009_i73_d03",
+      "rank": 1.5,
+      "score": 1000.1457764481582
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f009_i73_d03",
+      "rank": 1.5,
+      "score": 1000.1457764481582
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f009_i74_d03",
+      "rank": 4.0,
+      "score": 226.88064597795864
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f009_i74_d03",
+      "rank": 1.0,
+      "score": 32.11724522995642
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f009_i74_d03",
+      "rank": 2.5,
+      "score": 83.3299760768177
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f009_i74_d03",
+      "rank": 2.5,
+      "score": 83.3299760768177
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f009_i75_d03",
+      "rank": 4.0,
+      "score": 149.1466842451238
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f009_i75_d03",
+      "rank": 1.0,
+      "score": 58.84672067848613
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f009_i75_d03",
+      "rank": 2.0,
+      "score": 63.0528763340506
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f009_i75_d03",
+      "rank": 3.0,
+      "score": 67.04448957405516
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f010_i72_d03",
+      "rank": 4.0,
+      "score": 1511.2661068162283
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f010_i72_d03",
+      "rank": 2.0,
+      "score": 272.8369957814596
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f010_i72_d03",
+      "rank": 3.0,
+      "score": 306.00584382522425
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f010_i72_d03",
+      "rank": 1.0,
+      "score": 91.64321358939469
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f010_i73_d03",
+      "rank": 3.0,
+      "score": 1988.0952309602717
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f010_i73_d03",
+      "rank": 4.0,
+      "score": 42047.14159435449
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f010_i73_d03",
+      "rank": 1.5,
+      "score": 211.1088768944038
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f010_i73_d03",
+      "rank": 1.5,
+      "score": 211.1088768944038
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f010_i74_d03",
+      "rank": 3.0,
+      "score": 9017.55266422443
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f010_i74_d03",
+      "rank": 4.0,
+      "score": 24312.33547418193
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f010_i74_d03",
+      "rank": 2.0,
+      "score": 1176.780341680813
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f010_i74_d03",
+      "rank": 1.0,
+      "score": 1040.5097240542816
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f010_i75_d03",
+      "rank": 4.0,
+      "score": 9812.584975108668
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f010_i75_d03",
+      "rank": 3.0,
+      "score": 1878.9879367559756
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f010_i75_d03",
+      "rank": 1.5,
+      "score": 264.0146775804859
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f010_i75_d03",
+      "rank": 1.5,
+      "score": 264.0146775804859
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f011_i72_d03",
+      "rank": 4.0,
+      "score": 742.7667438712838
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f011_i72_d03",
+      "rank": 3.0,
+      "score": 180.42511702095436
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f011_i72_d03",
+      "rank": 1.5,
+      "score": 138.89861635277614
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f011_i72_d03",
+      "rank": 1.5,
+      "score": 138.89861635277614
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f011_i73_d03",
+      "rank": 4.0,
+      "score": 217.4334120333658
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f011_i73_d03",
+      "rank": 1.0,
+      "score": 98.69494052266131
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f011_i73_d03",
+      "rank": 2.5,
+      "score": 119.33950908756367
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f011_i73_d03",
+      "rank": 2.5,
+      "score": 119.33950908756367
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f011_i74_d03",
+      "rank": 4.0,
+      "score": -1.3320779587233602
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f011_i74_d03",
+      "rank": 1.0,
+      "score": -17.30923830641558
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f011_i74_d03",
+      "rank": 3.0,
+      "score": -10.422614383473709
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f011_i74_d03",
+      "rank": 2.0,
+      "score": -12.745383089196835
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f011_i75_d03",
+      "rank": 4.0,
+      "score": 393.1456299799584
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f011_i75_d03",
+      "rank": 2.0,
+      "score": 179.76392838289962
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f011_i75_d03",
+      "rank": 3.0,
+      "score": 187.9396565515537
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f011_i75_d03",
+      "rank": 1.0,
+      "score": 103.87281323713353
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f012_i72_d03",
+      "rank": 4.0,
+      "score": 513990.3084438452
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f012_i72_d03",
+      "rank": 1.0,
+      "score": -85.2936754214475
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f012_i72_d03",
+      "rank": 2.5,
+      "score": 121476.55419125606
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f012_i72_d03",
+      "rank": 2.5,
+      "score": 121476.55419125606
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f012_i73_d03",
+      "rank": 4.0,
+      "score": 204683.3382648016
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f012_i73_d03",
+      "rank": 1.0,
+      "score": 175.89292380040715
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f012_i73_d03",
+      "rank": 2.0,
+      "score": 409.5516404144613
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f012_i73_d03",
+      "rank": 3.0,
+      "score": 453.8898836437607
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f012_i74_d03",
+      "rank": 4.0,
+      "score": 415775.64375332696
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f012_i74_d03",
+      "rank": 1.0,
+      "score": 71.07615305820266
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f012_i74_d03",
+      "rank": 3.0,
+      "score": 876.0922865885682
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f012_i74_d03",
+      "rank": 2.0,
+      "score": 215.4881984899911
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f012_i75_d03",
+      "rank": 2.0,
+      "score": 120003.37232442688
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f012_i75_d03",
+      "rank": 1.0,
+      "score": 1001.3181924080227
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f012_i75_d03",
+      "rank": 4.0,
+      "score": 182101.64579094743
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f012_i75_d03",
+      "rank": 3.0,
+      "score": 179753.9710529948
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f013_i72_d03",
+      "rank": 4.0,
+      "score": -584.7988170656523
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f013_i72_d03",
+      "rank": 1.0,
+      "score": -730.9192671157319
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f013_i72_d03",
+      "rank": 3.0,
+      "score": -725.6385786737757
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f013_i72_d03",
+      "rank": 2.0,
+      "score": -725.976814924038
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f013_i73_d03",
+      "rank": 4.0,
+      "score": 94.92609622577694
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f013_i73_d03",
+      "rank": 3.0,
+      "score": -26.69877932544161
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f013_i73_d03",
+      "rank": 1.5,
+      "score": -38.557701531949775
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f013_i73_d03",
+      "rank": 1.5,
+      "score": -38.557701531949775
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f013_i74_d03",
+      "rank": 4.0,
+      "score": -11.182751123701934
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f013_i74_d03",
+      "rank": 3.0,
+      "score": -201.62712229551263
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f013_i74_d03",
+      "rank": 2.0,
+      "score": -210.62405085621305
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f013_i74_d03",
+      "rank": 1.0,
+      "score": -217.94628682488317
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f013_i75_d03",
+      "rank": 4.0,
+      "score": 296.9372555226909
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f013_i75_d03",
+      "rank": 1.0,
+      "score": 7.7108028222443625
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f013_i75_d03",
+      "rank": 3.0,
+      "score": 29.609018030490482
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f013_i75_d03",
+      "rank": 2.0,
+      "score": 27.716578753684995
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f014_i72_d03",
+      "rank": 4.0,
+      "score": -38.587183875435926
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f014_i72_d03",
+      "rank": 2.0,
+      "score": -39.425320663393855
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f014_i72_d03",
+      "rank": 3.0,
+      "score": -39.35590361427805
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f014_i72_d03",
+      "rank": 1.0,
+      "score": -39.42720845488695
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f014_i73_d03",
+      "rank": 4.0,
+      "score": 420.0967311832055
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f014_i73_d03",
+      "rank": 1.0,
+      "score": 419.7313417218914
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f014_i73_d03",
+      "rank": 3.0,
+      "score": 419.9114881155458
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f014_i73_d03",
+      "rank": 2.0,
+      "score": 419.7987085695126
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f014_i74_d03",
+      "rank": 4.0,
+      "score": 7.714421036717893
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f014_i74_d03",
+      "rank": 1.0,
+      "score": 7.6422431432132925
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f014_i74_d03",
+      "rank": 2.5,
+      "score": 7.676262249611145
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f014_i74_d03",
+      "rank": 2.5,
+      "score": 7.676262249611145
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f014_i75_d03",
+      "rank": 4.0,
+      "score": -126.31189575398622
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f014_i75_d03",
+      "rank": 1.0,
+      "score": -127.6746281529593
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f014_i75_d03",
+      "rank": 2.0,
+      "score": -127.63185736425874
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f014_i75_d03",
+      "rank": 3.0,
+      "score": -127.61856599726977
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f015_i72_d03",
+      "rank": 2.0,
+      "score": 101.28665861207645
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f015_i72_d03",
+      "rank": 4.0,
+      "score": 107.02939403374225
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f015_i72_d03",
+      "rank": 1.0,
+      "score": 93.39047640457889
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f015_i72_d03",
+      "rank": 3.0,
+      "score": 104.72278402031645
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f015_i73_d03",
+      "rank": 4.0,
+      "score": -7.244674586482326
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f015_i73_d03",
+      "rank": 2.0,
+      "score": -24.629351282986
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f015_i73_d03",
+      "rank": 3.0,
+      "score": -16.449310765903483
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f015_i73_d03",
+      "rank": 1.0,
+      "score": -26.117718327733314
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f015_i74_d03",
+      "rank": 3.0,
+      "score": -980.4031088106269
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f015_i74_d03",
+      "rank": 4.0,
+      "score": -971.1449613804466
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f015_i74_d03",
+      "rank": 1.0,
+      "score": -990.3514561194994
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f015_i74_d03",
+      "rank": 2.0,
+      "score": -987.4906002877158
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f015_i75_d03",
+      "rank": 4.0,
+      "score": -65.65260615655056
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f015_i75_d03",
+      "rank": 1.0,
+      "score": -84.47477490625586
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f015_i75_d03",
+      "rank": 2.5,
+      "score": -77.80310987318964
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f015_i75_d03",
+      "rank": 2.5,
+      "score": -77.80310987318964
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f016_i72_d03",
+      "rank": 4.0,
+      "score": -131.1750406791664
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f016_i72_d03",
+      "rank": 1.0,
+      "score": -138.3241882076264
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f016_i72_d03",
+      "rank": 2.5,
+      "score": -136.27971421148143
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f016_i72_d03",
+      "rank": 2.5,
+      "score": -136.27971421148143
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f016_i73_d03",
+      "rank": 3.0,
+      "score": 738.4272440720334
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f016_i73_d03",
+      "rank": 2.0,
+      "score": 737.3677592710875
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f016_i73_d03",
+      "rank": 1.0,
+      "score": 733.9728534939558
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f016_i73_d03",
+      "rank": 4.0,
+      "score": 739.6315987774504
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f016_i74_d03",
+      "rank": 3.0,
+      "score": 88.25504775294779
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f016_i74_d03",
+      "rank": 4.0,
+      "score": 116.44640225886724
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f016_i74_d03",
+      "rank": 2.0,
+      "score": 76.88221865733959
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f016_i74_d03",
+      "rank": 1.0,
+      "score": 76.8354094382491
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f016_i75_d03",
+      "rank": 3.0,
+      "score": -41.155117490221656
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f016_i75_d03",
+      "rank": 4.0,
+      "score": -39.628632990026674
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f016_i75_d03",
+      "rank": 1.5,
+      "score": -44.31757887296236
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f016_i75_d03",
+      "rank": 1.5,
+      "score": -44.31757887296236
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f017_i72_d03",
+      "rank": 3.0,
+      "score": -34.30871797394198
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f017_i72_d03",
+      "rank": 4.0,
+      "score": -32.845736907091116
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f017_i72_d03",
+      "rank": 1.5,
+      "score": -35.32600989095178
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f017_i72_d03",
+      "rank": 1.5,
+      "score": -35.32600989095178
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f017_i73_d03",
+      "rank": 3.0,
+      "score": 40.70444723797159
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f017_i73_d03",
+      "rank": 4.0,
+      "score": 44.86535013268754
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f017_i73_d03",
+      "rank": 1.5,
+      "score": 40.66910842994405
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f017_i73_d03",
+      "rank": 1.5,
+      "score": 40.66910842994405
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f017_i74_d03",
+      "rank": 1.0,
+      "score": -30.50814828477184
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f017_i74_d03",
+      "rank": 4.0,
+      "score": -20.360942210461396
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f017_i74_d03",
+      "rank": 3.0,
+      "score": -29.36696443958818
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f017_i74_d03",
+      "rank": 2.0,
+      "score": -30.05383109530355
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f017_i75_d03",
+      "rank": 3.0,
+      "score": 370.53587836402755
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f017_i75_d03",
+      "rank": 4.0,
+      "score": 378.8107172848001
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f017_i75_d03",
+      "rank": 1.5,
+      "score": 368.4953142021666
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f017_i75_d03",
+      "rank": 1.5,
+      "score": 368.4953142021666
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f018_i72_d03",
+      "rank": 3.0,
+      "score": -26.48817009979615
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f018_i72_d03",
+      "rank": 4.0,
+      "score": -22.41474993948823
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f018_i72_d03",
+      "rank": 1.5,
+      "score": -34.778711977728854
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f018_i72_d03",
+      "rank": 1.5,
+      "score": -34.778711977728854
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f018_i73_d03",
+      "rank": 4.0,
+      "score": 67.01294392101518
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f018_i73_d03",
+      "rank": 3.0,
+      "score": 53.24524985073174
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f018_i73_d03",
+      "rank": 1.0,
+      "score": 41.335301696693726
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f018_i73_d03",
+      "rank": 2.0,
+      "score": 41.71248200351115
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f018_i74_d03",
+      "rank": 1.0,
+      "score": -25.853071433806527
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f018_i74_d03",
+      "rank": 4.0,
+      "score": 30.10261631893814
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f018_i74_d03",
+      "rank": 2.5,
+      "score": -24.80854505009737
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f018_i74_d03",
+      "rank": 2.5,
+      "score": -24.80854505009737
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f018_i75_d03",
+      "rank": 1.0,
+      "score": 369.54548640009324
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f018_i75_d03",
+      "rank": 4.0,
+      "score": 457.467584678368
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f018_i75_d03",
+      "rank": 2.5,
+      "score": 374.3349817268015
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f018_i75_d03",
+      "rank": 2.5,
+      "score": 374.3349817268015
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f019_i72_d03",
+      "rank": 4.0,
+      "score": -79.48136944854515
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f019_i72_d03",
+      "rank": 2.0,
+      "score": -82.56811128995432
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f019_i72_d03",
+      "rank": 1.0,
+      "score": -83.76983851755759
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f019_i72_d03",
+      "rank": 3.0,
+      "score": -82.4990012802642
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f019_i73_d03",
+      "rank": 2.0,
+      "score": -23.93129417828215
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f019_i73_d03",
+      "rank": 1.0,
+      "score": -24.794585555922392
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f019_i73_d03",
+      "rank": 4.0,
+      "score": -22.79399187578692
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f019_i73_d03",
+      "rank": 3.0,
+      "score": -23.690588212330937
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f019_i74_d03",
+      "rank": 2.0,
+      "score": -26.76013885398614
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f019_i74_d03",
+      "rank": 3.0,
+      "score": -23.841573450343493
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f019_i74_d03",
+      "rank": 1.0,
+      "score": -29.462109779883917
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f019_i74_d03",
+      "rank": 4.0,
+      "score": -23.34527844769731
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f019_i75_d03",
+      "rank": 3.0,
+      "score": -995.7091863729612
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f019_i75_d03",
+      "rank": 4.0,
+      "score": -985.1587205085788
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f019_i75_d03",
+      "rank": 1.5,
+      "score": -999.3812658433545
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f019_i75_d03",
+      "rank": 1.5,
+      "score": -999.3812658433545
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f020_i72_d03",
+      "rank": 4.0,
+      "score": 369.7420835634149
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f020_i72_d03",
+      "rank": 1.0,
+      "score": 368.2254430598607
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f020_i72_d03",
+      "rank": 3.0,
+      "score": 368.61953165630086
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f020_i72_d03",
+      "rank": 2.0,
+      "score": 368.6108206739537
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f020_i73_d03",
+      "rank": 3.0,
+      "score": -245.85803805453932
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f020_i73_d03",
+      "rank": 4.0,
+      "score": -245.40103991107145
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f020_i73_d03",
+      "rank": 1.0,
+      "score": -247.0480864205738
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f020_i73_d03",
+      "rank": 2.0,
+      "score": -246.6248522643475
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f020_i74_d03",
+      "rank": 4.0,
+      "score": -65.45205853361684
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f020_i74_d03",
+      "rank": 1.0,
+      "score": -66.87292740639906
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f020_i74_d03",
+      "rank": 3.0,
+      "score": -65.73733369080402
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f020_i74_d03",
+      "rank": 2.0,
+      "score": -65.9554382523789
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f020_i75_d03",
+      "rank": 4.0,
+      "score": -19.413981111110992
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f020_i75_d03",
+      "rank": 1.0,
+      "score": -22.891525078383406
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f020_i75_d03",
+      "rank": 2.5,
+      "score": -21.229787367935508
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f020_i75_d03",
+      "rank": 2.5,
+      "score": -21.229787367935508
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f021_i72_d03",
+      "rank": 1.0,
+      "score": 24.403146278544256
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f021_i72_d03",
+      "rank": 4.0,
+      "score": 46.87832310445333
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f021_i72_d03",
+      "rank": 2.0,
+      "score": 27.41773163844295
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f021_i72_d03",
+      "rank": 3.0,
+      "score": 28.366033710914117
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f021_i73_d03",
+      "rank": 4.0,
+      "score": -19.922486960753602
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f021_i73_d03",
+      "rank": 3.0,
+      "score": -22.08000080799259
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f021_i73_d03",
+      "rank": 2.0,
+      "score": -22.972721456844873
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f021_i73_d03",
+      "rank": 1.0,
+      "score": -22.97421615799589
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f021_i74_d03",
+      "rank": 4.0,
+      "score": -324.8288035618304
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f021_i74_d03",
+      "rank": 3.0,
+      "score": -330.79811944591637
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f021_i74_d03",
+      "rank": 2.0,
+      "score": -332.3495522308651
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f021_i74_d03",
+      "rank": 1.0,
+      "score": -332.3520740590502
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f021_i75_d03",
+      "rank": 4.0,
+      "score": -120.44133860139009
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f021_i75_d03",
+      "rank": 1.0,
+      "score": -121.56699014083507
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f021_i75_d03",
+      "rank": 2.5,
+      "score": -121.36033066957718
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f021_i75_d03",
+      "rank": 2.5,
+      "score": -121.36033066957718
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f022_i72_d03",
+      "rank": 3.0,
+      "score": 103.54493726351028
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f022_i72_d03",
+      "rank": 4.0,
+      "score": 121.58710139654016
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f022_i72_d03",
+      "rank": 1.5,
+      "score": 99.81810749960366
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f022_i72_d03",
+      "rank": 1.5,
+      "score": 99.81810749960366
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f022_i73_d03",
+      "rank": 3.0,
+      "score": -107.20772346888891
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f022_i73_d03",
+      "rank": 4.0,
+      "score": -100.640878509425
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f022_i73_d03",
+      "rank": 1.0,
+      "score": -117.4313052582031
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f022_i73_d03",
+      "rank": 2.0,
+      "score": -116.80953071976184
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f022_i74_d03",
+      "rank": 4.0,
+      "score": 13.524683116598737
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f022_i74_d03",
+      "rank": 1.0,
+      "score": 10.77216883677988
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f022_i74_d03",
+      "rank": 3.0,
+      "score": 11.498058712949046
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f022_i74_d03",
+      "rank": 2.0,
+      "score": 10.87955792532017
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f022_i75_d03",
+      "rank": 4.0,
+      "score": 37.54416186702327
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f022_i75_d03",
+      "rank": 1.0,
+      "score": 22.064572296465172
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f022_i75_d03",
+      "rank": 3.0,
+      "score": 23.464819975049625
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f022_i75_d03",
+      "rank": 2.0,
+      "score": 23.214104608274397
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f023_i72_d03",
+      "rank": 4.0,
+      "score": 1006.8978170572439
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f023_i72_d03",
+      "rank": 3.0,
+      "score": 1003.7504519776404
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f023_i72_d03",
+      "rank": 1.5,
+      "score": 1002.3304137625328
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f023_i72_d03",
+      "rank": 1.5,
+      "score": 1002.3304137625328
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f023_i73_d03",
+      "rank": 1.0,
+      "score": -184.21764644918102
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f023_i73_d03",
+      "rank": 2.0,
+      "score": -183.8184274191354
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f023_i73_d03",
+      "rank": 3.0,
+      "score": -183.01929278770194
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f023_i73_d03",
+      "rank": 4.0,
+      "score": -182.92651783158914
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f023_i74_d03",
+      "rank": 2.0,
+      "score": 589.3438575144008
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f023_i74_d03",
+      "rank": 4.0,
+      "score": 590.9369793007389
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f023_i74_d03",
+      "rank": 3.0,
+      "score": 590.6601227754948
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f023_i74_d03",
+      "rank": 1.0,
+      "score": 588.15643376292
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f023_i75_d03",
+      "rank": 3.0,
+      "score": 292.34007756722315
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f023_i75_d03",
+      "rank": 4.0,
+      "score": 293.2797842252345
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f023_i75_d03",
+      "rank": 1.0,
+      "score": 290.80401365983056
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f023_i75_d03",
+      "rank": 2.0,
+      "score": 292.09669206631753
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f024_i72_d03",
+      "rank": 4.0,
+      "score": 10.012296404827474
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f024_i72_d03",
+      "rank": 1.0,
+      "score": -4.187690019413167
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f024_i72_d03",
+      "rank": 3.0,
+      "score": 7.114573262812829
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f024_i72_d03",
+      "rank": 2.0,
+      "score": 5.853412679441629
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f024_i73_d03",
+      "rank": 4.0,
+      "score": -186.73096559662463
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f024_i73_d03",
+      "rank": 2.0,
+      "score": -192.55921183894355
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f024_i73_d03",
+      "rank": 1.0,
+      "score": -192.93270354004994
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f024_i73_d03",
+      "rank": 3.0,
+      "score": -189.41839993938015
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f024_i74_d03",
+      "rank": 2.0,
+      "score": 48.55766895293865
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f024_i74_d03",
+      "rank": 4.0,
+      "score": 88.12654012051298
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f024_i74_d03",
+      "rank": 1.0,
+      "score": 39.586327753496256
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f024_i74_d03",
+      "rank": 3.0,
+      "score": 51.738245789858816
+    },
+    {
+      "algorithm": "cmaes",
+      "problem_id": "bbob_f024_i75_d03",
+      "rank": 3.0,
+      "score": -985.6496615825753
+    },
+    {
+      "algorithm": "ngopt",
+      "problem_id": "bbob_f024_i75_d03",
+      "rank": 4.0,
+      "score": -978.130144483069
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f024_i75_d03",
+      "rank": 1.5,
+      "score": -994.2923435861738
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "bbob_f024_i75_d03",
+      "rank": 1.5,
+      "score": -994.2923435861738
+    }
+  ],
+  "ranking_policy": {
+    "ranks": "average_ranks_exact_ties",
+    "unique_wins": "sole_best_only",
+    "win_share": "fractional_1_over_N_at_best"
+  }
+}

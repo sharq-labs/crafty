@@ -1,0 +1,3 @@
+suite = 'bbob', funcId = 14, DIM = 5, Precision = 1.000e-08, algId = 'stacked', coco_version = '2.8.2', logger = 'bbob', data_format = 'bbob-new2', settings = ''
+% Engineering AI Core V0.3.2.6 arena
+data_f14/bbobexp_f14_DIM5.dat, 1:100|2.5e-01, 2:100|6.4e-02, 3:100|7.5e-02, 4:100|7.6e-01, 5:100|3.6e-01

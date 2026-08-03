@@ -1,0 +1,18 @@
+====================================================================================================================
+Engineering AI Core V0.3.3 — Optimizer Validation Lab
+====================================================================================================================
+Ranking is per-problem, then averaged. Exact ties use average ranks. Lower mean rank is better.
+WinShare = fractional credit 1/N when N algorithms share the exact best score. Wins = sole-best count only.
+Target fraction = fraction of standard target deltas [1e2 ... 1e-6] reached within budget.
+
+Algorithm             Runs  MeanRank WinShare  Wins TargetFrac FinalHit  MedLogGap   Wall(s)
+--------------------------------------------------------------------------------------------
+stacked_v0301           24     2.000    7.500     3        N/A      N/A        N/A    29.737
+adaptive_stacked_v033    24     2.000    7.500     3        N/A      N/A        N/A    43.429
+ngopt                   24     2.917    8.000     8        N/A      N/A        N/A     0.076
+cmaes                   24     3.083    1.000     1        N/A      N/A        N/A     0.015
+
+TargetFrac / FinalHit / MedLogGap are N/A when the installed cocoex binding does not expose the final target.
+Use official COCO Observer logs + cocopp for target-based BBOB assessment.
+NOTE: This lab measures optimizer behavior. It does not validate engineering physics.
+====================================================================================================================

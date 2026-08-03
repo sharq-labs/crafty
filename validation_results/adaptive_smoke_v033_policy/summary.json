@@ -1,0 +1,159 @@
+{
+  "algorithms": {
+    "adaptive_stacked_v033": {
+      "final_target_hit_rate": 0.0,
+      "mean_evaluations": 20.0,
+      "mean_rank": 2.125,
+      "mean_target_fraction": 0.3571428571428571,
+      "mean_wall_s": 5.960168674995657,
+      "median_log10_final_gap": 0.31380693180263575,
+      "median_rank": 1.5,
+      "runs": 4,
+      "unique_wins": 0,
+      "win_share": 1.5,
+      "wins": 0
+    },
+    "random": {
+      "final_target_hit_rate": 0.0,
+      "mean_evaluations": 20.0,
+      "mean_rank": 3.75,
+      "mean_target_fraction": 0.2857142857142857,
+      "mean_wall_s": 0.0004288749914849177,
+      "median_log10_final_gap": 0.7975978186784607,
+      "median_rank": 4.0,
+      "runs": 4,
+      "unique_wins": 0,
+      "win_share": 0.0,
+      "wins": 0
+    },
+    "sobol": {
+      "final_target_hit_rate": 0.0,
+      "mean_evaluations": 20.0,
+      "mean_rank": 2.75,
+      "mean_target_fraction": 0.3214285714285714,
+      "mean_wall_s": 0.002382924998528324,
+      "median_log10_final_gap": 0.22177517995793442,
+      "median_rank": 3.0,
+      "runs": 4,
+      "unique_wins": 0,
+      "win_share": 0.0,
+      "wins": 0
+    },
+    "stacked_v0301": {
+      "final_target_hit_rate": 0.0,
+      "mean_evaluations": 20.0,
+      "mean_rank": 1.375,
+      "mean_target_fraction": 0.5,
+      "mean_wall_s": 6.087604924978223,
+      "median_log10_final_gap": -1.2589973327935458,
+      "median_rank": 1.5,
+      "runs": 4,
+      "unique_wins": 1,
+      "win_share": 2.5,
+      "wins": 1
+    }
+  },
+  "per_problem_ranks": [
+    {
+      "algorithm": "random",
+      "problem_id": "sphere_d2_i1",
+      "rank": 4.0,
+      "score": 0.27889827507659637
+    },
+    {
+      "algorithm": "sobol",
+      "problem_id": "sphere_d2_i1",
+      "rank": 3.0,
+      "score": 0.006698599046879477
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "sphere_d2_i1",
+      "rank": 1.5,
+      "score": -3.731705891384167
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "sphere_d2_i1",
+      "rank": 1.5,
+      "score": -3.731705891384167
+    },
+    {
+      "algorithm": "random",
+      "problem_id": "rastrigin_d2_i1",
+      "rank": 4.0,
+      "score": 0.9974436326046109
+    },
+    {
+      "algorithm": "sobol",
+      "problem_id": "rastrigin_d2_i1",
+      "rank": 3.0,
+      "score": 0.9282059749695617
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "rastrigin_d2_i1",
+      "rank": 1.5,
+      "score": 0.6253818313344917
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "rastrigin_d2_i1",
+      "rank": 1.5,
+      "score": 0.6253818313344917
+    },
+    {
+      "algorithm": "random",
+      "problem_id": "rosenbrock_d2_i1",
+      "rank": 3.0,
+      "score": 0.932580763768308
+    },
+    {
+      "algorithm": "sobol",
+      "problem_id": "rosenbrock_d2_i1",
+      "rank": 2.0,
+      "score": -0.47927840775141434
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "rosenbrock_d2_i1",
+      "rank": 1.0,
+      "score": -2.520226697857871
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "rosenbrock_d2_i1",
+      "rank": 4.0,
+      "score": 1.0251786024368228
+    },
+    {
+      "algorithm": "random",
+      "problem_id": "ackley_d2_i1",
+      "rank": 4.0,
+      "score": 0.6626148735886134
+    },
+    {
+      "algorithm": "sobol",
+      "problem_id": "ackley_d2_i1",
+      "rank": 3.0,
+      "score": 0.43685176086898936
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "ackley_d2_i1",
+      "rank": 1.5,
+      "score": 0.002232032270779823
+    },
+    {
+      "algorithm": "adaptive_stacked_v033",
+      "problem_id": "ackley_d2_i1",
+      "rank": 1.5,
+      "score": 0.002232032270779823
+    }
+  ],
+  "ranking_policy": {
+    "ranks": "average_ranks_exact_ties",
+    "unique_wins": "sole_best_only",
+    "win_share": "fractional_1_over_N_at_best"
+  }
+}

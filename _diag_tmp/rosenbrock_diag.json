@@ -1,0 +1,1235 @@
+{
+  "stacked_best": 0.003018385743815598,
+  "adaptive_best": 10.596894310059719,
+  "first_divergence_eval_1based": 13,
+  "n_deviations": 8,
+  "counterfactuals": {
+    "A_no_search_realloc": 10.55202728977968,
+    "B_no_forced_refit": 0.37828837933186893,
+    "C_no_rescue": 10.596894310059719,
+    "D_no_diversity_scale": 10.596894310059719,
+    "E_no_screen_scale": 10.596894310059719,
+    "F_no_refinement_changes": 10.596894310059719,
+    "G_no_strength_dynamics": 0.003018385743815598,
+    "DIAG_ONLY_NO_REPLACE": 0.003018385743815598,
+    "DIAG_ONLY_NO_REPLACE_bit_identical_to_stacked": true
+  },
+  "complexity": {
+    "logical_loc": 452,
+    "constants": [
+      "EARLY_NEUTRAL_ABS",
+      "EARLY_NEUTRAL_DIM_MULT",
+      "MODEL_SUPPORT_CAP",
+      "MODEL_ONLY_EVIDENCE_CAP",
+      "SEARCH_FAIL_CAP",
+      "EVIDENCE_WEAK",
+      "EVIDENCE_MILD",
+      "EVIDENCE_STRONG",
+      "EVIDENCE_SEVERE",
+      "SUSTAIN_MILD",
+      "SUSTAIN_STRONG",
+      "SUSTAIN_RESCUE",
+      "SUSTAIN_REFIT",
+      "RECOVERY_STEPS",
+      "STRENGTH_ATTACK",
+      "STRENGTH_DECAY",
+      "STRENGTH_HYSTERESIS",
+      "COOLDOWN_STRONG",
+      "COOLDOWN_RESCUE",
+      "POOL_MULT_MAX",
+      "DIVERSITY_MULT_MAX",
+      "EXPLORE_MIX_MAX",
+      "REFINE_K_DELTA_MIN",
+      "REFINE_ITER_DELTA_MIN"
+    ],
+    "n_constants": 24,
+    "n_if_elif_else": 38
+  },
+  "steps": [
+    {
+      "step": 0,
+      "eval_number": 5,
+      "x": [
+        -0.13832096569240093,
+        -0.06702975556254387
+      ],
+      "x01": [
+        0.4769465057179332,
+        0.48882837407290936
+      ],
+      "objective": 36.612892762647235,
+      "incumbent_score": -36.612892762647235,
+      "incumbent_f": 36.612892762647235,
+      "baseline_x": [
+        -0.13832096569240093,
+        -0.06702975556254387
+      ],
+      "adaptive_x": [
+        -0.13832096569240093,
+        -0.06702975556254387
+      ],
+      "baseline_x01": [
+        0.4769465057179332,
+        0.48882837407290936
+      ],
+      "adaptive_x01": [
+        0.4769465057179332,
+        0.48882837407290936
+      ],
+      "executed_x": [
+        -0.13832096569240093,
+        -0.06702975556254387
+      ],
+      "candidate_source": "adapt_discrete",
+      "baseline_source": "base_discrete",
+      "baseline_acq": 6.18481112828708,
+      "adaptive_acq": 6.18481112828708,
+      "candidates_differ": false,
+      "evidence_score": 0.15,
+      "search_failure": 0.0,
+      "model_support": 0.15,
+      "adaptation_strength": 0.0,
+      "consecutive_evidence": 0,
+      "cooldown": 0,
+      "search_realloc": false,
+      "forced_refit": false,
+      "rescue_inject": false,
+      "raw_search_realloc": false,
+      "raw_forced_refit": false,
+      "raw_rescue_inject": false,
+      "screen_mult": 1.0,
+      "diversity_mult": 1.0,
+      "refine_k_delta": 0,
+      "refine_iter_delta": 0,
+      "exploration_mix": 0.0,
+      "weight_rbf": 0.9,
+      "opt_base": true,
+      "opt_adapt": true,
+      "pool_base": 50000,
+      "pool_adapt": 50000,
+      "div_base": 0.035,
+      "div_adapt": 0.035,
+      "reason": "early_neutral+baseline_hold",
+      "intervention_type": "none",
+      "n_obs": 4,
+      "stagnation_score": 0.0,
+      "model_reliability": 0.0,
+      "model_error_proxy": 0.5,
+      "incumbent_locality": 0.25,
+      "recent_improvement_rate": 0.0,
+      "exploration_coverage": 0.7737450418062508,
+      "evaluations_since_improve": 0
+    },
+    {
+      "step": 1,
+      "eval_number": 6,
+      "x": [
+        -0.1401489693671465,
+        1.5354073494672775
+      ],
+      "x01": [
+        0.4766418384388089,
+        0.7559012249112129
+      ],
+      "objective": 205.1828345581569,
+      "incumbent_score": -36.612892762647235,
+      "incumbent_f": 36.612892762647235,
+      "baseline_x": [
+        -0.1401489693671465,
+        1.5354073494672775
+      ],
+      "adaptive_x": [
+        -0.1401489693671465,
+        1.5354073494672775
+      ],
+      "baseline_x01": [
+        0.4766418384388089,
+        0.7559012249112129
+      ],
+      "adaptive_x01": [
+        0.4766418384388089,
+        0.7559012249112129
+      ],
+      "executed_x": [
+        -0.1401489693671465,
+        1.5354073494672775
+      ],
+      "candidate_source": "adapt_discrete",
+      "baseline_source": "base_discrete",
+      "baseline_acq": 6.019502740000363,
+      "adaptive_acq": 6.019502740000363,
+      "candidates_differ": false,
+      "evidence_score": 0.25,
+      "search_failure": 0.0,
+      "model_support": 0.35,
+      "adaptation_strength": 0.0,
+      "consecutive_evidence": 0,
+      "cooldown": 0,
+      "search_realloc": false,
+      "forced_refit": false,
+      "rescue_inject": false,
+      "raw_search_realloc": false,
+      "raw_forced_refit": false,
+      "raw_rescue_inject": false,
+      "screen_mult": 1.0,
+      "diversity_mult": 1.0,
+      "refine_k_delta": 0,
+      "refine_iter_delta": 0,
+      "exploration_mix": 0.0,
+      "weight_rbf": 0.9,
+      "opt_base": false,
+      "opt_adapt": false,
+      "pool_base": 50000,
+      "pool_adapt": 50000,
+      "div_base": 0.035,
+      "div_adapt": 0.035,
+      "reason": "early_neutral+baseline_hold+improving_hold",
+      "intervention_type": "none",
+      "n_obs": 5,
+      "stagnation_score": 0.0,
+      "model_reliability": 7.55454261880506e-05,
+      "model_error_proxy": 0.9999460389812942,
+      "incumbent_locality": 0.2,
+      "recent_improvement_rate": 0.25,
+      "exploration_coverage": 0.7737450418062508,
+      "evaluations_since_improve": 0
+    },
+    {
+      "step": 2,
+      "eval_number": 7,
+      "x": [
+        0.9298468250781298,
+        2.9960804153233767
+      ],
+      "x01": [
+        0.654974470846355,
+        0.9993467358872294
+      ],
+      "objective": 962.0819648328837,
+      "incumbent_score": -36.612892762647235,
+      "incumbent_f": 36.612892762647235,
+      "baseline_x": [
+        0.9298468250781298,
+        2.9960804153233767
+      ],
+      "adaptive_x": [
+        0.9298468250781298,
+        2.9960804153233767
+      ],
+      "baseline_x01": [
+        0.654974470846355,
+        0.9993467358872294
+      ],
+      "adaptive_x01": [
+        0.654974470846355,
+        0.9993467358872294
+      ],
+      "executed_x": [
+        0.9298468250781298,
+        2.9960804153233767
+      ],
+      "candidate_source": "adapt_discrete",
+      "baseline_source": "base_discrete",
+      "baseline_acq": 5.764393180474271,
+      "adaptive_acq": 5.764393180474271,
+      "candidates_differ": false,
+      "evidence_score": 0.25,
+      "search_failure": 0.0,
+      "model_support": 0.35,
+      "adaptation_strength": 0.0,
+      "consecutive_evidence": 0,
+      "cooldown": 0,
+      "search_realloc": false,
+      "forced_refit": false,
+      "rescue_inject": false,
+      "raw_search_realloc": false,
+      "raw_forced_refit": false,
+      "raw_rescue_inject": false,
+      "screen_mult": 1.0,
+      "diversity_mult": 1.0,
+      "refine_k_delta": 0,
+      "refine_iter_delta": 0,
+      "exploration_mix": 0.0,
+      "weight_rbf": 0.9,
+      "opt_base": false,
+      "opt_adapt": false,
+      "pool_base": 50000,
+      "pool_adapt": 50000,
+      "div_base": 0.035,
+      "div_adapt": 0.035,
+      "reason": "early_neutral+baseline_hold+improving_hold",
+      "intervention_type": "none",
+      "n_obs": 6,
+      "stagnation_score": 0.16666666666666666,
+      "model_reliability": 7.55454261880506e-05,
+      "model_error_proxy": 0.9999460389812942,
+      "incumbent_locality": 0.16666666666666666,
+      "recent_improvement_rate": 0.2,
+      "exploration_coverage": 0.7737450418062508,
+      "evaluations_since_improve": 1
+    },
+    {
+      "step": 3,
+      "eval_number": 8,
+      "x": [
+        0.1953280750672146,
+        -3.0
+      ],
+      "x01": [
+        0.5325546791778691,
+        0.0
+      ],
+      "objective": 14162.531642786324,
+      "incumbent_score": -36.612892762647235,
+      "incumbent_f": 36.612892762647235,
+      "baseline_x": [
+        0.1953280750672146,
+        -3.0
+      ],
+      "adaptive_x": [
+        0.1953280750672146,
+        -3.0
+      ],
+      "baseline_x01": [
+        0.5325546791778691,
+        0.0
+      ],
+      "adaptive_x01": [
+        0.5325546791778691,
+        0.0
+      ],
+      "executed_x": [
+        0.1953280750672146,
+        -3.0
+      ],
+      "candidate_source": "adapt_refined",
+      "baseline_source": "base_refined",
+      "baseline_acq": 5.502634004319683,
+      "adaptive_acq": 5.502634004319683,
+      "candidates_differ": false,
+      "evidence_score": 0.25,
+      "search_failure": 0.0,
+      "model_support": 0.35,
+      "adaptation_strength": 0.0,
+      "consecutive_evidence": 0,
+      "cooldown": 0,
+      "search_realloc": false,
+      "forced_refit": false,
+      "rescue_inject": false,
+      "raw_search_realloc": false,
+      "raw_forced_refit": false,
+      "raw_rescue_inject": false,
+      "screen_mult": 1.0,
+      "diversity_mult": 1.0,
+      "refine_k_delta": 0,
+      "refine_iter_delta": 0,
+      "exploration_mix": 0.0,
+      "weight_rbf": 0.9,
+      "opt_base": false,
+      "opt_adapt": false,
+      "pool_base": 50000,
+      "pool_adapt": 50000,
+      "div_base": 0.035,
+      "div_adapt": 0.035,
+      "reason": "early_neutral+baseline_hold+improving_hold",
+      "intervention_type": "none",
+      "n_obs": 7,
+      "stagnation_score": 0.3333333333333333,
+      "model_reliability": 7.55454261880506e-05,
+      "model_error_proxy": 0.9999460389812942,
+      "incumbent_locality": 0.14285714285714285,
+      "recent_improvement_rate": 0.16666666666666666,
+      "exploration_coverage": 0.8062806688249111,
+      "evaluations_since_improve": 2
+    },
+    {
+      "step": 4,
+      "eval_number": 9,
+      "x": [
+        -1.3760941922664642,
+        -0.2383367456495762
+      ],
+      "x01": [
+        0.2706509679555893,
+        0.46027720905840397
+      ],
+      "objective": 51.49013418569697,
+      "incumbent_score": -36.612892762647235,
+      "incumbent_f": 36.612892762647235,
+      "baseline_x": [
+        -1.3760941922664642,
+        -0.2383367456495762
+      ],
+      "adaptive_x": [
+        -1.3760941922664642,
+        -0.2383367456495762
+      ],
+      "baseline_x01": [
+        0.2706509679555893,
+        0.46027720905840397
+      ],
+      "adaptive_x01": [
+        0.2706509679555893,
+        0.46027720905840397
+      ],
+      "executed_x": [
+        -1.3760941922664642,
+        -0.2383367456495762
+      ],
+      "candidate_source": "adapt_discrete",
+      "baseline_source": "base_discrete",
+      "baseline_acq": 7.3220705949007625,
+      "adaptive_acq": 7.3220705949007625,
+      "candidates_differ": false,
+      "evidence_score": 0.425,
+      "search_failure": 0.25,
+      "model_support": 0.35,
+      "adaptation_strength": 0.0,
+      "consecutive_evidence": 0,
+      "cooldown": 0,
+      "search_realloc": false,
+      "forced_refit": false,
+      "rescue_inject": false,
+      "raw_search_realloc": false,
+      "raw_forced_refit": false,
+      "raw_rescue_inject": false,
+      "screen_mult": 1.0,
+      "diversity_mult": 1.0,
+      "refine_k_delta": 0,
+      "refine_iter_delta": 0,
+      "exploration_mix": 0.0,
+      "weight_rbf": 0.9,
+      "opt_base": false,
+      "opt_adapt": false,
+      "pool_base": 50000,
+      "pool_adapt": 50000,
+      "div_base": 0.035,
+      "div_adapt": 0.035,
+      "reason": "baseline_hold",
+      "intervention_type": "none",
+      "n_obs": 8,
+      "stagnation_score": 0.5,
+      "model_reliability": 7.55454261880506e-05,
+      "model_error_proxy": 0.9999460389812942,
+      "incumbent_locality": 0.125,
+      "recent_improvement_rate": 0.14285714285714285,
+      "exploration_coverage": 0.9056461714208126,
+      "evaluations_since_improve": 3
+    },
+    {
+      "step": 5,
+      "eval_number": 10,
+      "x": [
+        -2.5886082015931606,
+        -2.163025377318263
+      ],
+      "x01": [
+        0.06856529973447323,
+        0.13949577044695616
+      ],
+      "objective": 1083.3141418313828,
+      "incumbent_score": -36.612892762647235,
+      "incumbent_f": 36.612892762647235,
+      "baseline_x": [
+        -2.5886082015931606,
+        -2.163025377318263
+      ],
+      "adaptive_x": [
+        -2.5886082015931606,
+        -2.163025377318263
+      ],
+      "baseline_x01": [
+        0.06856529973447323,
+        0.13949577044695616
+      ],
+      "adaptive_x01": [
+        0.06856529973447323,
+        0.13949577044695616
+      ],
+      "executed_x": [
+        -2.5886082015931606,
+        -2.163025377318263
+      ],
+      "candidate_source": "adapt_discrete",
+      "baseline_source": "base_discrete",
+      "baseline_acq": 6.930796632599844,
+      "adaptive_acq": 6.930796632599844,
+      "candidates_differ": false,
+      "evidence_score": 0.425,
+      "search_failure": 0.25,
+      "model_support": 0.35,
+      "adaptation_strength": 0.0,
+      "consecutive_evidence": 0,
+      "cooldown": 0,
+      "search_realloc": false,
+      "forced_refit": false,
+      "rescue_inject": false,
+      "raw_search_realloc": false,
+      "raw_forced_refit": false,
+      "raw_rescue_inject": false,
+      "screen_mult": 1.0,
+      "diversity_mult": 1.0,
+      "refine_k_delta": 0,
+      "refine_iter_delta": 0,
+      "exploration_mix": 0.0,
+      "weight_rbf": 0.9,
+      "opt_base": false,
+      "opt_adapt": false,
+      "pool_base": 50000,
+      "pool_adapt": 50000,
+      "div_base": 0.035,
+      "div_adapt": 0.035,
+      "reason": "baseline_hold",
+      "intervention_type": "none",
+      "n_obs": 9,
+      "stagnation_score": 0.6666666666666666,
+      "model_reliability": 7.55454261880506e-05,
+      "model_error_proxy": 0.9999460389812942,
+      "incumbent_locality": 0.125,
+      "recent_improvement_rate": 0.125,
+      "exploration_coverage": 0.9056461714208126,
+      "evaluations_since_improve": 4
+    },
+    {
+      "step": 6,
+      "eval_number": 11,
+      "x": [
+        -2.2708990630539345,
+        -1.2575992846607442
+      ],
+      "x01": [
+        0.12151682282434423,
+        0.2904001192232093
+      ],
+      "objective": 436.7657561285966,
+      "incumbent_score": -36.612892762647235,
+      "incumbent_f": 36.612892762647235,
+      "baseline_x": [
+        -2.2708990630539345,
+        -1.2575992846607442
+      ],
+      "adaptive_x": [
+        -2.2708990630539345,
+        -1.2575992846607442
+      ],
+      "baseline_x01": [
+        0.12151682282434423,
+        0.2904001192232093
+      ],
+      "adaptive_x01": [
+        0.12151682282434423,
+        0.2904001192232093
+      ],
+      "executed_x": [
+        -2.2708990630539345,
+        -1.2575992846607442
+      ],
+      "candidate_source": "adapt_refined",
+      "baseline_source": "base_refined",
+      "baseline_acq": 7.188187825111969,
+      "adaptive_acq": 7.188187825111969,
+      "candidates_differ": false,
+      "evidence_score": 0.575,
+      "search_failure": 0.4,
+      "model_support": 0.35,
+      "adaptation_strength": 0.0,
+      "consecutive_evidence": 1,
+      "cooldown": 0,
+      "search_realloc": false,
+      "forced_refit": false,
+      "rescue_inject": false,
+      "raw_search_realloc": false,
+      "raw_forced_refit": false,
+      "raw_rescue_inject": false,
+      "screen_mult": 1.0,
+      "diversity_mult": 1.0,
+      "refine_k_delta": 0,
+      "refine_iter_delta": 0,
+      "exploration_mix": 0.0,
+      "weight_rbf": 0.9,
+      "opt_base": true,
+      "opt_adapt": true,
+      "pool_base": 50000,
+      "pool_adapt": 50000,
+      "div_base": 0.035,
+      "div_adapt": 0.035,
+      "reason": "baseline_hold",
+      "intervention_type": "none",
+      "n_obs": 10,
+      "stagnation_score": 0.8333333333333334,
+      "model_reliability": 7.55454261880506e-05,
+      "model_error_proxy": 0.9999460389812942,
+      "incumbent_locality": 0.125,
+      "recent_improvement_rate": 0.125,
+      "exploration_coverage": 0.9056461714208126,
+      "evaluations_since_improve": 5
+    },
+    {
+      "step": 7,
+      "eval_number": 12,
+      "x": [
+        -1.2553764022886753,
+        -0.7331614438444376
+      ],
+      "x01": [
+        0.2907705996185541,
+        0.37780642602592707
+      ],
+      "objective": 173.10284625158314,
+      "incumbent_score": -36.612892762647235,
+      "incumbent_f": 36.612892762647235,
+      "baseline_x": [
+        -1.2553764022886753,
+        -0.7331614438444376
+      ],
+      "adaptive_x": [
+        -1.2553764022886753,
+        -0.7331614438444376
+      ],
+      "baseline_x01": [
+        0.2907705996185541,
+        0.37780642602592707
+      ],
+      "adaptive_x01": [
+        0.2907705996185541,
+        0.37780642602592707
+      ],
+      "executed_x": [
+        -1.2553764022886753,
+        -0.7331614438444376
+      ],
+      "candidate_source": "adapt_discrete",
+      "baseline_source": "base_discrete",
+      "baseline_acq": 5.945472542384359,
+      "adaptive_acq": 5.945472542384359,
+      "candidates_differ": false,
+      "evidence_score": 0.575,
+      "search_failure": 0.4,
+      "model_support": 0.35,
+      "adaptation_strength": 0.13999999999999999,
+      "consecutive_evidence": 2,
+      "cooldown": 0,
+      "search_realloc": false,
+      "forced_refit": false,
+      "rescue_inject": false,
+      "raw_search_realloc": false,
+      "raw_forced_refit": false,
+      "raw_rescue_inject": false,
+      "screen_mult": 1.0,
+      "diversity_mult": 1.0,
+      "refine_k_delta": 0,
+      "refine_iter_delta": 0,
+      "exploration_mix": 0.0,
+      "weight_rbf": 0.9,
+      "opt_base": true,
+      "opt_adapt": true,
+      "pool_base": 100000,
+      "pool_adapt": 100000,
+      "div_base": 0.035,
+      "div_adapt": 0.035,
+      "reason": "mild_sustained",
+      "intervention_type": "none",
+      "n_obs": 11,
+      "stagnation_score": 1.0,
+      "model_reliability": 7.238582324646802e-05,
+      "model_error_proxy": 0.9999482958405382,
+      "incumbent_locality": 0.125,
+      "recent_improvement_rate": 0.125,
+      "exploration_coverage": 0.8869769931770861,
+      "evaluations_since_improve": 6
+    },
+    {
+      "step": 8,
+      "eval_number": 13,
+      "x": [
+        -0.4110457766801119,
+        0.49356215447187424
+      ],
+      "x01": [
+        0.4314923705533147,
+        0.5822603590786457
+      ],
+      "objective": 14.735764778317451,
+      "incumbent_score": -14.735764778317451,
+      "incumbent_f": 14.735764778317451,
+      "baseline_x": [
+        -0.43494282363694925,
+        0.4869821362045821
+      ],
+      "adaptive_x": [
+        -0.4110457766801119,
+        0.49356215447187424
+      ],
+      "baseline_x01": [
+        0.4275095293938418,
+        0.5811636893674303
+      ],
+      "adaptive_x01": [
+        0.4314923705533147,
+        0.5822603590786457
+      ],
+      "executed_x": [
+        -0.4110457766801119,
+        0.49356215447187424
+      ],
+      "candidate_source": "adapt_discrete",
+      "baseline_source": "base_refined",
+      "baseline_acq": 6.460302692420756,
+      "adaptive_acq": 6.459978232966763,
+      "candidates_differ": true,
+      "evidence_score": 0.575,
+      "search_failure": 0.4,
+      "model_support": 0.35,
+      "adaptation_strength": 0.23099999999999998,
+      "consecutive_evidence": 3,
+      "cooldown": 0,
+      "search_realloc": true,
+      "forced_refit": true,
+      "rescue_inject": false,
+      "raw_search_realloc": true,
+      "raw_forced_refit": true,
+      "raw_rescue_inject": false,
+      "screen_mult": 1.1155,
+      "diversity_mult": 1.12705,
+      "refine_k_delta": 0,
+      "refine_iter_delta": -2,
+      "exploration_mix": 0.08084999999999999,
+      "weight_rbf": 0.1,
+      "opt_base": false,
+      "opt_adapt": true,
+      "pool_base": 50000,
+      "pool_adapt": 55775,
+      "div_base": 0.035,
+      "div_adapt": 0.03944675000000001,
+      "reason": "mild_sustained+search_realloc_mild",
+      "intervention_type": "mild_realloc",
+      "n_obs": 12,
+      "stagnation_score": 1.0,
+      "model_reliability": 7.558175828813462e-05,
+      "model_error_proxy": 0.9999460130297941,
+      "incumbent_locality": 0.125,
+      "recent_improvement_rate": 0.125,
+      "exploration_coverage": 0.7928779534995556,
+      "evaluations_since_improve": 7
+    },
+    {
+      "step": 9,
+      "eval_number": 14,
+      "x": [
+        2.8269953448325396,
+        2.4855951983481646
+      ],
+      "x01": [
+        0.9711658908054233,
+        0.9142658663913608
+      ],
+      "objective": 570.675655983482,
+      "incumbent_score": -14.735764778317451,
+      "incumbent_f": 14.735764778317451,
+      "baseline_x": [
+        2.8269953448325396,
+        2.4855951983481646
+      ],
+      "adaptive_x": [
+        2.8269953448325396,
+        2.4855951983481646
+      ],
+      "baseline_x01": [
+        0.9711658908054233,
+        0.9142658663913608
+      ],
+      "adaptive_x01": [
+        0.9711658908054233,
+        0.9142658663913608
+      ],
+      "executed_x": [
+        2.8269953448325396,
+        2.4855951983481646
+      ],
+      "candidate_source": "adapt_discrete",
+      "baseline_source": "base_discrete",
+      "baseline_acq": 5.875859327345507,
+      "adaptive_acq": 5.875859327345507,
+      "candidates_differ": false,
+      "evidence_score": 0.25,
+      "search_failure": 0.0,
+      "model_support": 0.35,
+      "adaptation_strength": 0.1848,
+      "consecutive_evidence": 3,
+      "cooldown": 0,
+      "search_realloc": false,
+      "forced_refit": false,
+      "rescue_inject": false,
+      "raw_search_realloc": false,
+      "raw_forced_refit": false,
+      "raw_rescue_inject": false,
+      "screen_mult": 1.0,
+      "diversity_mult": 1.0,
+      "refine_k_delta": 0,
+      "refine_iter_delta": 0,
+      "exploration_mix": 0.0,
+      "weight_rbf": 0.1,
+      "opt_base": false,
+      "opt_adapt": false,
+      "pool_base": 50000,
+      "pool_adapt": 50000,
+      "div_base": 0.035,
+      "div_adapt": 0.035,
+      "reason": "baseline_hold+improving_hold+recovering",
+      "intervention_type": "none",
+      "n_obs": 13,
+      "stagnation_score": 0.0,
+      "model_reliability": 8.58812893033467e-05,
+      "model_error_proxy": 0.9999386562219261,
+      "incumbent_locality": 0.125,
+      "recent_improvement_rate": 0.125,
+      "exploration_coverage": 0.7928779534995556,
+      "evaluations_since_improve": 0
+    },
+    {
+      "step": 10,
+      "eval_number": 15,
+      "x": [
+        1.8331901226192713,
+        1.8485915176570415
+      ],
+      "x01": [
+        0.8055316871032119,
+        0.8080985862761736
+      ],
+      "objective": 368.3105218210758,
+      "incumbent_score": -14.735764778317451,
+      "incumbent_f": 14.735764778317451,
+      "baseline_x": [
+        1.8331901226192713,
+        1.8485915176570415
+      ],
+      "adaptive_x": [
+        1.8331901226192713,
+        1.8485915176570415
+      ],
+      "baseline_x01": [
+        0.8055316871032119,
+        0.8080985862761736
+      ],
+      "adaptive_x01": [
+        0.8055316871032119,
+        0.8080985862761736
+      ],
+      "executed_x": [
+        1.8331901226192713,
+        1.8485915176570415
+      ],
+      "candidate_source": "adapt_discrete",
+      "baseline_source": "base_discrete",
+      "baseline_acq": 5.93655897142987,
+      "adaptive_acq": 5.93655897142987,
+      "candidates_differ": false,
+      "evidence_score": 0.25,
+      "search_failure": 0.0,
+      "model_support": 0.35,
+      "adaptation_strength": 0.14784,
+      "consecutive_evidence": 0,
+      "cooldown": 0,
+      "search_realloc": false,
+      "forced_refit": false,
+      "rescue_inject": false,
+      "raw_search_realloc": false,
+      "raw_forced_refit": false,
+      "raw_rescue_inject": false,
+      "screen_mult": 1.0,
+      "diversity_mult": 1.0,
+      "refine_k_delta": 0,
+      "refine_iter_delta": 0,
+      "exploration_mix": 0.0,
+      "weight_rbf": 0.1,
+      "opt_base": false,
+      "opt_adapt": false,
+      "pool_base": 50000,
+      "pool_adapt": 50000,
+      "div_base": 0.035,
+      "div_adapt": 0.035,
+      "reason": "baseline_hold+improving_hold+recovering",
+      "intervention_type": "none",
+      "n_obs": 14,
+      "stagnation_score": 0.16666666666666666,
+      "model_reliability": 8.58812893033467e-05,
+      "model_error_proxy": 0.9999386562219261,
+      "incumbent_locality": 0.125,
+      "recent_improvement_rate": 0.125,
+      "exploration_coverage": 0.9509736634790897,
+      "evaluations_since_improve": 1
+    },
+    {
+      "step": 11,
+      "eval_number": 16,
+      "x": [
+        3.0,
+        1.267273000896087
+      ],
+      "x01": [
+        1.0,
+        0.7112121668160145
+      ],
+      "objective": 358.9516111286158,
+      "incumbent_score": -14.735764778317451,
+      "incumbent_f": 14.735764778317451,
+      "baseline_x": [
+        3.0,
+        1.267273000896087
+      ],
+      "adaptive_x": [
+        3.0,
+        1.267273000896087
+      ],
+      "baseline_x01": [
+        1.0,
+        0.7112121668160145
+      ],
+      "adaptive_x01": [
+        1.0,
+        0.7112121668160145
+      ],
+      "executed_x": [
+        3.0,
+        1.267273000896087
+      ],
+      "candidate_source": "adapt_refined",
+      "baseline_source": "base_refined",
+      "baseline_acq": 5.507597381992935,
+      "adaptive_acq": 5.507597381992935,
+      "candidates_differ": false,
+      "evidence_score": 0.25,
+      "search_failure": 0.0,
+      "model_support": 0.35,
+      "adaptation_strength": 0.118272,
+      "consecutive_evidence": 0,
+      "cooldown": 0,
+      "search_realloc": false,
+      "forced_refit": false,
+      "rescue_inject": false,
+      "raw_search_realloc": false,
+      "raw_forced_refit": false,
+      "raw_rescue_inject": false,
+      "screen_mult": 1.0,
+      "diversity_mult": 1.0,
+      "refine_k_delta": 0,
+      "refine_iter_delta": 0,
+      "exploration_mix": 0.0,
+      "weight_rbf": 0.1,
+      "opt_base": false,
+      "opt_adapt": false,
+      "pool_base": 50000,
+      "pool_adapt": 50000,
+      "div_base": 0.035,
+      "div_adapt": 0.035,
+      "reason": "baseline_hold+improving_hold+recovering",
+      "intervention_type": "none",
+      "n_obs": 15,
+      "stagnation_score": 0.3333333333333333,
+      "model_reliability": 8.58812893033467e-05,
+      "model_error_proxy": 0.9999386562219261,
+      "incumbent_locality": 0.125,
+      "recent_improvement_rate": 0.125,
+      "exploration_coverage": 0.9084332287311554,
+      "evaluations_since_improve": 2
+    },
+    {
+      "step": 12,
+      "eval_number": 17,
+      "x": [
+        0.652004387229681,
+        1.8116260394454002
+      ],
+      "x01": [
+        0.6086673978716135,
+        0.8019376732409
+      ],
+      "objective": 461.5127443572667,
+      "incumbent_score": -14.735764778317451,
+      "incumbent_f": 14.735764778317451,
+      "baseline_x": [
+        0.652004387229681,
+        1.8116260394454002
+      ],
+      "adaptive_x": [
+        0.652004387229681,
+        1.8116260394454002
+      ],
+      "baseline_x01": [
+        0.6086673978716135,
+        0.8019376732409
+      ],
+      "adaptive_x01": [
+        0.6086673978716135,
+        0.8019376732409
+      ],
+      "executed_x": [
+        0.652004387229681,
+        1.8116260394454002
+      ],
+      "candidate_source": "adapt_discrete",
+      "baseline_source": "base_discrete",
+      "baseline_acq": 5.2393646782835805,
+      "adaptive_acq": 5.2393646782835805,
+      "candidates_differ": false,
+      "evidence_score": 0.425,
+      "search_failure": 0.25,
+      "model_support": 0.35,
+      "adaptation_strength": 0.09461760000000001,
+      "consecutive_evidence": 0,
+      "cooldown": 0,
+      "search_realloc": false,
+      "forced_refit": false,
+      "rescue_inject": false,
+      "raw_search_realloc": false,
+      "raw_forced_refit": false,
+      "raw_rescue_inject": false,
+      "screen_mult": 1.0,
+      "diversity_mult": 1.0,
+      "refine_k_delta": 0,
+      "refine_iter_delta": 0,
+      "exploration_mix": 0.0,
+      "weight_rbf": 0.1,
+      "opt_base": true,
+      "opt_adapt": true,
+      "pool_base": 50000,
+      "pool_adapt": 50000,
+      "div_base": 0.035,
+      "div_adapt": 0.035,
+      "reason": "baseline_hold+recovering",
+      "intervention_type": "none",
+      "n_obs": 16,
+      "stagnation_score": 0.5,
+      "model_reliability": 8.58812893033467e-05,
+      "model_error_proxy": 0.9999386562219261,
+      "incumbent_locality": 0.125,
+      "recent_improvement_rate": 0.125,
+      "exploration_coverage": 0.8531023981049657,
+      "evaluations_since_improve": 3
+    },
+    {
+      "step": 13,
+      "eval_number": 18,
+      "x": [
+        0.09659732691943645,
+        0.4931885562837124
+      ],
+      "x01": [
+        0.5160995544865727,
+        0.5821980927139521
+      ],
+      "objective": 10.596894310059719,
+      "incumbent_score": -10.596894310059719,
+      "incumbent_f": 10.596894310059719,
+      "baseline_x": [
+        0.09659732691943645,
+        0.4931885562837124
+      ],
+      "adaptive_x": [
+        0.09659732691943645,
+        0.4931885562837124
+      ],
+      "baseline_x01": [
+        0.5160995544865727,
+        0.5821980927139521
+      ],
+      "adaptive_x01": [
+        0.5160995544865727,
+        0.5821980927139521
+      ],
+      "executed_x": [
+        0.09659732691943645,
+        0.4931885562837124
+      ],
+      "candidate_source": "adapt_discrete",
+      "baseline_source": "base_discrete",
+      "baseline_acq": 5.141502774136989,
+      "adaptive_acq": 5.141502774136989,
+      "candidates_differ": false,
+      "evidence_score": 0.425,
+      "search_failure": 0.25,
+      "model_support": 0.35,
+      "adaptation_strength": 0.07569408000000001,
+      "consecutive_evidence": 0,
+      "cooldown": 0,
+      "search_realloc": false,
+      "forced_refit": false,
+      "rescue_inject": false,
+      "raw_search_realloc": false,
+      "raw_forced_refit": false,
+      "raw_rescue_inject": false,
+      "screen_mult": 1.0,
+      "diversity_mult": 1.0,
+      "refine_k_delta": 0,
+      "refine_iter_delta": 0,
+      "exploration_mix": 0.0,
+      "weight_rbf": 0.1,
+      "opt_base": false,
+      "opt_adapt": false,
+      "pool_base": 50000,
+      "pool_adapt": 50000,
+      "div_base": 0.035,
+      "div_adapt": 0.035,
+      "reason": "baseline_hold+recovering",
+      "intervention_type": "none",
+      "n_obs": 17,
+      "stagnation_score": 0.6666666666666666,
+      "model_reliability": 9.268038658024613e-05,
+      "model_error_proxy": 0.9999337997238713,
+      "incumbent_locality": 0.125,
+      "recent_improvement_rate": 0.125,
+      "exploration_coverage": 0.8531023981049657,
+      "evaluations_since_improve": 4
+    },
+    {
+      "step": 14,
+      "eval_number": 19,
+      "x": [
+        -0.7367509938776493,
+        -0.06351130083203316
+      ],
+      "x01": [
+        0.37720816768705845,
+        0.48941478319466114
+      ],
+      "objective": 14.560138640268038,
+      "incumbent_score": -10.596894310059719,
+      "incumbent_f": 10.596894310059719,
+      "baseline_x": [
+        -0.7367509938776493,
+        -0.06351130083203316
+      ],
+      "adaptive_x": [
+        -0.7367509938776493,
+        -0.06351130083203316
+      ],
+      "baseline_x01": [
+        0.37720816768705845,
+        0.48941478319466114
+      ],
+      "adaptive_x01": [
+        0.37720816768705845,
+        0.48941478319466114
+      ],
+      "executed_x": [
+        -0.7367509938776493,
+        -0.06351130083203316
+      ],
+      "candidate_source": "adapt_discrete",
+      "baseline_source": "base_discrete",
+      "baseline_acq": 5.075716253488041,
+      "adaptive_acq": 5.075716253488041,
+      "candidates_differ": false,
+      "evidence_score": 0.25,
+      "search_failure": 0.0,
+      "model_support": 0.35,
+      "adaptation_strength": 0.06055526400000001,
+      "consecutive_evidence": 0,
+      "cooldown": 0,
+      "search_realloc": false,
+      "forced_refit": false,
+      "rescue_inject": false,
+      "raw_search_realloc": false,
+      "raw_forced_refit": false,
+      "raw_rescue_inject": false,
+      "screen_mult": 1.0,
+      "diversity_mult": 1.0,
+      "refine_k_delta": 0,
+      "refine_iter_delta": 0,
+      "exploration_mix": 0.0,
+      "weight_rbf": 0.1,
+      "opt_base": false,
+      "opt_adapt": false,
+      "pool_base": 50000,
+      "pool_adapt": 50000,
+      "div_base": 0.035,
+      "div_adapt": 0.035,
+      "reason": "baseline_hold+improving_hold+recovering",
+      "intervention_type": "none",
+      "n_obs": 18,
+      "stagnation_score": 0.0,
+      "model_reliability": 9.268038658024613e-05,
+      "model_error_proxy": 0.9999337997238713,
+      "incumbent_locality": 0.125,
+      "recent_improvement_rate": 0.25,
+      "exploration_coverage": 0.7511744621719036,
+      "evaluations_since_improve": 0
+    },
+    {
+      "step": 15,
+      "eval_number": 20,
+      "x": [
+        -0.42619606392293985,
+        3.0
+      ],
+      "x01": [
+        0.42896732267951,
+        1.0
+      ],
+      "objective": 24.25543251521478,
+      "incumbent_score": -10.596894310059719,
+      "incumbent_f": 10.596894310059719,
+      "baseline_x": [
+        -0.42619606392293985,
+        3.0
+      ],
+      "adaptive_x": [
+        -0.42619606392293985,
+        3.0
+      ],
+      "baseline_x01": [
+        0.42896732267951,
+        1.0
+      ],
+      "adaptive_x01": [
+        0.42896732267951,
+        1.0
+      ],
+      "executed_x": [
+        -0.42619606392293985,
+        3.0
+      ],
+      "candidate_source": "adapt_refined",
+      "baseline_source": "base_refined",
+      "baseline_acq": 4.7126547806818895,
+      "adaptive_acq": 4.7126547806818895,
+      "candidates_differ": false,
+      "evidence_score": 0.25,
+      "search_failure": 0.0,
+      "model_support": 0.35,
+      "adaptation_strength": 0.0,
+      "consecutive_evidence": 0,
+      "cooldown": 0,
+      "search_realloc": false,
+      "forced_refit": false,
+      "rescue_inject": false,
+      "raw_search_realloc": false,
+      "raw_forced_refit": false,
+      "raw_rescue_inject": false,
+      "screen_mult": 1.0,
+      "diversity_mult": 1.0,
+      "refine_k_delta": 0,
+      "refine_iter_delta": 0,
+      "exploration_mix": 0.0,
+      "weight_rbf": 0.1,
+      "opt_base": false,
+      "opt_adapt": false,
+      "pool_base": 50000,
+      "pool_adapt": 50000,
+      "div_base": 0.035,
+      "div_adapt": 0.035,
+      "reason": "baseline_hold+improving_hold+recovering",
+      "intervention_type": "none",
+      "n_obs": 19,
+      "stagnation_score": 0.16666666666666666,
+      "model_reliability": 9.268038658024613e-05,
+      "model_error_proxy": 0.9999337997238713,
+      "incumbent_locality": 0.125,
+      "recent_improvement_rate": 0.25,
+      "exploration_coverage": 0.6228444203734398,
+      "evaluations_since_improve": 1
+    }
+  ],
+  "initial": 4
+}
