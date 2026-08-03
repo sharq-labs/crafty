@@ -1,17 +1,19 @@
-# Engineering AI Core V0.3.3 — Research Adaptive Optimizer
+# Engineering AI Core V0.3.3 — Adaptive Stacked Optimizer with Safety Arbiter
 
 Branch: `research/v0.3.3-adaptive`  
+Scientific checkpoint: `df67b78722ec7508a0938171fc478cc26e73f29a`  
 Baseline tag: `v0.3.2.6-stacked_v0301` (immutable)
 
 ## Goal
 
 Add a **separately selectable** adaptive stacked optimizer that:
 
-- infers search state only from black-box observations
-- adapts exploration / exploitation / rescue continuously
+- infers search state only from legal black-box observations
+- may propose alternate search knobs under evidence gates
+- accepts an adaptive candidate only via a conservative safety arbiter
 - preserves `stacked_v0301` unchanged
 
-This is **not** a BBOB memorizer.
+This is **not** a BBOB memorizer and does **not** claim universal superiority.
 
 ## Architecture audit (stacked_v0301 baseline)
 
@@ -29,42 +31,62 @@ This is **not** a BBOB memorizer.
 | Devices | Fit+refine CPU; screen optional CUDA |
 | Budget | Exactly `initial_trials + smart_trials` objective calls |
 
+## Validated V0.3.3 dual-proposal architecture
+
+Each BO step (after the shared baseline model fit on current observations):
+
+1. **identity proposal** — baseline `stacked_v0301` search knobs on the current adaptive-run observations  
+2. **adaptive proposal** (optional) — same fitted models; alternate search knobs if the policy enables a proposal  
+3. **`candidate_arbiter.py`** — conservative dual-proposal safety arbiter chooses exactly one unevaluated candidate  
+4. **one objective evaluation** of the chosen proposal  
+
+Rescue candidates are generated only when the policy authorizes them and **must pass through the same arbiter**. There is no rescue bypass.
+
+### Adaptive proposer policy (`adaptive_policy.py`)
+
+Not a generic continuous knob controller. It is a **mild / severe evidence-gated proposal policy**:
+
+- early-neutral: identity-only until enough observations exist  
+- evidence from search-failure signals plus capped model-support (model-alone cannot enable proposals)  
+- **mild**: sustained evidence above the mild gate → modest pool / diversity / explore mix deltas; adaptive proposal may be generated  
+- **severe**: stronger sustained evidence + cooldown clear → larger deltas and rescue authorization  
+- recovery / cooldown reset escalation so proposals are not sticky  
+
+The policy **does not** change the GP refit schedule and **never** forces adaptive refits.
+
+### Safety arbiter (`candidate_arbiter.py`)
+
+Adaptive replaces identity only under **component consensus**. Accept adaptive only if all hold:
+
+- adaptive proposal generation was enabled by policy evidence  
+- **RBF and Matern both must not prefer identity** (adaptive is not worse on either component)  
+- **at least one component must strictly prefer adaptive**  
+- **stacked mixture must prefer adaptive**  
+- **component disagreement rejects adaptive** (one GP prefers adaptive, the other identity)  
+
+Otherwise identity is executed.
+
+### Budget / evaluation guardrails
+
+| Check | Value |
+|---|---|
+| Extra objective evaluations from dual proposals | **0** |
+| Hidden objective evaluations | **NO** |
+| Adaptive forced GP refits | **0** |
+| Strict objective budget | **YES** |
+| Baseline `stacked_v0301` modified | **NO** |
+| Benchmark-specific / fopt / instance selectors | **NO** |
+
 ## New modules
 
-1. `landscape_diagnostics.py` — online features only from X/y/budget/model stack stats  
-2. `adaptive_policy.py` — continuous knob policy (no landscape class labels)  
-3. `adaptive_stacked_engine.py` — `AdaptiveStackedGPBOEngine` / `adaptive_stacked_v033`
-
-## Adaptive policy (minimal)
-
-Uses diagnostics every BO step:
-
-- reliable + improving → modest exploitation (smaller screen, more refine)
-- unreliable / disagreeing models → more global diversity
-- stagnation + concentration → expand exploration + rescue
-- late budget + reliable model → exploit
-- tiny-N → conservative defaults
-
-## Rescue mechanism
-
-Triggers from policy (stagnation / unreliable model), not benchmark IDs.
-
-- fresh Sobol space-filling candidates
-- incumbent-centered Gaussian perturbations
-- scored by acquisition only (no extra objective calls)
-- selected only if acquisition beats current discrete/refined choice
-
-## Performance
-
-No semantic changes to `stacked_v0301` screening/refinement.
-
-Adaptive engine remains dual-GP heavy by design; wall-clock optimization for cheap
-objectives is secondary to sample efficiency. Implementation opts in the adaptive
-path are limited to avoiding extra objective work in rescue/diagnostics.
+1. `landscape_diagnostics.py` — online features from X/y/budget/model stack stats only  
+2. `adaptive_policy.py` — mild/severe evidence-gated adaptive *proposer*  
+3. `candidate_arbiter.py` — consensus safety arbiter between identity and adaptive  
+4. `adaptive_stacked_engine.py` — `AdaptiveStackedGPBOEngine` / `adaptive_stacked_v033`
 
 ## Validation registry
 
-Algorithms now include:
+Algorithms include:
 
 `cmaes, ngopt, stacked, adaptive_stacked`
 
@@ -74,6 +96,12 @@ Algorithms now include:
 .\.venv\Scripts\python.exe -m src.engcore.adaptive_stacked_selftest
 .\.venv\Scripts\python.exe -m src.engcore.validation_fairness_selftest
 ```
+
+## D3 validation status (external holdout)
+
+Controlled BBOB D3 external replication (instances 71–80) showed the adaptive path to be **active and safe** under the dual-proposal arbiter.
+
+This does **not** justify a universal superiority claim. V0.3.3 remains a research optimizer.
 
 ## Short smoke comparison (user/local)
 
@@ -98,3 +126,5 @@ Algorithms now include:
 | BENCHMARK-SPECIFIC LOGIC ADDED | **NO** |
 | HIDDEN OBJECTIVE EVALUATIONS ADDED | **NO** |
 | STRICT BUDGET PRESERVED | **YES** |
+| ADAPTIVE FORCED REFITS | **0** |
+| UNIVERSAL SUPERIORITY CLAIM | **NO** |
