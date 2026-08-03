@@ -1,3 +1,0 @@
-suite = 'bbob', funcId = 24, DIM = 3, Precision = 1.000e-08, algId = 'ngopt', coco_version = '2.8.2', logger = 'bbob', data_format = 'bbob-new2', settings = ''
-% Engineering AI Core V0.3.2.6 arena
-data_f24/bbobexp_f24_DIM3.dat, 72:60|5.0e+00, 73:60|1.1e+01, 74:60|5.4e+01, 75:60|2.2e+01

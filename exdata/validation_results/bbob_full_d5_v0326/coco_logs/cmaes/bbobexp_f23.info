@@ -1,3 +1,0 @@
-suite = 'bbob', funcId = 23, DIM = 5, Precision = 1.000e-08, algId = 'cmaes', coco_version = '2.8.2', logger = 'bbob', data_format = 'bbob-new2', settings = ''
-% Engineering AI Core V0.3.2.6 arena
-data_f23/bbobexp_f23_DIM5.dat, 1:100|2.4e+00, 2:100|3.6e+00, 3:100|5.1e+00, 4:100|2.7e+00, 5:100|4.7e+00

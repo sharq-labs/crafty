@@ -1,3 +1,0 @@
-suite = 'bbob', funcId = 8, DIM = 3, Precision = 1.000e-08, algId = 'adaptive_stacked', coco_version = '2.8.2', logger = 'bbob', data_format = 'bbob-new2', settings = ''
-% Engineering AI Core V0.3.2.6 arena
-data_f8/bbobexp_f8_DIM3.dat, 71:60|5.9e-01, 72:60|3.1e+00, 73:60|2.5e+00, 74:60|1.1e+00, 75:60|5.9e-01
