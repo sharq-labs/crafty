@@ -652,6 +652,263 @@ def run_stacked(
     )
 
 
+def run_adaptive_stacked(
+    problem_id,
+    func,
+    lower,
+    upper,
+    budget,
+    seed,
+    final_target=None,
+    mode="fast",
+    screen_device="auto",
+    refinement_backend="torch",
+):
+    """
+    Validation adapter for adaptive_stacked_v033.
+
+    Same fairness contract as run_stacked; separate optimizer identity.
+    """
+    from ..models import (
+        Variable,
+        DesignSpace,
+    )
+    from ..adaptive_stacked_engine import (
+        AdaptiveStackedGPBOEngine,
+    )
+    from ..stacked_modes import (
+        get_stacked_mode,
+    )
+
+    rec = ObjectiveRecorder(
+        func, lower, upper, budget
+    )
+
+    space = DesignSpace([
+        Variable(
+            f"x{i}",
+            float(lo),
+            float(hi),
+            "",
+        )
+        for i, (lo, hi)
+        in enumerate(
+            zip(
+                rec.lower,
+                rec.upper,
+            )
+        )
+    ])
+
+    def evaluator(x):
+        f = rec.evaluate(x)
+        return (
+            -float(f),
+            True,
+            {"objective_f": float(f)},
+        )
+
+    initial = min(
+        max(4, 2 * rec.dimension),
+        max(2, rec.budget // 3),
+        rec.budget - 1,
+    )
+    initial = max(1, int(initial))
+
+    refinement_backend = str(
+        refinement_backend
+    ).lower()
+    if refinement_backend not in {
+        "torch",
+        "scipy",
+    }:
+        raise ValueError(
+            "refinement_backend must be 'torch' or 'scipy'"
+        )
+
+    # Optional torch refinement wrapper mirrors stacked adapter, but subclasses
+    # AdaptiveStackedGPBOEngine so adaptive policy remains active.
+    if refinement_backend == "torch":
+        from botorch.generation.gen import (
+            gen_candidates_torch,
+        )
+        from ..logei_engine import (
+            CandidateSource,
+        )
+
+        class _TorchAdaptive(AdaptiveStackedGPBOEngine):
+            def _refine_informed_starts(
+                self,
+                cpu_acq,
+                starts,
+                maxiter,
+                timeout_sec,
+                seed,
+            ):
+                torch = self.torch
+                starts_np = np.asarray(
+                    starts,
+                    dtype=np.float64,
+                )
+                if len(starts_np) == 0:
+                    return None
+                initial_conditions = torch.as_tensor(
+                    starts_np,
+                    dtype=self.dtype,
+                    device=self.device,
+                ).unsqueeze(1)
+                lower_t = torch.zeros(
+                    self.space.dim,
+                    dtype=self.dtype,
+                    device=self.device,
+                )
+                upper_t = torch.ones(
+                    self.space.dim,
+                    dtype=self.dtype,
+                    device=self.device,
+                )
+                t0 = time.perf_counter()
+                self.fit_diagnostics[
+                    "refinement_attempts"
+                ] += 1
+                try:
+                    candidates, values = (
+                        gen_candidates_torch(
+                            initial_conditions=initial_conditions,
+                            acquisition_function=cpu_acq,
+                            lower_bounds=lower_t,
+                            upper_bounds=upper_t,
+                            options={
+                                "optimizer_options": {
+                                    "lr": 0.025,
+                                },
+                                "stopping_criterion_options": {
+                                    "maxiter": int(
+                                        maxiter
+                                    ),
+                                },
+                            },
+                            timeout_sec=float(
+                                timeout_sec
+                            ),
+                        )
+                    )
+                    values = values.reshape(-1)
+                    idx = int(
+                        torch.argmax(values).item()
+                    )
+                    x01 = (
+                        candidates[idx]
+                        .detach()
+                        .cpu()
+                        .double()
+                        .numpy()
+                        .reshape(-1)
+                    )
+                    acq_value = float(
+                        values[idx]
+                        .detach()
+                        .cpu()
+                        .double()
+                        .item()
+                    )
+                    if (
+                        not np.all(np.isfinite(x01))
+                        or not np.isfinite(acq_value)
+                    ):
+                        raise RuntimeError(
+                            "Torch refinement returned non-finite result."
+                        )
+                    result = CandidateSource(
+                        name="adaptive_refined_torch",
+                        x01=np.clip(x01, 0.0, 1.0),
+                        acquisition_value=acq_value,
+                    )
+                except Exception as exc:
+                    self.fit_diagnostics[
+                        "refinement_failures"
+                    ] += 1
+                    self.events.append({
+                        "event": "torch_refinement_failure",
+                        "error": str(exc),
+                    })
+                    result = None
+                self.timings[
+                    "refinement_s"
+                ] += time.perf_counter() - t0
+                return result
+
+        EngineClass = _TorchAdaptive
+    else:
+        EngineClass = AdaptiveStackedGPBOEngine
+
+    engine = EngineClass(
+        design_space=space,
+        evaluator=evaluator,
+        seed=int(seed),
+        screen_device=screen_device,
+        record_diagnostics=True,
+    )
+
+    t0 = time.perf_counter()
+    result = engine.run(
+        initial_trials=initial,
+        smart_trials=(rec.budget - initial),
+        verbose=False,
+        **get_stacked_mode(mode),
+    )
+    wall = time.perf_counter() - t0
+
+    return _trace(
+        "adaptive_stacked_v033",
+        problem_id,
+        rec,
+        seed,
+        final_target,
+        wall,
+        {
+            "initial_trials": initial,
+            "mode": mode,
+            "refinement_backend": refinement_backend,
+            "screen_device": result["screen_device"],
+            "engine_id": result["engine_id"],
+            "final_weight_rbf": result[
+                "final_weight_rbf"
+            ],
+            "final_weight_matern": result[
+                "final_weight_matern"
+            ],
+            "adaptive_proposals_generated": result[
+                "fit_diagnostics"
+            ].get("adaptive_proposals_generated", 0),
+            "adaptive_proposals_accepted": result[
+                "fit_diagnostics"
+            ].get("adaptive_proposals_accepted", 0),
+            "adaptive_proposals_rejected": result[
+                "fit_diagnostics"
+            ].get("adaptive_proposals_rejected", 0),
+            "adaptive_rescue_proposals": result[
+                "fit_diagnostics"
+            ].get("adaptive_rescue_proposals", 0),
+            "adaptive_rescue_accepted": result[
+                "fit_diagnostics"
+            ].get("adaptive_rescue_accepted", 0),
+            "adaptive_forced_refits": result[
+                "fit_diagnostics"
+            ].get("adaptive_forced_refits", 0),
+            "adaptive_policy_updates": result[
+                "fit_diagnostics"
+            ]["adaptive_policy_updates"],
+            "diagnostic_history_len": len(
+                result["diagnostic_history"]
+            ),
+            "arbiter_history_len": len(
+                result.get("arbiter_history", [])
+            ),
+        },
+    )
+
+
 ALGORITHMS = {
     "random": run_random,
     "sobol": run_sobol,
@@ -659,4 +916,5 @@ ALGORITHMS = {
     "ngopt": run_ngopt,
     "cmaes": run_cmaes,
     "stacked": run_stacked,
+    "adaptive_stacked": run_adaptive_stacked,
 }
