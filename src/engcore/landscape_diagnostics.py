@@ -1,5 +1,5 @@
 """
-Online landscape / search diagnostics for V0.3.3.
+Online landscape / search diagnostics.
 
 Black-box safe: uses only evaluated X, objective/score values, bounds/dim,
 budget state, and already-computed model stacking diagnostics.
@@ -105,12 +105,8 @@ def compute_landscape_diagnostics(
         tail = best_curve[-(window + 1) :]
         if len(tail) >= 2:
             improves = np.diff(tail) > 1e-12
-            recent_improvement_rate = float(
-                np.mean(improves)
-            )
-            span = float(
-                abs(tail[-1] - tail[0])
-            )
+            recent_improvement_rate = float(np.mean(improves))
+            span = float(abs(tail[-1] - tail[0]))
             y_scale = float(
                 max(
                     np.std(y),
@@ -135,20 +131,10 @@ def compute_landscape_diagnostics(
     # Geometry: diversity of recent points and locality around incumbent.
     if n >= 2:
         recent_X = X[-min(n, window) :]
-        # Mean pairwise distance among recent points (O(w^2), w small).
-        diffs = (
-            recent_X[:, None, :]
-            - recent_X[None, :, :]
-        )
-        dists = np.sqrt(
-            np.sum(diffs * diffs, axis=-1)
-        )
+        diffs = recent_X[:, None, :] - recent_X[None, :, :]
+        dists = np.sqrt(np.sum(diffs * diffs, axis=-1))
         iu = np.triu_indices(len(recent_X), k=1)
-        if iu[0].size:
-            mean_dist = float(np.mean(dists[iu]))
-        else:
-            mean_dist = 0.0
-        # Normalize by unit-cube diagonal.
+        mean_dist = float(np.mean(dists[iu])) if iu[0].size else 0.0
         sample_diversity = _clip01(
             mean_dist / max(np.sqrt(dim), 1e-12)
         )
@@ -162,17 +148,13 @@ def compute_landscape_diagnostics(
         incumbent_locality = _clip01(
             float(
                 np.mean(
-                    recent_to_inc
-                    <= float(locality_radius)
+                    recent_to_inc <= float(locality_radius)
                 )
             )
         )
 
-        # Cheap coverage proxy: fraction of dim-wise range used recently.
         span = np.ptp(recent_X, axis=0)
-        exploration_coverage = _clip01(
-            float(np.mean(span))
-        )
+        exploration_coverage = _clip01(float(np.mean(span)))
     else:
         sample_diversity = 0.0
         incumbent_locality = 1.0
@@ -181,59 +163,59 @@ def compute_landscape_diagnostics(
     w_rbf = _clip01(float(weight_rbf))
     w_mat = _clip01(1.0 - w_rbf)
 
-    # Model agreement / reliability from stacking diagnostics already computed.
+    # Reliability proxy from scale-robust inter-model consistency rather than
+    # absolute predictive log density. Multiplying the objective by a constant
+    # can shift both mean log densities by a common offset; their difference
+    # remains the safer signal.
     model_agreement = 0.5
     model_error_proxy = 0.5
     model_reliability = 0.0
 
     if weight_history:
         last = weight_history[-1]
-        lp_a = float(
-            last.get("mean_logp_rbf", np.nan)
-        )
-        lp_b = float(
-            last.get(
-                "mean_logp_matern",
-                np.nan,
-            )
-        )
+        lp_a = float(last.get("mean_logp_rbf", np.nan))
+        lp_b = float(last.get("mean_logp_matern", np.nan))
         if np.isfinite(lp_a) and np.isfinite(lp_b):
-            # Large logp gap => one member clearly preferred (agreement on winner).
             gap = abs(lp_a - lp_b)
-            scale = 1.0 + abs(lp_a) + abs(lp_b)
-            model_agreement = _clip01(
-                gap / scale
+            model_agreement = _clip01(1.0 / (1.0 + gap))
+
+            recent_weights = [
+                float(row.get("weight_rbf", np.nan))
+                for row in weight_history[-5:]
+            ]
+            recent_weights = [
+                value for value in recent_weights
+                if np.isfinite(value)
+            ]
+            weight_volatility = (
+                float(np.std(recent_weights)) * 2.0
+                if len(recent_weights) >= 2
+                else 0.0
             )
-            # Poor absolute predictive density => higher error proxy.
-            mean_lp = 0.5 * (lp_a + lp_b)
+            disagreement = 1.0 - model_agreement
             model_error_proxy = _clip01(
-                1.0 / (1.0 + np.exp(mean_lp))
+                max(disagreement, weight_volatility)
             )
             model_reliability = _clip01(
                 1.0 - model_error_proxy
             )
-        # Near-floor stacking weights also reduce reliability.
+
+        # Near-floor stacking weights indicate effective member collapse and
+        # reduce trust in model-consensus adaptation.
         floor_dist = min(w_rbf, w_mat)
         if floor_dist <= 0.11:
             model_reliability *= 0.7
             model_error_proxy = _clip01(
-                0.5 * model_error_proxy + 0.5
+                max(model_error_proxy, 0.5)
             )
 
     return LandscapeDiagnostics(
         n_obs=n,
         dimension=dim,
-        remaining_budget_fraction=_clip01(
-            remaining
-        ),
-        best_score=_finite_or(
-            best_score,
-            float("-inf"),
-        ),
+        remaining_budget_fraction=_clip01(remaining),
+        best_score=_finite_or(best_score, float("-inf")),
         evaluations_since_improve=since,
-        recent_improvement_rate=_clip01(
-            recent_improvement_rate
-        ),
+        recent_improvement_rate=_clip01(recent_improvement_rate),
         normalized_improvement_velocity=_finite_or(
             normalized_improvement_velocity,
             0.0,
