@@ -84,10 +84,18 @@ def with_continuous_constraints(name, evaluator):
         margins = constraint_margins_for(name, x)
         metadata["constraint_margins"] = [float(v) for v in margins]
 
-        # Sanity: continuous margins should match the benchmark boolean rule.
         if margins:
             margin_feasible = all(v >= -1e-12 for v in margins)
             metadata["margin_feasible"] = bool(margin_feasible)
+
+            # Keep one source of truth. The boolean feasibility result and the
+            # continuous margin model must describe the same feasible set.
+            if bool(feasible) != bool(margin_feasible):
+                raise RuntimeError(
+                    "Constraint feasibility mismatch for "
+                    f"{name!r}: evaluator={bool(feasible)}, "
+                    f"margins={bool(margin_feasible)}"
+                )
 
         return score, feasible, metadata
 
