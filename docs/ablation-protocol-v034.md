@@ -139,6 +139,16 @@ band; it has **no decision authority**.
 | R2 | B vs A harmful (refresh harmful) | Amend the branch to revert per-step refresh in `adaptive_stacked_v034`. **Any registered-evidence-driven algorithm change invalidates the old results as validation of the new algorithm**: create `v0.3.4-rc2` and rerun the **complete three-arm matched campaign** under the one rc2 apparatus. Never combine arms across RC apparatus versions into one causal dataset. The rc1 campaign is archived as evidence about the rc1 treatments only. |
 | R3 | C vs B positive | Adaptive machinery earns its complexity beyond fresh weights. Document; merge as-is. |
 | R4 | Inconclusive endpoint(s) | No attribution for that contrast. Merge as-is with `adaptive_stacked_v034` explicitly labeled *behaviorally changed, performance-unvalidated* in README-V0.3.4 and in any future solver descriptor. The open question files as a follow-up hypothesis for the deferred multi-seed tier. |
+| R5 | C vs B harmful | The adaptive proposal / safety-arbiter path is harmful relative to fresh weights at this design point (D=2, budget 40, one seed per case). No algorithm change is required in order to merge, but `adaptive_stacked_v034` must carry the recorded harmful-at-this-design finding in README-V0.3.4 and in any future solver descriptor, and must not be presented as a preferred or default solver on this evidence. If the owner elects a treatment-changing modification in response, R2's `v0.3.4-rc2` + complete three-arm rerun requirement applies unchanged. |
+
+**Rule precedence (pre-registered).** If the two contrasts return decisive
+verdicts implying conflicting actions (e.g. R2 harmful on B vs A together
+with R3 positive on C vs B), the **harmful finding governs**: the
+amendment / adverse-labeling path takes precedence over the positive path,
+and the positive finding is recorded but does not license presenting the
+affected arm as preferred. This precedence is declared before any
+registered data exists so that no decisive outcome combination requires a
+post-hoc judgment call.
 
 Rule R2's rerun requirement applies to **any** treatment-changing
 modification triggered by registered evidence, not only weight-refresh

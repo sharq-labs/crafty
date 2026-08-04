@@ -60,8 +60,18 @@ _FN_RE = re.compile(r"bbob_f(\d+)_i")
 
 
 def _function_of(problem_id):
+    """Cluster key for a case. Fails loudly rather than degrading:
+    an unparsable id would silently give each case its own cluster,
+    turning the clustered primary endpoint back into pseudoreplication
+    under a 'function-clustered' label."""
     m = _FN_RE.search(problem_id)
-    return int(m.group(1)) if m else problem_id  # own cluster if unparsable
+    if m is None:
+        raise ValueError(
+            f"cannot determine BBOB function for problem_id "
+            f"{problem_id!r}: function-clustered primary inference "
+            f"requires parsable ids (expected 'bbob_f<NNN>_i<NN>_d<NN>')"
+        )
+    return int(m.group(1))
 
 
 def load_journal(path):
