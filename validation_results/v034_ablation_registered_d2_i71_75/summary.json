@@ -1,0 +1,2210 @@
+{
+  "algorithms": {
+    "adaptive_stacked_v034": {
+      "final_target_hit_rate": NaN,
+      "mean_evaluations": 40.0,
+      "mean_rank": 1.9833333333333334,
+      "mean_target_fraction": NaN,
+      "mean_wall_s": 24.32376183499982,
+      "median_log10_final_gap": NaN,
+      "median_rank": 2.0,
+      "runs": 120,
+      "unique_wins": 1,
+      "win_share": 31.83333333333333,
+      "wins": 1
+    },
+    "stacked_fresh_weights_v034": {
+      "final_target_hit_rate": NaN,
+      "mean_evaluations": 40.0,
+      "mean_rank": 1.9875,
+      "mean_target_fraction": NaN,
+      "mean_wall_s": 15.875807073332664,
+      "median_log10_final_gap": NaN,
+      "median_rank": 2.0,
+      "runs": 120,
+      "unique_wins": 1,
+      "win_share": 31.83333333333333,
+      "wins": 1
+    },
+    "stacked_v0301": {
+      "final_target_hit_rate": NaN,
+      "mean_evaluations": 40.0,
+      "mean_rank": 2.029166666666667,
+      "mean_target_fraction": NaN,
+      "mean_wall_s": 16.233023907500442,
+      "median_log10_final_gap": NaN,
+      "median_rank": 2.0,
+      "runs": 120,
+      "unique_wins": 53,
+      "win_share": 56.33333333333334,
+      "wins": 53
+    }
+  },
+  "per_problem_ranks": [
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f001_i71_d02",
+      "rank": 1.0,
+      "score": 183.01000110102322
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f001_i71_d02",
+      "rank": 2.5,
+      "score": 183.0100024316608
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f001_i71_d02",
+      "rank": 2.5,
+      "score": 183.0100024316608
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f001_i72_d02",
+      "rank": 1.0,
+      "score": 183.52000086230896
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f001_i72_d02",
+      "rank": 2.5,
+      "score": 183.52000764568405
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f001_i72_d02",
+      "rank": 2.5,
+      "score": 183.52000764568405
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f001_i73_d02",
+      "rank": 3.0,
+      "score": -593.8399634819526
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f001_i73_d02",
+      "rank": 1.5,
+      "score": -593.8399984490322
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f001_i73_d02",
+      "rank": 1.5,
+      "score": -593.8399984490322
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f001_i74_d02",
+      "rank": 3.0,
+      "score": -999.9999999182791
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f001_i74_d02",
+      "rank": 1.5,
+      "score": -999.9999999698024
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f001_i74_d02",
+      "rank": 1.5,
+      "score": -999.9999999698024
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f001_i75_d02",
+      "rank": 1.0,
+      "score": -25.309987518651855
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f001_i75_d02",
+      "rank": 2.5,
+      "score": -25.309979314725535
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f001_i75_d02",
+      "rank": 2.5,
+      "score": -25.309979314725535
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f002_i71_d02",
+      "rank": 1.0,
+      "score": -64.46706578440296
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f002_i71_d02",
+      "rank": 2.5,
+      "score": -42.79597721832113
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f002_i71_d02",
+      "rank": 2.5,
+      "score": -42.79597721832113
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f002_i72_d02",
+      "rank": 3.0,
+      "score": -356.5432834817027
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f002_i72_d02",
+      "rank": 1.5,
+      "score": -362.7359803027053
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f002_i72_d02",
+      "rank": 1.5,
+      "score": -362.7359803027053
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f002_i73_d02",
+      "rank": 3.0,
+      "score": -10.450514714259972
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f002_i73_d02",
+      "rank": 2.0,
+      "score": -15.408478481820046
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f002_i73_d02",
+      "rank": 1.0,
+      "score": -16.181983781997353
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f002_i74_d02",
+      "rank": 3.0,
+      "score": 178.89773757496087
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f002_i74_d02",
+      "rank": 1.5,
+      "score": 175.96024063388202
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f002_i74_d02",
+      "rank": 1.5,
+      "score": 175.96024063388202
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f002_i75_d02",
+      "rank": 3.0,
+      "score": -536.1600978139819
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f002_i75_d02",
+      "rank": 1.5,
+      "score": -563.5513311399966
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f002_i75_d02",
+      "rank": 1.5,
+      "score": -563.5513311399966
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f003_i71_d02",
+      "rank": 3.0,
+      "score": -24.459486345594627
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f003_i71_d02",
+      "rank": 1.5,
+      "score": -27.040945827365825
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f003_i71_d02",
+      "rank": 1.5,
+      "score": -27.040945827365825
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f003_i72_d02",
+      "rank": 2.0,
+      "score": 50.22164621022945
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f003_i72_d02",
+      "rank": 2.0,
+      "score": 50.22164621022945
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f003_i72_d02",
+      "rank": 2.0,
+      "score": 50.22164621022945
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f003_i73_d02",
+      "rank": 3.0,
+      "score": 290.86861417518145
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f003_i73_d02",
+      "rank": 1.5,
+      "score": 289.99683689327355
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f003_i73_d02",
+      "rank": 1.5,
+      "score": 289.99683689327355
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f003_i74_d02",
+      "rank": 1.0,
+      "score": -20.590422064552783
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f003_i74_d02",
+      "rank": 2.5,
+      "score": -18.77749416695662
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f003_i74_d02",
+      "rank": 2.5,
+      "score": -18.77749416695662
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f003_i75_d02",
+      "rank": 1.0,
+      "score": -52.99005991662819
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f003_i75_d02",
+      "rank": 2.5,
+      "score": -47.27664228371819
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f003_i75_d02",
+      "rank": 2.5,
+      "score": -47.27664228371819
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f004_i71_d02",
+      "rank": 3.0,
+      "score": -32.26005234237579
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f004_i71_d02",
+      "rank": 1.5,
+      "score": -36.44359673708626
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f004_i71_d02",
+      "rank": 1.5,
+      "score": -36.44359673708626
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f004_i72_d02",
+      "rank": 3.0,
+      "score": 51.98084622449531
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f004_i72_d02",
+      "rank": 1.5,
+      "score": 48.98448092139131
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f004_i72_d02",
+      "rank": 1.5,
+      "score": 48.98448092139131
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f004_i73_d02",
+      "rank": 1.0,
+      "score": 293.8718332282615
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f004_i73_d02",
+      "rank": 2.5,
+      "score": 294.0831562616161
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f004_i73_d02",
+      "rank": 2.5,
+      "score": 294.0831562616161
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f004_i74_d02",
+      "rank": 1.0,
+      "score": -26.30265595007842
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f004_i74_d02",
+      "rank": 2.5,
+      "score": -25.696268807132828
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f004_i74_d02",
+      "rank": 2.5,
+      "score": -25.696268807132828
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f004_i75_d02",
+      "rank": 3.0,
+      "score": -47.31537321812199
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f004_i75_d02",
+      "rank": 1.5,
+      "score": -51.087440623919356
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f004_i75_d02",
+      "rank": 1.5,
+      "score": -51.087440623919356
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f005_i71_d02",
+      "rank": 2.0,
+      "score": -66.39
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f005_i71_d02",
+      "rank": 2.0,
+      "score": -66.39
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f005_i71_d02",
+      "rank": 2.0,
+      "score": -66.39
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f005_i72_d02",
+      "rank": 2.0,
+      "score": -226.01
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f005_i72_d02",
+      "rank": 2.0,
+      "score": -226.01
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f005_i72_d02",
+      "rank": 2.0,
+      "score": -226.01
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f005_i73_d02",
+      "rank": 2.0,
+      "score": 1000.0
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f005_i73_d02",
+      "rank": 2.0,
+      "score": 1000.0
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f005_i73_d02",
+      "rank": 2.0,
+      "score": 1000.0
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f005_i74_d02",
+      "rank": 2.0,
+      "score": -183.02
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f005_i74_d02",
+      "rank": 2.0,
+      "score": -183.02
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f005_i74_d02",
+      "rank": 2.0,
+      "score": -183.02
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f005_i75_d02",
+      "rank": 2.0,
+      "score": -102.62
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f005_i75_d02",
+      "rank": 2.0,
+      "score": -102.62
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f005_i75_d02",
+      "rank": 2.0,
+      "score": -102.62
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f006_i71_d02",
+      "rank": 3.0,
+      "score": 68.39346163563468
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f006_i71_d02",
+      "rank": 1.5,
+      "score": 67.93234533929356
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f006_i71_d02",
+      "rank": 1.5,
+      "score": 67.93234533929356
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f006_i72_d02",
+      "rank": 2.0,
+      "score": 31.37257075322426
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f006_i72_d02",
+      "rank": 2.0,
+      "score": 31.37257075322426
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f006_i72_d02",
+      "rank": 2.0,
+      "score": 31.37257075322426
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f006_i73_d02",
+      "rank": 3.0,
+      "score": 11.23953982472064
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f006_i73_d02",
+      "rank": 1.5,
+      "score": 11.09740263937804
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f006_i73_d02",
+      "rank": 1.5,
+      "score": 11.09740263937804
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f006_i74_d02",
+      "rank": 1.0,
+      "score": 562.1221664929393
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f006_i74_d02",
+      "rank": 2.5,
+      "score": 570.7996606092061
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f006_i74_d02",
+      "rank": 2.5,
+      "score": 570.7996606092061
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f006_i75_d02",
+      "rank": 3.0,
+      "score": -102.63643886913677
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f006_i75_d02",
+      "rank": 1.5,
+      "score": -103.16410039970403
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f006_i75_d02",
+      "rank": 1.5,
+      "score": -103.16410039970403
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f007_i71_d02",
+      "rank": 3.0,
+      "score": -999.8020290785859
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f007_i71_d02",
+      "rank": 1.5,
+      "score": -999.9791095498326
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f007_i71_d02",
+      "rank": 1.5,
+      "score": -999.9791095498326
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f007_i72_d02",
+      "rank": 1.0,
+      "score": 164.07429314990867
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f007_i72_d02",
+      "rank": 2.5,
+      "score": 164.17601338364295
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f007_i72_d02",
+      "rank": 2.5,
+      "score": 164.17601338364295
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f007_i73_d02",
+      "rank": 3.0,
+      "score": -162.69134456990616
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f007_i73_d02",
+      "rank": 1.5,
+      "score": -165.3781254399593
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f007_i73_d02",
+      "rank": 1.5,
+      "score": -165.3781254399593
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f007_i74_d02",
+      "rank": 1.0,
+      "score": 92.84567164773958
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f007_i74_d02",
+      "rank": 2.5,
+      "score": 93.40716477395789
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f007_i74_d02",
+      "rank": 2.5,
+      "score": 93.40716477395789
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f007_i75_d02",
+      "rank": 3.0,
+      "score": -367.8984524157046
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f007_i75_d02",
+      "rank": 1.5,
+      "score": -367.91455393128
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f007_i75_d02",
+      "rank": 1.5,
+      "score": -367.91455393128
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f008_i71_d02",
+      "rank": 3.0,
+      "score": 6.860702112583341
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f008_i71_d02",
+      "rank": 1.5,
+      "score": 6.744107792493554
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f008_i71_d02",
+      "rank": 1.5,
+      "score": 6.744107792493554
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f008_i72_d02",
+      "rank": 3.0,
+      "score": -189.72018210451932
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f008_i72_d02",
+      "rank": 1.5,
+      "score": -189.770136687775
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f008_i72_d02",
+      "rank": 1.5,
+      "score": -189.770136687775
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f008_i73_d02",
+      "rank": 1.0,
+      "score": -27.726161970687137
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f008_i73_d02",
+      "rank": 2.5,
+      "score": -27.65979447285428
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f008_i73_d02",
+      "rank": 2.5,
+      "score": -27.65979447285428
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f008_i74_d02",
+      "rank": 1.0,
+      "score": 6.942093160316417
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f008_i74_d02",
+      "rank": 2.5,
+      "score": 7.0513414509968815
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f008_i74_d02",
+      "rank": 2.5,
+      "score": 7.0513414509968815
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f008_i75_d02",
+      "rank": 3.0,
+      "score": -44.00699607618944
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f008_i75_d02",
+      "rank": 1.5,
+      "score": -44.46393432314882
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f008_i75_d02",
+      "rank": 1.5,
+      "score": -44.46393432314882
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f009_i71_d02",
+      "rank": 1.0,
+      "score": 935.3039553677759
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f009_i71_d02",
+      "rank": 2.5,
+      "score": 935.3299047129401
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f009_i71_d02",
+      "rank": 2.5,
+      "score": 935.3299047129401
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f009_i72_d02",
+      "rank": 3.0,
+      "score": -63.614175234940355
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f009_i72_d02",
+      "rank": 1.5,
+      "score": -63.68673627205775
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f009_i72_d02",
+      "rank": 1.5,
+      "score": -63.68673627205775
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f009_i73_d02",
+      "rank": 1.0,
+      "score": 1000.4018239011701
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f009_i73_d02",
+      "rank": 2.5,
+      "score": 1001.8682508923833
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f009_i73_d02",
+      "rank": 2.5,
+      "score": 1001.8682508923833
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f009_i74_d02",
+      "rank": 3.0,
+      "score": 32.622449945132416
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f009_i74_d02",
+      "rank": 1.5,
+      "score": 32.19975444764175
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f009_i74_d02",
+      "rank": 1.5,
+      "score": 32.19975444764175
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f009_i75_d02",
+      "rank": 3.0,
+      "score": 58.358654774550004
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f009_i75_d02",
+      "rank": 1.5,
+      "score": 58.20189824433677
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f009_i75_d02",
+      "rank": 1.5,
+      "score": 58.20189824433677
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f010_i71_d02",
+      "rank": 3.0,
+      "score": -48.04671985501391
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f010_i71_d02",
+      "rank": 1.5,
+      "score": -51.47784007952858
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f010_i71_d02",
+      "rank": 1.5,
+      "score": -51.47784007952858
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f010_i72_d02",
+      "rank": 3.0,
+      "score": 102.58042596524574
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f010_i72_d02",
+      "rank": 1.5,
+      "score": 77.43179078577305
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f010_i72_d02",
+      "rank": 1.5,
+      "score": 77.43179078577305
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f010_i73_d02",
+      "rank": 1.0,
+      "score": 39.19549530625911
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f010_i73_d02",
+      "rank": 3.0,
+      "score": 39.254098507950616
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f010_i73_d02",
+      "rank": 2.0,
+      "score": 39.236782119918686
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f010_i74_d02",
+      "rank": 1.0,
+      "score": 1015.1960417284095
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f010_i74_d02",
+      "rank": 2.5,
+      "score": 1015.9686055222047
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f010_i74_d02",
+      "rank": 2.5,
+      "score": 1015.9686055222047
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f010_i75_d02",
+      "rank": 1.0,
+      "score": -35.24581589839633
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f010_i75_d02",
+      "rank": 2.5,
+      "score": -28.875465699361335
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f010_i75_d02",
+      "rank": 2.5,
+      "score": -28.875465699361335
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f011_i71_d02",
+      "rank": 1.0,
+      "score": -36.48569313492105
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f011_i71_d02",
+      "rank": 2.5,
+      "score": -29.613230638195667
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f011_i71_d02",
+      "rank": 2.5,
+      "score": -29.613230638195667
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f011_i72_d02",
+      "rank": 1.0,
+      "score": 134.49649443773382
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f011_i72_d02",
+      "rank": 2.5,
+      "score": 143.70865025858936
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f011_i72_d02",
+      "rank": 2.5,
+      "score": 143.70865025858936
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f011_i73_d02",
+      "rank": 1.0,
+      "score": 99.44037091507306
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f011_i73_d02",
+      "rank": 2.5,
+      "score": 102.84246837986791
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f011_i73_d02",
+      "rank": 2.5,
+      "score": 102.84246837986791
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f011_i74_d02",
+      "rank": 3.0,
+      "score": -19.54486024644196
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f011_i74_d02",
+      "rank": 1.5,
+      "score": -20.199219052096225
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f011_i74_d02",
+      "rank": 1.5,
+      "score": -20.199219052096225
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f011_i75_d02",
+      "rank": 1.0,
+      "score": 101.85502065060679
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f011_i75_d02",
+      "rank": 2.5,
+      "score": 139.97853001275882
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f011_i75_d02",
+      "rank": 2.5,
+      "score": 139.97853001275882
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f012_i71_d02",
+      "rank": 3.0,
+      "score": -271.5145545254539
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f012_i71_d02",
+      "rank": 1.5,
+      "score": -619.1135395577385
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f012_i71_d02",
+      "rank": 1.5,
+      "score": -619.1135395577385
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f012_i72_d02",
+      "rank": 1.0,
+      "score": 212.58534577562926
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f012_i72_d02",
+      "rank": 2.5,
+      "score": 1000.1999421525561
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f012_i72_d02",
+      "rank": 2.5,
+      "score": 1000.1999421525561
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f012_i73_d02",
+      "rank": 1.0,
+      "score": 190.0168680018245
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f012_i73_d02",
+      "rank": 2.5,
+      "score": 210.27782105154992
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f012_i73_d02",
+      "rank": 2.5,
+      "score": 210.27782105154992
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f012_i74_d02",
+      "rank": 3.0,
+      "score": 89.26291768101945
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f012_i74_d02",
+      "rank": 1.5,
+      "score": 73.58503810163508
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f012_i74_d02",
+      "rank": 1.5,
+      "score": 73.58503810163508
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f012_i75_d02",
+      "rank": 3.0,
+      "score": 1005.8521984697913
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f012_i75_d02",
+      "rank": 1.5,
+      "score": 1001.3844982860787
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f012_i75_d02",
+      "rank": 1.5,
+      "score": 1001.3844982860787
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f013_i71_d02",
+      "rank": 1.0,
+      "score": 34.43880597106369
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f013_i71_d02",
+      "rank": 2.5,
+      "score": 38.85969125216726
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f013_i71_d02",
+      "rank": 2.5,
+      "score": 38.85969125216726
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f013_i72_d02",
+      "rank": 3.0,
+      "score": -735.7056376884797
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f013_i72_d02",
+      "rank": 1.5,
+      "score": -738.9173965157879
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f013_i72_d02",
+      "rank": 1.5,
+      "score": -738.9173965157879
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f013_i73_d02",
+      "rank": 3.0,
+      "score": -50.62513897053807
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f013_i73_d02",
+      "rank": 1.5,
+      "score": -51.67162420493022
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f013_i73_d02",
+      "rank": 1.5,
+      "score": -51.67162420493022
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f013_i74_d02",
+      "rank": 1.0,
+      "score": -222.58107569794228
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f013_i74_d02",
+      "rank": 2.5,
+      "score": -221.710941217073
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f013_i74_d02",
+      "rank": 2.5,
+      "score": -221.710941217073
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f013_i75_d02",
+      "rank": 1.0,
+      "score": 7.462172215778594
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f013_i75_d02",
+      "rank": 2.5,
+      "score": 9.926755341724533
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f013_i75_d02",
+      "rank": 2.5,
+      "score": 9.926755341724533
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f014_i71_d02",
+      "rank": 3.0,
+      "score": 32.782567553874074
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f014_i71_d02",
+      "rank": 1.5,
+      "score": 32.7123606299754
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f014_i71_d02",
+      "rank": 1.5,
+      "score": 32.7123606299754
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f014_i72_d02",
+      "rank": 1.0,
+      "score": -39.414738197405185
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f014_i72_d02",
+      "rank": 2.5,
+      "score": -39.40000823903284
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f014_i72_d02",
+      "rank": 2.5,
+      "score": -39.40000823903284
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f014_i73_d02",
+      "rank": 1.0,
+      "score": 419.7471969188005
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f014_i73_d02",
+      "rank": 2.5,
+      "score": 419.7557054910146
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f014_i73_d02",
+      "rank": 2.5,
+      "score": 419.7557054910146
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f014_i74_d02",
+      "rank": 3.0,
+      "score": 7.7669929319449835
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f014_i74_d02",
+      "rank": 1.5,
+      "score": 7.694621153442667
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f014_i74_d02",
+      "rank": 1.5,
+      "score": 7.694621153442667
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f014_i75_d02",
+      "rank": 1.0,
+      "score": -127.5995429147021
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f014_i75_d02",
+      "rank": 2.5,
+      "score": -127.57482010005957
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f014_i75_d02",
+      "rank": 2.5,
+      "score": -127.57482010005957
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f015_i71_d02",
+      "rank": 3.0,
+      "score": -336.23703460518294
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f015_i71_d02",
+      "rank": 1.5,
+      "score": -343.6923344825304
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f015_i71_d02",
+      "rank": 1.5,
+      "score": -343.6923344825304
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f015_i72_d02",
+      "rank": 2.0,
+      "score": 98.85010705371027
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f015_i72_d02",
+      "rank": 2.0,
+      "score": 98.85010705371027
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f015_i72_d02",
+      "rank": 2.0,
+      "score": 98.85010705371027
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f015_i73_d02",
+      "rank": 3.0,
+      "score": -24.71709786073621
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f015_i73_d02",
+      "rank": 1.5,
+      "score": -25.65629019047862
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f015_i73_d02",
+      "rank": 1.5,
+      "score": -25.65629019047862
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f015_i74_d02",
+      "rank": 1.0,
+      "score": -993.2785998536349
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f015_i74_d02",
+      "rank": 2.5,
+      "score": -988.0490437463455
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f015_i74_d02",
+      "rank": 2.5,
+      "score": -988.0490437463455
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f015_i75_d02",
+      "rank": 1.0,
+      "score": -87.77823574947337
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f015_i75_d02",
+      "rank": 2.5,
+      "score": -84.02568519160357
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f015_i75_d02",
+      "rank": 2.5,
+      "score": -84.02568519160357
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f016_i71_d02",
+      "rank": 1.0,
+      "score": 66.48791630420244
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f016_i71_d02",
+      "rank": 2.5,
+      "score": 66.5341698264698
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f016_i71_d02",
+      "rank": 2.5,
+      "score": 66.5341698264698
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f016_i72_d02",
+      "rank": 1.0,
+      "score": -138.11259444291812
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f016_i72_d02",
+      "rank": 2.5,
+      "score": -138.10248406464822
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f016_i72_d02",
+      "rank": 2.5,
+      "score": -138.10248406464822
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f016_i73_d02",
+      "rank": 1.0,
+      "score": 731.801220325971
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f016_i73_d02",
+      "rank": 2.5,
+      "score": 733.5723088839663
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f016_i73_d02",
+      "rank": 2.5,
+      "score": 733.5723088839663
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f016_i74_d02",
+      "rank": 1.0,
+      "score": 76.46927327733847
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f016_i74_d02",
+      "rank": 2.5,
+      "score": 77.78640217812543
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f016_i74_d02",
+      "rank": 2.5,
+      "score": 77.78640217812543
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f016_i75_d02",
+      "rank": 3.0,
+      "score": -48.40637249994656
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f016_i75_d02",
+      "rank": 1.5,
+      "score": -48.69668871842829
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f016_i75_d02",
+      "rank": 1.5,
+      "score": -48.69668871842829
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f017_i71_d02",
+      "rank": 3.0,
+      "score": 482.8201085510565
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f017_i71_d02",
+      "rank": 1.5,
+      "score": 482.7583487200938
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f017_i71_d02",
+      "rank": 1.5,
+      "score": 482.7583487200938
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f017_i72_d02",
+      "rank": 3.0,
+      "score": -34.9027635181175
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f017_i72_d02",
+      "rank": 1.5,
+      "score": -35.47917672590821
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f017_i72_d02",
+      "rank": 1.5,
+      "score": -35.47917672590821
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f017_i73_d02",
+      "rank": 1.0,
+      "score": 40.126838977001064
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f017_i73_d02",
+      "rank": 2.5,
+      "score": 40.605307639250775
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f017_i73_d02",
+      "rank": 2.5,
+      "score": 40.605307639250775
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f017_i74_d02",
+      "rank": 3.0,
+      "score": -31.161996002007804
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f017_i74_d02",
+      "rank": 1.5,
+      "score": -31.543737693842303
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f017_i74_d02",
+      "rank": 1.5,
+      "score": -31.543737693842303
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f017_i75_d02",
+      "rank": 3.0,
+      "score": 369.2749468794012
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f017_i75_d02",
+      "rank": 1.5,
+      "score": 368.65015739281597
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f017_i75_d02",
+      "rank": 1.5,
+      "score": 368.65015739281597
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f018_i71_d02",
+      "rank": 1.0,
+      "score": 483.4141685549142
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f018_i71_d02",
+      "rank": 2.5,
+      "score": 483.7461482262132
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f018_i71_d02",
+      "rank": 2.5,
+      "score": 483.7461482262132
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f018_i72_d02",
+      "rank": 1.0,
+      "score": -34.60715917874702
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f018_i72_d02",
+      "rank": 2.5,
+      "score": -22.977876717898067
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f018_i72_d02",
+      "rank": 2.5,
+      "score": -22.977876717898067
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f018_i73_d02",
+      "rank": 2.0,
+      "score": 42.33610679464323
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f018_i73_d02",
+      "rank": 2.0,
+      "score": 42.33610679464323
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f018_i73_d02",
+      "rank": 2.0,
+      "score": 42.33610679464323
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f018_i74_d02",
+      "rank": 3.0,
+      "score": -22.308103648730008
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f018_i74_d02",
+      "rank": 1.5,
+      "score": -31.453300518773663
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f018_i74_d02",
+      "rank": 1.5,
+      "score": -31.453300518773663
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f018_i75_d02",
+      "rank": 3.0,
+      "score": 369.0731736393395
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f018_i75_d02",
+      "rank": 1.5,
+      "score": 368.8756959656383
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f018_i75_d02",
+      "rank": 1.5,
+      "score": 368.8756959656383
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f019_i71_d02",
+      "rank": 1.0,
+      "score": 62.885857809965
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f019_i71_d02",
+      "rank": 2.5,
+      "score": 64.1692586111615
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f019_i71_d02",
+      "rank": 2.5,
+      "score": 64.1692586111615
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f019_i72_d02",
+      "rank": 3.0,
+      "score": -83.94795597710583
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f019_i72_d02",
+      "rank": 1.5,
+      "score": -84.54130648224105
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f019_i72_d02",
+      "rank": 1.5,
+      "score": -84.54130648224105
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f019_i73_d02",
+      "rank": 1.0,
+      "score": -25.65226799846698
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f019_i73_d02",
+      "rank": 2.5,
+      "score": -25.614896090322475
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f019_i73_d02",
+      "rank": 2.5,
+      "score": -25.614896090322475
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f019_i74_d02",
+      "rank": 3.0,
+      "score": -30.14714300263431
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f019_i74_d02",
+      "rank": 1.5,
+      "score": -30.148361068309107
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f019_i74_d02",
+      "rank": 1.5,
+      "score": -30.148361068309107
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f019_i75_d02",
+      "rank": 1.0,
+      "score": -999.9296433632724
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f019_i75_d02",
+      "rank": 2.5,
+      "score": -999.9150905292353
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f019_i75_d02",
+      "rank": 2.5,
+      "score": -999.9150905292353
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f020_i71_d02",
+      "rank": 1.0,
+      "score": -135.2159791973156
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f020_i71_d02",
+      "rank": 2.5,
+      "score": -134.6202407934953
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f020_i71_d02",
+      "rank": 2.5,
+      "score": -134.6202407934953
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f020_i72_d02",
+      "rank": 1.0,
+      "score": 367.46883472920774
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f020_i72_d02",
+      "rank": 2.5,
+      "score": 368.27040767365304
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f020_i72_d02",
+      "rank": 2.5,
+      "score": 368.27040767365304
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f020_i73_d02",
+      "rank": 1.0,
+      "score": -247.00711936909687
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f020_i73_d02",
+      "rank": 2.5,
+      "score": -246.86510260188578
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f020_i73_d02",
+      "rank": 2.5,
+      "score": -246.86510260188578
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f020_i74_d02",
+      "rank": 1.0,
+      "score": -66.47898441439706
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f020_i74_d02",
+      "rank": 2.5,
+      "score": -65.79859469179051
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f020_i74_d02",
+      "rank": 2.5,
+      "score": -65.79859469179051
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f020_i75_d02",
+      "rank": 3.0,
+      "score": -21.42023806782324
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f020_i75_d02",
+      "rank": 1.5,
+      "score": -22.237754245921856
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f020_i75_d02",
+      "rank": 1.5,
+      "score": -22.237754245921856
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f021_i71_d02",
+      "rank": 3.0,
+      "score": -84.33807679019098
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f021_i71_d02",
+      "rank": 1.5,
+      "score": -86.27607725878528
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f021_i71_d02",
+      "rank": 1.5,
+      "score": -86.27607725878528
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f021_i72_d02",
+      "rank": 3.0,
+      "score": 24.185229006292296
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f021_i72_d02",
+      "rank": 1.5,
+      "score": 23.69374794740345
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f021_i72_d02",
+      "rank": 1.5,
+      "score": 23.69374794740345
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f021_i73_d02",
+      "rank": 3.0,
+      "score": -21.116473267887702
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f021_i73_d02",
+      "rank": 1.5,
+      "score": -22.077258301535892
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f021_i73_d02",
+      "rank": 1.5,
+      "score": -22.077258301535892
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f021_i74_d02",
+      "rank": 3.0,
+      "score": -330.32437123453
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f021_i74_d02",
+      "rank": 1.5,
+      "score": -332.3668367011875
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f021_i74_d02",
+      "rank": 1.5,
+      "score": -332.3668367011875
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f021_i75_d02",
+      "rank": 1.0,
+      "score": -123.11617718807994
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f021_i75_d02",
+      "rank": 2.5,
+      "score": -122.22011755811039
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f021_i75_d02",
+      "rank": 2.5,
+      "score": -122.22011755811039
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f022_i71_d02",
+      "rank": 3.0,
+      "score": 153.58703785913718
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f022_i71_d02",
+      "rank": 1.5,
+      "score": 153.02632753104047
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f022_i71_d02",
+      "rank": 1.5,
+      "score": 153.02632753104047
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f022_i72_d02",
+      "rank": 3.0,
+      "score": 100.2611674341306
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f022_i72_d02",
+      "rank": 1.5,
+      "score": 99.80372434102355
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f022_i72_d02",
+      "rank": 1.5,
+      "score": 99.80372434102355
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f022_i73_d02",
+      "rank": 3.0,
+      "score": -117.431187306359
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f022_i73_d02",
+      "rank": 1.5,
+      "score": -118.68165778514016
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f022_i73_d02",
+      "rank": 1.5,
+      "score": -118.68165778514016
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f022_i74_d02",
+      "rank": 1.0,
+      "score": 10.773601682526
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f022_i74_d02",
+      "rank": 2.5,
+      "score": 11.493472031582304
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f022_i74_d02",
+      "rank": 2.5,
+      "score": 11.493472031582304
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f022_i75_d02",
+      "rank": 3.0,
+      "score": 21.374514045463712
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f022_i75_d02",
+      "rank": 1.5,
+      "score": 21.373172089263036
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f022_i75_d02",
+      "rank": 1.5,
+      "score": 21.373172089263036
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f023_i71_d02",
+      "rank": 1.0,
+      "score": 258.57160486543677
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f023_i71_d02",
+      "rank": 2.5,
+      "score": 263.0379468768309
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f023_i71_d02",
+      "rank": 2.5,
+      "score": 263.0379468768309
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f023_i72_d02",
+      "rank": 2.5,
+      "score": 1004.9675747337167
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f023_i72_d02",
+      "rank": 1.0,
+      "score": 1004.2691677096673
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f023_i72_d02",
+      "rank": 2.5,
+      "score": 1004.9675747337167
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f023_i73_d02",
+      "rank": 1.0,
+      "score": -180.80853133124117
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f023_i73_d02",
+      "rank": 2.5,
+      "score": -179.18207583811218
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f023_i73_d02",
+      "rank": 2.5,
+      "score": -179.18207583811218
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f023_i74_d02",
+      "rank": 1.0,
+      "score": 590.3991127328056
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f023_i74_d02",
+      "rank": 2.5,
+      "score": 591.1766573674131
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f023_i74_d02",
+      "rank": 2.5,
+      "score": 591.1766573674131
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f023_i75_d02",
+      "rank": 2.0,
+      "score": 290.01691970284793
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f023_i75_d02",
+      "rank": 2.0,
+      "score": 290.01691970284793
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f023_i75_d02",
+      "rank": 2.0,
+      "score": 290.01691970284793
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f024_i71_d02",
+      "rank": 1.0,
+      "score": -26.93778435832904
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f024_i71_d02",
+      "rank": 2.5,
+      "score": -25.241677524004437
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f024_i71_d02",
+      "rank": 2.5,
+      "score": -25.241677524004437
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f024_i72_d02",
+      "rank": 3.0,
+      "score": -2.76829417314147
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f024_i72_d02",
+      "rank": 1.5,
+      "score": -2.870778443239482
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f024_i72_d02",
+      "rank": 1.5,
+      "score": -2.870778443239482
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f024_i73_d02",
+      "rank": 3.0,
+      "score": -200.03198778448203
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f024_i73_d02",
+      "rank": 1.5,
+      "score": -201.72100176062654
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f024_i73_d02",
+      "rank": 1.5,
+      "score": -201.72100176062654
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f024_i74_d02",
+      "rank": 1.0,
+      "score": 34.83904823699489
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f024_i74_d02",
+      "rank": 2.5,
+      "score": 35.64187889278216
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f024_i74_d02",
+      "rank": 2.5,
+      "score": 35.64187889278216
+    },
+    {
+      "algorithm": "stacked_v0301",
+      "problem_id": "bbob_f024_i75_d02",
+      "rank": 3.0,
+      "score": -993.7878226826483
+    },
+    {
+      "algorithm": "stacked_fresh_weights_v034",
+      "problem_id": "bbob_f024_i75_d02",
+      "rank": 1.5,
+      "score": -996.498789804994
+    },
+    {
+      "algorithm": "adaptive_stacked_v034",
+      "problem_id": "bbob_f024_i75_d02",
+      "rank": 1.5,
+      "score": -996.498789804994
+    }
+  ],
+  "ranking_policy": {
+    "ranks": "average_ranks_exact_ties",
+    "unique_wins": "sole_best_only",
+    "win_share": "fractional_1_over_N_at_best"
+  }
+}
