@@ -1,0 +1,501 @@
+{
+  "attempted_cases": 120,
+  "failed_cases": [],
+  "journal": "validation_results/v034_ablation_registered_d2_i71_75/progress.jsonl",
+  "kind": "v034_ablation_analysis",
+  "matched_cases": 120,
+  "non_converged_note": "NON_CONVERGED not applicable: legacy lab evaluator contract has no such status",
+  "per_arm_accounting": {
+    "adaptive_stacked_v034": {
+      "attempted": 120,
+      "completed": 120,
+      "excluded_by_matching": 0,
+      "failed": 0,
+      "failure_reasons": []
+    },
+    "stacked_fresh_weights_v034": {
+      "attempted": 120,
+      "completed": 120,
+      "excluded_by_matching": 0,
+      "failed": 0,
+      "failure_reasons": []
+    },
+    "stacked_v0301": {
+      "attempted": 120,
+      "completed": 120,
+      "excluded_by_matching": 0,
+      "failed": 0,
+      "failure_reasons": []
+    }
+  },
+  "primary_function_clustered": {
+    "B_vs_A": {
+      "all_tied_functions": 1,
+      "arm": "stacked_fresh_weights_v034",
+      "baseline": "stacked_v0301",
+      "ci_high": 0.7930793991352533,
+      "ci_low": 0.2880740095600375,
+      "n_functions": 24,
+      "n_nonties": 20,
+      "negative_functions": 9,
+      "p_value": 0.8238029479980469,
+      "p_value_holm": 1.0,
+      "per_function": [
+        {
+          "direction": "NEGATIVE",
+          "function": 1,
+          "function_score": -0.2,
+          "instance_losses": 3,
+          "instance_ties": 0,
+          "instance_wins": 2
+        },
+        {
+          "direction": "NEGATIVE",
+          "function": 10,
+          "function_score": -0.2,
+          "instance_losses": 3,
+          "instance_ties": 0,
+          "instance_wins": 2
+        },
+        {
+          "direction": "NEGATIVE",
+          "function": 11,
+          "function_score": -0.6,
+          "instance_losses": 4,
+          "instance_ties": 0,
+          "instance_wins": 1
+        },
+        {
+          "direction": "POSITIVE",
+          "function": 12,
+          "function_score": 0.2,
+          "instance_losses": 2,
+          "instance_ties": 0,
+          "instance_wins": 3
+        },
+        {
+          "direction": "NEGATIVE",
+          "function": 13,
+          "function_score": -0.2,
+          "instance_losses": 3,
+          "instance_ties": 0,
+          "instance_wins": 2
+        },
+        {
+          "direction": "NEGATIVE",
+          "function": 14,
+          "function_score": -0.2,
+          "instance_losses": 3,
+          "instance_ties": 0,
+          "instance_wins": 2
+        },
+        {
+          "direction": "TIE",
+          "function": 15,
+          "function_score": 0.0,
+          "instance_losses": 2,
+          "instance_ties": 1,
+          "instance_wins": 2
+        },
+        {
+          "direction": "NEGATIVE",
+          "function": 16,
+          "function_score": -0.6,
+          "instance_losses": 4,
+          "instance_ties": 0,
+          "instance_wins": 1
+        },
+        {
+          "direction": "POSITIVE",
+          "function": 17,
+          "function_score": 0.6,
+          "instance_losses": 1,
+          "instance_ties": 0,
+          "instance_wins": 4
+        },
+        {
+          "direction": "TIE",
+          "function": 18,
+          "function_score": 0.0,
+          "instance_losses": 2,
+          "instance_ties": 1,
+          "instance_wins": 2
+        },
+        {
+          "direction": "NEGATIVE",
+          "function": 19,
+          "function_score": -0.2,
+          "instance_losses": 3,
+          "instance_ties": 0,
+          "instance_wins": 2
+        },
+        {
+          "direction": "POSITIVE",
+          "function": 2,
+          "function_score": 0.6,
+          "instance_losses": 1,
+          "instance_ties": 0,
+          "instance_wins": 4
+        },
+        {
+          "direction": "NEGATIVE",
+          "function": 20,
+          "function_score": -0.6,
+          "instance_losses": 4,
+          "instance_ties": 0,
+          "instance_wins": 1
+        },
+        {
+          "direction": "POSITIVE",
+          "function": 21,
+          "function_score": 0.6,
+          "instance_losses": 1,
+          "instance_ties": 0,
+          "instance_wins": 4
+        },
+        {
+          "direction": "POSITIVE",
+          "function": 22,
+          "function_score": 0.6,
+          "instance_losses": 1,
+          "instance_ties": 0,
+          "instance_wins": 4
+        },
+        {
+          "direction": "NEGATIVE",
+          "function": 23,
+          "function_score": -0.5,
+          "instance_losses": 3,
+          "instance_ties": 1,
+          "instance_wins": 1
+        },
+        {
+          "direction": "POSITIVE",
+          "function": 24,
+          "function_score": 0.2,
+          "instance_losses": 2,
+          "instance_ties": 0,
+          "instance_wins": 3
+        },
+        {
+          "direction": "TIE",
+          "function": 3,
+          "function_score": 0.0,
+          "instance_losses": 2,
+          "instance_ties": 1,
+          "instance_wins": 2
+        },
+        {
+          "direction": "POSITIVE",
+          "function": 4,
+          "function_score": 0.2,
+          "instance_losses": 2,
+          "instance_ties": 0,
+          "instance_wins": 3
+        },
+        {
+          "direction": "ALL_TIED",
+          "function": 5,
+          "function_score": null,
+          "instance_losses": 0,
+          "instance_ties": 5,
+          "instance_wins": 0
+        },
+        {
+          "direction": "POSITIVE",
+          "function": 6,
+          "function_score": 0.5,
+          "instance_losses": 1,
+          "instance_ties": 1,
+          "instance_wins": 3
+        },
+        {
+          "direction": "POSITIVE",
+          "function": 7,
+          "function_score": 0.2,
+          "instance_losses": 2,
+          "instance_ties": 0,
+          "instance_wins": 3
+        },
+        {
+          "direction": "POSITIVE",
+          "function": 8,
+          "function_score": 0.2,
+          "instance_losses": 2,
+          "instance_ties": 0,
+          "instance_wins": 3
+        },
+        {
+          "direction": "POSITIVE",
+          "function": 9,
+          "function_score": 0.2,
+          "instance_losses": 2,
+          "instance_ties": 0,
+          "instance_wins": 3
+        }
+      ],
+      "positive_functions": 11,
+      "rank_biserial": 0.10000000000000009,
+      "tied_functions": 3,
+      "verdict": "INCONCLUSIVE",
+      "win_probability": 0.55
+    },
+    "C_vs_B": {
+      "all_tied_functions": 21,
+      "arm": "adaptive_stacked_v034",
+      "baseline": "stacked_fresh_weights_v034",
+      "ci_high": 0.9958158506449565,
+      "ci_low": 0.0660189017305505,
+      "n_functions": 24,
+      "n_nonties": 3,
+      "negative_functions": 1,
+      "p_value": 1.0,
+      "p_value_holm": 1.0,
+      "per_function": [
+        {
+          "direction": "ALL_TIED",
+          "function": 1,
+          "function_score": null,
+          "instance_losses": 0,
+          "instance_ties": 5,
+          "instance_wins": 0
+        },
+        {
+          "direction": "POSITIVE",
+          "function": 10,
+          "function_score": 1.0,
+          "instance_losses": 0,
+          "instance_ties": 4,
+          "instance_wins": 1
+        },
+        {
+          "direction": "ALL_TIED",
+          "function": 11,
+          "function_score": null,
+          "instance_losses": 0,
+          "instance_ties": 5,
+          "instance_wins": 0
+        },
+        {
+          "direction": "ALL_TIED",
+          "function": 12,
+          "function_score": null,
+          "instance_losses": 0,
+          "instance_ties": 5,
+          "instance_wins": 0
+        },
+        {
+          "direction": "ALL_TIED",
+          "function": 13,
+          "function_score": null,
+          "instance_losses": 0,
+          "instance_ties": 5,
+          "instance_wins": 0
+        },
+        {
+          "direction": "ALL_TIED",
+          "function": 14,
+          "function_score": null,
+          "instance_losses": 0,
+          "instance_ties": 5,
+          "instance_wins": 0
+        },
+        {
+          "direction": "ALL_TIED",
+          "function": 15,
+          "function_score": null,
+          "instance_losses": 0,
+          "instance_ties": 5,
+          "instance_wins": 0
+        },
+        {
+          "direction": "ALL_TIED",
+          "function": 16,
+          "function_score": null,
+          "instance_losses": 0,
+          "instance_ties": 5,
+          "instance_wins": 0
+        },
+        {
+          "direction": "ALL_TIED",
+          "function": 17,
+          "function_score": null,
+          "instance_losses": 0,
+          "instance_ties": 5,
+          "instance_wins": 0
+        },
+        {
+          "direction": "ALL_TIED",
+          "function": 18,
+          "function_score": null,
+          "instance_losses": 0,
+          "instance_ties": 5,
+          "instance_wins": 0
+        },
+        {
+          "direction": "ALL_TIED",
+          "function": 19,
+          "function_score": null,
+          "instance_losses": 0,
+          "instance_ties": 5,
+          "instance_wins": 0
+        },
+        {
+          "direction": "POSITIVE",
+          "function": 2,
+          "function_score": 1.0,
+          "instance_losses": 0,
+          "instance_ties": 4,
+          "instance_wins": 1
+        },
+        {
+          "direction": "ALL_TIED",
+          "function": 20,
+          "function_score": null,
+          "instance_losses": 0,
+          "instance_ties": 5,
+          "instance_wins": 0
+        },
+        {
+          "direction": "ALL_TIED",
+          "function": 21,
+          "function_score": null,
+          "instance_losses": 0,
+          "instance_ties": 5,
+          "instance_wins": 0
+        },
+        {
+          "direction": "ALL_TIED",
+          "function": 22,
+          "function_score": null,
+          "instance_losses": 0,
+          "instance_ties": 5,
+          "instance_wins": 0
+        },
+        {
+          "direction": "NEGATIVE",
+          "function": 23,
+          "function_score": -1.0,
+          "instance_losses": 1,
+          "instance_ties": 4,
+          "instance_wins": 0
+        },
+        {
+          "direction": "ALL_TIED",
+          "function": 24,
+          "function_score": null,
+          "instance_losses": 0,
+          "instance_ties": 5,
+          "instance_wins": 0
+        },
+        {
+          "direction": "ALL_TIED",
+          "function": 3,
+          "function_score": null,
+          "instance_losses": 0,
+          "instance_ties": 5,
+          "instance_wins": 0
+        },
+        {
+          "direction": "ALL_TIED",
+          "function": 4,
+          "function_score": null,
+          "instance_losses": 0,
+          "instance_ties": 5,
+          "instance_wins": 0
+        },
+        {
+          "direction": "ALL_TIED",
+          "function": 5,
+          "function_score": null,
+          "instance_losses": 0,
+          "instance_ties": 5,
+          "instance_wins": 0
+        },
+        {
+          "direction": "ALL_TIED",
+          "function": 6,
+          "function_score": null,
+          "instance_losses": 0,
+          "instance_ties": 5,
+          "instance_wins": 0
+        },
+        {
+          "direction": "ALL_TIED",
+          "function": 7,
+          "function_score": null,
+          "instance_losses": 0,
+          "instance_ties": 5,
+          "instance_wins": 0
+        },
+        {
+          "direction": "ALL_TIED",
+          "function": 8,
+          "function_score": null,
+          "instance_losses": 0,
+          "instance_ties": 5,
+          "instance_wins": 0
+        },
+        {
+          "direction": "ALL_TIED",
+          "function": 9,
+          "function_score": null,
+          "instance_losses": 0,
+          "instance_ties": 5,
+          "instance_wins": 0
+        }
+      ],
+      "positive_functions": 2,
+      "rank_biserial": 0.33333333333333326,
+      "tied_functions": 0,
+      "verdict": "INCONCLUSIVE",
+      "win_probability": 0.6666666666666666
+    }
+  },
+  "registered_semantics": {
+    "ci_level_per_contrast": 0.975,
+    "decision": "function-level CI>0.50 positive; <0.50 harmful; else inconclusive; case-level and robustness endpoints are descriptive only",
+    "family_alpha": 0.05,
+    "multiplicity": "Holm-adjusted p reported; CIs at Bonferroni-adjusted level (family 95%)",
+    "primary_unit": "BBOB function (24 clusters of 5 instances)"
+  },
+  "schema": "ablation-analysis/2",
+  "secondary_all_case_robustness": {
+    "B_vs_A": {
+      "cases": 120,
+      "losses": 53,
+      "practical_band_note": "within [0.42, 0.58] descriptive small-effect band",
+      "ties": 10,
+      "win_share": 0.5166666666666667,
+      "wins": 57
+    },
+    "C_vs_B": {
+      "cases": 120,
+      "losses": 1,
+      "practical_band_note": "within [0.42, 0.58] descriptive small-effect band",
+      "ties": 117,
+      "win_share": 0.5041666666666667,
+      "wins": 2
+    },
+    "note": "descriptive only; failed arm scored as loss vs completed arm, two failures tie"
+  },
+  "secondary_case_level_descriptive": {
+    "B_vs_A": {
+      "cases": 120,
+      "losses": 53,
+      "practical_band_note": "within [0.42, 0.58] descriptive small-effect band",
+      "ties": 10,
+      "win_share": 0.5166666666666667,
+      "wins": 57
+    },
+    "C_vs_B": {
+      "cases": 120,
+      "losses": 1,
+      "practical_band_note": "within [0.42, 0.58] descriptive small-effect band",
+      "ties": 117,
+      "win_share": 0.5041666666666667,
+      "wins": 2
+    },
+    "note": "descriptive only; instances within a function are not independent \u2014 this is NOT n=120 evidence"
+  }
+}

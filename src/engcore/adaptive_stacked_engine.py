@@ -1,19 +1,19 @@
 """
-Adaptive Stacked GP-BO engine — V0.3.3 / adaptive_stacked_v033
+Adaptive Stacked GP-BO engine — V0.3.4 logic hardening.
 
 Architecture:
   observations
-     → baseline model fit (stacked_v0301 schedule; no adaptive forced refit)
+     → baseline hyperparameter refit schedule
+     → fresh stacking-weight update on current observations
      → diagnostics / proposer policy
-     → identity_proposal  (baseline search knobs on current observations)
+     → identity_proposal  (baseline search knobs, current observations)
      → adaptive_proposal  (optional; same models, adapted search knobs)
      → robust arbiter
      → ONE objective evaluation of the chosen proposal
 
-identity_proposal means:
-  What stacked_v0301 search logic would propose from the CURRENT
-  adaptive-run observations using baseline search settings.
-  It is NOT a full stacked counterfactual trajectory after prior deviations.
+identity_proposal means what the baseline search logic would propose from the
+CURRENT adaptive-run observations. It is not a full counterfactual baseline
+trajectory after prior adaptive deviations.
 """
 
 from __future__ import annotations
@@ -27,20 +27,15 @@ from .adaptive_policy import (
     apply_decision_to_knobs,
     identity_knobs,
 )
-from .candidate_arbiter import (
-    ProposalView,
-    arbitrate_proposals,
-)
-from .landscape_diagnostics import (
-    compute_landscape_diagnostics,
-)
+from .candidate_arbiter import ProposalView, arbitrate_proposals
+from .landscape_diagnostics import compute_landscape_diagnostics
 from .logei_engine import CandidateSource
 from .sampling import sobol_points
 from .stacked_engine import StackedGPBOEngine
 
 
 class AdaptiveStackedGPBOEngine(StackedGPBOEngine):
-    ENGINE_ID = "adaptive_stacked_v033"
+    ENGINE_ID = "adaptive_stacked_v034"
 
     def __init__(
         self,
@@ -68,9 +63,10 @@ class AdaptiveStackedGPBOEngine(StackedGPBOEngine):
             "adaptive_proposals_generated": 0,
             "adaptive_proposals_accepted": 0,
             "adaptive_proposals_rejected": 0,
+            "adaptive_rescue_search_attempts": 0,
             "adaptive_rescue_proposals": 0,
             "adaptive_rescue_accepted": 0,
-            "adaptive_forced_refits": 0,  # always 0 in V0.3.3
+            "adaptive_forced_refits": 0,
             "identity_proposals": 0,
         })
 
@@ -82,9 +78,7 @@ class AdaptiveStackedGPBOEngine(StackedGPBOEngine):
 
     def _incumbent_x01(self):
         if not self.history:
-            return np.full(
-                self.space.dim, 0.5, dtype=np.float64
-            )
+            return np.full(self.space.dim, 0.5, dtype=np.float64)
         scores = self._scores_array()
         idx = int(np.argmax(scores))
         return np.asarray(
@@ -102,9 +96,7 @@ class AdaptiveStackedGPBOEngine(StackedGPBOEngine):
         parts = []
         if n_global > 0:
             parts.append(
-                sobol_points(
-                    int(n_global), self.space.dim, int(seed)
-                )
+                sobol_points(int(n_global), self.space.dim, int(seed))
             )
         if n_local > 0:
             rng = np.random.default_rng(int(seed) + 17)
@@ -128,9 +120,7 @@ class AdaptiveStackedGPBOEngine(StackedGPBOEngine):
         n_replace = max(0, min(n_replace, len(starts) - 1))
         if n_replace == 0:
             return starts, start_scores
-        explorers = sobol_points(
-            n_replace, self.space.dim, int(seed)
-        )
+        explorers = sobol_points(n_replace, self.space.dim, int(seed))
         out_x = starts.copy()
         out_s = start_scores.copy()
         out_x[-n_replace:] = explorers
@@ -271,15 +261,15 @@ class AdaptiveStackedGPBOEngine(StackedGPBOEngine):
                 source = f"{tag}_refined"
 
         if enable_rescue:
-            self.fit_diagnostics["adaptive_rescue_proposals"] += 1
+            self.fit_diagnostics[
+                "adaptive_rescue_search_attempts"
+            ] += 1
             rescue_X = self._build_rescue_candidates(
                 n_global=max(32, 8 * self.space.dim),
                 n_local=max(16, 4 * self.space.dim),
                 seed=self.seed + 300_000 + step,
             )
-            rescue = self._best_rescue_by_acquisition(
-                cpu_acq, rescue_X
-            )
+            rescue = self._best_rescue_by_acquisition(cpu_acq, rescue_X)
             if (
                 rescue is not None
                 and rescue.acquisition_value
@@ -288,18 +278,29 @@ class AdaptiveStackedGPBOEngine(StackedGPBOEngine):
                 chosen = rescue
                 source = "adaptive_rescue"
                 is_rescue = True
+                self.fit_diagnostics[
+                    "adaptive_rescue_proposals"
+                ] += 1
 
         if self._is_duplicate(chosen.x01):
+            self.fit_diagnostics["duplicate_candidates"] += 1
+            replacement = None
             for x, value in zip(starts[1:], start_scores[1:]):
                 if not self._is_duplicate(x):
-                    chosen = CandidateSource(
+                    replacement = CandidateSource(
                         name=f"{tag}_dup_recovery",
                         x01=x.copy(),
                         acquisition_value=float(value),
                     )
-                    source = chosen.name
-                    is_rescue = False
                     break
+            if replacement is None:
+                raise RuntimeError(
+                    "All adaptive proposal candidates duplicate history"
+                )
+            chosen = replacement
+            source = chosen.name
+            is_rescue = False
+            self.fit_diagnostics["duplicate_recoveries"] += 1
 
         acq_scores = self._score_proposal_views(
             chosen.x01,
@@ -336,6 +337,12 @@ class AdaptiveStackedGPBOEngine(StackedGPBOEngine):
         verbose=False,
         record_diagnostics=None,
     ):
+        if self.history or self.x01_history or self.margin_history:
+            raise RuntimeError(
+                "Engine instances are single-use; create a new engine for "
+                "each independent optimization run"
+            )
+
         if record_diagnostics is None:
             record_diagnostics = self.record_diagnostics
 
@@ -368,6 +375,40 @@ class AdaptiveStackedGPBOEngine(StackedGPBOEngine):
 
         for step in range(total_steps):
             iter_t0 = time.perf_counter()
+
+            pulse = (
+                stagnation >= int(stagnation_trigger)
+                and (stagnation - int(stagnation_trigger))
+                % max(1, int(pulse_interval))
+                == 0
+            )
+            severe_pulse = (
+                stagnation >= int(severe_stagnation_trigger)
+                and not severe_used
+            )
+            if severe_pulse:
+                severe_used = True
+                self.fit_diagnostics[
+                    "severe_stagnation_pulses"
+                ] += 1
+            if pulse or severe_pulse:
+                self.fit_diagnostics["stagnation_pulses"] += 1
+
+            optimize_models = (
+                step == 0
+                or int(refit_interval) <= 1
+                or step % int(refit_interval) == 0
+                or pulse
+                or severe_pulse
+            )
+
+            rbf_cpu, mat_cpu = self._fit_pair(
+                optimize=optimize_models
+            )
+
+            # Stacking weights depend on the observation set as well as fitted
+            # hyperparameters, so refresh them on every newly-built posterior.
+            self._update_stacking_weight(rbf_cpu, mat_cpu)
 
             diagnostics = compute_landscape_diagnostics(
                 x01_history=self.x01_history,
@@ -402,40 +443,6 @@ class AdaptiveStackedGPBOEngine(StackedGPBOEngine):
                     **decision.as_dict(),
                 })
 
-            # ---- stacked_v0301 refit schedule (no adaptive forced refit)
-            pulse = (
-                stagnation >= int(stagnation_trigger)
-                and (stagnation - int(stagnation_trigger))
-                % max(1, int(pulse_interval))
-                == 0
-            )
-            severe_pulse = (
-                stagnation >= int(severe_stagnation_trigger)
-                and not severe_used
-            )
-            if severe_pulse:
-                severe_used = True
-                self.fit_diagnostics[
-                    "severe_stagnation_pulses"
-                ] += 1
-            if pulse or severe_pulse:
-                self.fit_diagnostics["stagnation_pulses"] += 1
-
-            optimize_models = (
-                step == 0
-                or int(refit_interval) <= 1
-                or step % int(refit_interval) == 0
-                or pulse
-                or severe_pulse
-            )
-
-            rbf_cpu, mat_cpu = self._fit_pair(
-                optimize=optimize_models
-            )
-            if optimize_models:
-                self._update_stacking_weight(rbf_cpu, mat_cpu)
-
-            # Member + mixture acquisitions on the same fitted models.
             rbf_acq, rbf_mode = self._build_acquisition(rbf_cpu)
             mat_acq, mat_mode = self._build_acquisition(mat_cpu)
             if rbf_mode != mat_mode:
@@ -443,10 +450,8 @@ class AdaptiveStackedGPBOEngine(StackedGPBOEngine):
                     "Member acquisition modes disagree: "
                     f"{rbf_mode} vs {mat_mode}"
                 )
-            cpu_acq, acquisition_mode = (
-                self._build_stacked_acquisition(
-                    rbf_cpu, mat_cpu
-                )
+            cpu_acq, acquisition_mode = self._build_stacked_acquisition(
+                rbf_cpu, mat_cpu
             )
 
             if self.screen_device.type == "cpu":
@@ -467,7 +472,6 @@ class AdaptiveStackedGPBOEngine(StackedGPBOEngine):
                     rbf_screen, mat_screen
                 )
 
-            # A) identity_proposal — baseline knobs, current observations
             identity = self._generate_search_proposal(
                 knobs=id_knobs,
                 screen_acq=screen_acq,
@@ -477,9 +481,7 @@ class AdaptiveStackedGPBOEngine(StackedGPBOEngine):
                 step=step,
                 top_k=int(top_k),
                 screen_chunk_size=int(screen_chunk_size),
-                refinement_timeout_sec=float(
-                    refinement_timeout_sec
-                ),
+                refinement_timeout_sec=float(refinement_timeout_sec),
                 pulse=pulse,
                 severe_pulse=severe_pulse,
                 tag="identity",
@@ -487,31 +489,31 @@ class AdaptiveStackedGPBOEngine(StackedGPBOEngine):
             )
             self.fit_diagnostics["identity_proposals"] += 1
 
-            # B) adaptive_proposal — same models; isolated torch RNG so
-            # rejected adaptive proposals cannot perturb identity path RNG.
             adaptive = None
             if decision.enable_adaptive_proposal:
                 rng_snap = self._torch_rng_snapshot()
-                adaptive = self._generate_search_proposal(
-                    knobs=adapt_knobs,
-                    screen_acq=screen_acq,
-                    cpu_acq=cpu_acq,
-                    rbf_acq=rbf_acq,
-                    mat_acq=mat_acq,
-                    step=step,
-                    top_k=int(top_k),
-                    screen_chunk_size=int(screen_chunk_size),
-                    refinement_timeout_sec=float(
-                        refinement_timeout_sec
-                    ),
-                    pulse=pulse,
-                    severe_pulse=severe_pulse,
-                    tag="adaptive",
-                    enable_rescue=bool(
-                        decision.enable_rescue_proposal
-                    ),
-                )
-                self._torch_rng_restore(rng_snap)
+                try:
+                    adaptive = self._generate_search_proposal(
+                        knobs=adapt_knobs,
+                        screen_acq=screen_acq,
+                        cpu_acq=cpu_acq,
+                        rbf_acq=rbf_acq,
+                        mat_acq=mat_acq,
+                        step=step,
+                        top_k=int(top_k),
+                        screen_chunk_size=int(screen_chunk_size),
+                        refinement_timeout_sec=float(
+                            refinement_timeout_sec
+                        ),
+                        pulse=pulse,
+                        severe_pulse=severe_pulse,
+                        tag="adaptive",
+                        enable_rescue=bool(
+                            decision.enable_rescue_proposal
+                        ),
+                    )
+                finally:
+                    self._torch_rng_restore(rng_snap)
                 self.fit_diagnostics[
                     "adaptive_proposals_generated"
                 ] += 1
@@ -542,44 +544,30 @@ class AdaptiveStackedGPBOEngine(StackedGPBOEngine):
                     "evaluation": int(len(self.history)),
                     "identity_x01": identity.x01.tolist(),
                     "adaptive_x01": (
-                        None
-                        if adaptive is None
-                        else adaptive.x01.tolist()
+                        None if adaptive is None else adaptive.x01.tolist()
                     ),
                     "executed_x01": chosen_view.x01.tolist(),
                     "identity_source": identity.source,
                     "adaptive_source": (
-                        None
-                        if adaptive is None
-                        else adaptive.source
+                        None if adaptive is None else adaptive.source
                     ),
                     "executed_source": chosen_view.source,
                     "arbiter_decision": arb.choose_adaptive,
                     "arbiter_reason": arb.reason,
                     "identity_mixture_acq": identity.mixture_acq,
                     "adaptive_mixture_acq": (
-                        None
-                        if adaptive is None
-                        else adaptive.mixture_acq
+                        None if adaptive is None else adaptive.mixture_acq
                     ),
                     "identity_rbf_acq": identity.rbf_acq,
                     "adaptive_rbf_acq": (
-                        None
-                        if adaptive is None
-                        else adaptive.rbf_acq
+                        None if adaptive is None else adaptive.rbf_acq
                     ),
                     "identity_matern_acq": identity.matern_acq,
                     "adaptive_matern_acq": (
-                        None
-                        if adaptive is None
-                        else adaptive.matern_acq
+                        None if adaptive is None else adaptive.matern_acq
                     ),
-                    "component_disagreement": (
-                        arb.component_disagreement
-                    ),
-                    "evidence_score": float(
-                        decision.evidence_score
-                    ),
+                    "component_disagreement": arb.component_disagreement,
+                    "evidence_score": float(decision.evidence_score),
                     "consecutive_evidence": int(
                         decision.consecutive_evidence
                     ),
@@ -592,14 +580,10 @@ class AdaptiveStackedGPBOEngine(StackedGPBOEngine):
                     "proposal_level": decision.proposal_level,
                 })
 
-            # Duplicate recovery using identity starts if needed is already
-            # handled inside proposal generation; execute chosen once.
             chosen = CandidateSource(
                 name=chosen_view.source,
                 x01=chosen_view.x01.copy(),
-                acquisition_value=float(
-                    chosen_view.mixture_acq
-                ),
+                acquisition_value=float(chosen_view.mixture_acq),
             )
 
             if "refined" in chosen.name:

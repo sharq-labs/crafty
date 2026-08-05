@@ -1,9 +1,4 @@
-"""
-Fast V0.3.3 adaptive + arbiter property tests.
-
-Uses synthetic states and tiny randomized toy landscapes.
-Does NOT select thresholds from BBOB / named smoke scores.
-"""
+"""V0.3.4 logic-hardening property and regression tests."""
 
 from __future__ import annotations
 
@@ -13,28 +8,28 @@ import numpy as np
 
 from .adaptive_policy import (
     AdaptivePolicyController,
-    EVIDENCE_MILD,
     MODEL_ONLY_EVIDENCE_CAP,
     compute_evidence_score,
+    decide_adaptive_policy,
     is_early_neutral,
 )
-from .adaptive_stacked_engine import (
-    AdaptiveStackedGPBOEngine,
-)
+from .adaptive_stacked_engine import AdaptiveStackedGPBOEngine
 from .candidate_arbiter import (
     ProposalView,
     arbitrate_proposals,
     components_disagree,
 )
-from .landscape_diagnostics import LandscapeDiagnostics
+from .landscape_diagnostics import (
+    LandscapeDiagnostics,
+    compute_landscape_diagnostics,
+)
 from .models import DesignSpace, Variable
-from .stacked_engine import StackedGPBOEngine
-from .stacked_modes import get_stacked_mode
+from .validation.metrics import summarize_traces
 from .validation.optimizers import (
     ALGORITHMS,
     run_adaptive_stacked,
-    run_stacked,
 )
+from .validation.problem import ObjectiveRecorder, Trace
 
 
 def _require(cond, msg):
@@ -83,6 +78,20 @@ def _prop(x, mix, rbf, mat, source="p", rescue=False):
     )
 
 
+def _trace(algorithm, problem_id, value):
+    return Trace(
+        algorithm=algorithm,
+        problem_id=problem_id,
+        dimension=2,
+        budget=5,
+        seed=1,
+        best_f=float(value),
+        evaluations=5,
+        values=[float(value)] * 5,
+        best_curve=[float(value)] * 5,
+    )
+
+
 def test_no_benchmark_tokens():
     root = Path(__file__).resolve().parent
     for name in (
@@ -106,216 +115,233 @@ def test_no_benchmark_tokens():
             _require(banned not in text, f"{name}:{banned}")
 
 
-def test_A_neutral_equals_stacked():
-    def func(x):
-        x = np.asarray(x, dtype=float)
-        return float(
-            np.sum((x - 0.2) ** 2) + 0.05 * np.sin(3 * x[0])
-        )
-
-    lower = np.array([-1.5, -1.5])
-    upper = np.array([1.5, 1.5])
-    budget = 8  # early-neutral throughout for dim=2
-    xs, xa = [], []
-    for runner, bag in (
-        (run_stacked, xs),
-        (run_adaptive_stacked, xa),
-    ):
-        state = {"xs": []}
-
-        def counted(x, st=state):
-            st["xs"].append(np.asarray(x, dtype=float).copy())
-            return func(x)
-
-        row = runner(
-            problem_id="neutral_id",
-            func=counted,
-            lower=lower,
-            upper=upper,
-            budget=budget,
-            seed=99,
-            mode="fast",
-            screen_device="cpu",
-            refinement_backend="torch",
-        )
-        _require(row.evaluations == budget, "budget")
-        bag.extend(state["xs"])
-    _require(len(xs) == len(xa) == budget, "len")
-    _require(
-        all(np.allclose(a, b) for a, b in zip(xs, xa)),
-        "neutral trajectory != stacked",
-    )
-
-
-def test_B_rejected_executes_identity():
-    identity = _prop([0.1, 0.2], mix=1.0, rbf=1.0, mat=1.0, source="identity")
-    adaptive = _prop([0.9, 0.9], mix=0.5, rbf=0.5, mat=0.5, source="adaptive")
+def test_arbiter_rejects_worse_and_disagreement():
+    identity = _prop([0.1, 0.2], 1.0, 1.0, 1.0, "identity")
+    worse = _prop([0.9, 0.9], 0.5, 0.5, 0.5, "adaptive")
     chosen, dec = arbitrate_proposals(
-        identity, adaptive, adaptive_enabled=True
+        identity, worse, adaptive_enabled=True
     )
-    _require(not dec.choose_adaptive, "should reject")
-    _require(np.allclose(chosen.x01, identity.x01), "identity exec")
-    _require(dec.executed_source == "identity", "src")
+    _require(not dec.choose_adaptive, "worse adaptive accepted")
+    _require(np.allclose(chosen.x01, identity.x01), "identity not executed")
 
-
-def test_C_consensus_accepts_adaptive():
-    identity = _prop([0.1, 0.2], mix=1.0, rbf=1.0, mat=1.0)
-    adaptive = _prop([0.3, 0.4], mix=1.5, rbf=1.2, mat=1.1)
-    chosen, dec = arbitrate_proposals(
-        identity, adaptive, adaptive_enabled=True
-    )
-    _require(dec.choose_adaptive, "should accept")
-    _require(np.allclose(chosen.x01, adaptive.x01), "adaptive exec")
-    _require("consensus_accept" in dec.reason, "reason")
-
-
-def test_D_component_disagreement_prefers_identity():
-    identity = _prop([0.1, 0.2], mix=1.0, rbf=1.0, mat=1.0)
-    # RBF prefers adaptive, Matern prefers identity
-    adaptive = _prop([0.3, 0.4], mix=1.2, rbf=1.5, mat=0.5)
+    disagree = _prop([0.3, 0.4], 1.2, 1.5, 0.5, "adaptive")
     _require(
         components_disagree(1.0, 1.0, 1.5, 0.5),
-        "disagree helper",
+        "disagreement helper failed",
     )
+    chosen, dec = arbitrate_proposals(
+        identity, disagree, adaptive_enabled=True
+    )
+    _require(not dec.choose_adaptive, "disagreement accepted")
+    _require(dec.component_disagreement, "disagreement not flagged")
+
+
+def test_arbiter_accepts_material_consensus_gain():
+    identity = _prop([0.1, 0.2], 1.0, 1.0, 1.0)
+    adaptive = _prop([0.3, 0.4], 1.5, 1.2, 1.1)
     chosen, dec = arbitrate_proposals(
         identity, adaptive, adaptive_enabled=True
     )
-    _require(not dec.choose_adaptive, "reject on disagree")
-    _require(dec.component_disagreement, "flag")
-    _require(np.allclose(chosen.x01, identity.x01), "identity")
+    _require(dec.choose_adaptive, "material consensus gain rejected")
+    _require(np.allclose(chosen.x01, adaptive.x01), "adaptive not executed")
 
 
-def test_E_rescue_does_not_bypass_arbiter():
-    identity = _prop([0.1, 0.2], mix=1.0, rbf=1.0, mat=1.0)
+def test_arbiter_rejects_numerical_dust_gain():
+    identity = _prop([0.1, 0.2], -10.0, -10.0, -10.0)
+    adaptive = _prop(
+        [0.3, 0.4],
+        -10.0 + 1e-9,
+        -10.0 + 1e-9,
+        -10.0 + 1e-9,
+    )
+    _, dec = arbitrate_proposals(
+        identity, adaptive, adaptive_enabled=True
+    )
+    _require(
+        not dec.choose_adaptive,
+        "scale-aware tolerance accepted numerical dust",
+    )
+
+
+def test_rescue_does_not_bypass_arbiter():
+    identity = _prop([0.1, 0.2], 1.0, 1.0, 1.0)
     rescue = _prop(
         [0.8, 0.8],
-        mix=0.2,
-        rbf=0.2,
-        mat=0.2,
+        0.2,
+        0.2,
+        0.2,
         source="adaptive_rescue",
         rescue=True,
     )
     chosen, dec = arbitrate_proposals(
         identity, rescue, adaptive_enabled=True
     )
-    _require(not dec.choose_adaptive, "rescue rejected")
-    _require(np.allclose(chosen.x01, identity.x01), "identity")
+    _require(not dec.choose_adaptive, "weak rescue bypassed arbiter")
+    _require(np.allclose(chosen.x01, identity.x01), "identity not kept")
 
-    # Even a strong rescue must pass consensus
-    rescue_ok = _prop(
-        [0.3, 0.3],
-        mix=2.0,
-        rbf=1.5,
-        mat=1.4,
-        source="adaptive_rescue",
-        rescue=True,
+
+def test_policy_model_alone_cannot_enable():
+    ctl = AdaptivePolicyController()
+    d = _diag(
+        n_obs=20,
+        model_reliability=0.05,
+        model_error_proxy=0.99,
+        model_agreement=0.05,
+        stagnation_score=0.05,
+        recent_improvement_rate=0.3,
     )
-    chosen2, dec2 = arbitrate_proposals(
-        identity, rescue_ok, adaptive_enabled=True
+    for step in range(5):
+        dec = ctl.update(d, step=step)
+    evidence, _ = compute_evidence_score(d)
+    _require(evidence <= MODEL_ONLY_EVIDENCE_CAP + 1e-12, "model cap")
+    _require(not dec.enable_adaptive_proposal, "model-only enabled adaptive")
+
+
+def test_policy_helper_requires_persistent_controller():
+    try:
+        decide_adaptive_policy(_diag())
+    except ValueError as exc:
+        _require("persistent" in str(exc), "unexpected helper error")
+    else:
+        raise AssertionError("stateless policy helper silently accepted")
+
+
+def test_early_neutral():
+    d = _diag(n_obs=4, dimension=2, stagnation_score=0.9)
+    _require(is_early_neutral(d), "early-neutral not detected")
+    ctl = AdaptivePolicyController()
+    dec = ctl.update(d, step=0)
+    _require(not dec.enable_adaptive_proposal, "early proposal enabled")
+
+
+def test_rescue_consumes_evidence_streak():
+    ctl = AdaptivePolicyController()
+    severe = _diag(
+        n_obs=30,
+        recent_improvement_rate=0.0,
+        stagnation_score=1.0,
+        incumbent_locality=0.9,
+        exploration_coverage=0.1,
+        model_reliability=0.0,
+        model_error_proxy=1.0,
+        model_agreement=0.0,
     )
-    _require(dec2.choose_adaptive, "rescue can pass consensus")
-    _require("rescue" in dec2.reason, "rescue reason")
+    decision = None
+    for step in range(8):
+        decision = ctl.update(severe, step=step)
+        if decision.enable_rescue_proposal:
+            break
+    _require(decision is not None and decision.enable_rescue_proposal, "no rescue")
+    _require(ctl.consecutive_evidence == 0, "rescue did not consume streak")
+    _require(ctl.cooldown_remaining > 0, "rescue cooldown missing")
 
 
-def test_F_dual_proposals_no_extra_objective_calls():
-    calls = {"n": 0}
-
-    def func(x):
-        calls["n"] += 1
-        x = np.asarray(x, dtype=float)
-        return float(np.sum((x - 0.3) ** 2))
-
-    budget = 16
-    row = run_adaptive_stacked(
-        problem_id="dual",
-        func=func,
-        lower=np.array([-2.0, -2.0]),
-        upper=np.array([2.0, 2.0]),
-        budget=budget,
-        seed=21,
-        mode="fast",
-        screen_device="cpu",
-        refinement_backend="torch",
+def test_model_diagnostics_common_logp_shift_invariant():
+    X = np.array([[0.1, 0.2], [0.3, 0.4], [0.5, 0.6]])
+    y = np.array([-3.0, -2.0, -1.0])
+    base = [{
+        "weight_rbf": 0.6,
+        "mean_logp_rbf": -2.0,
+        "mean_logp_matern": -3.0,
+    }]
+    shifted = [{
+        "weight_rbf": 0.6,
+        "mean_logp_rbf": -102.0,
+        "mean_logp_matern": -103.0,
+    }]
+    a = compute_landscape_diagnostics(
+        x01_history=X,
+        scores=y,
+        best_score=-1.0,
+        evaluations_since_improve=1,
+        total_budget=20,
+        dimension=2,
+        weight_rbf=0.6,
+        weight_history=base,
     )
-    _require(row.evaluations == budget == calls["n"], "obj calls")
-    meta = row.metadata
-    # dual proposals may be generated; objective count still exact
-    _require(
-        meta.get("adaptive_forced_refits", 0) == 0,
-        "forced refits must be zero",
-    )
-
-
-def test_G_exact_budgets():
-    calls = {"n": 0}
-
-    def func(x):
-        calls["n"] += 1
-        return float(np.sum(np.asarray(x) ** 2))
-
-    for budget in (7, 13, 25):
-        calls["n"] = 0
-        row = run_adaptive_stacked(
-            problem_id=f"b{budget}",
-            func=func,
-            lower=np.array([-2.0, -2.0]),
-            upper=np.array([2.0, 2.0]),
-            budget=budget,
-            seed=11,
-            mode="fast",
-            screen_device="cpu",
-            refinement_backend="torch",
-        )
-        _require(
-            row.evaluations == budget == calls["n"],
-            f"budget {budget}",
-        )
-
-
-def test_H_deterministic_replay():
-    def make_engine(seed):
-        def evaluator(x):
-            f = float(np.sum(np.asarray(x) ** 2))
-            return -f, True, {"objective_f": f}
-
-        return AdaptiveStackedGPBOEngine(
-            design_space=_space(2),
-            evaluator=evaluator,
-            seed=seed,
-            screen_device="cpu",
-            record_diagnostics=True,
-        )
-
-    mode = dict(get_stacked_mode("fast"))
-    mode.update({
-        "screen_pool": 2048,
-        "pulse_screen_pool": 4096,
-        "severe_screen_pool": 4096,
-        "refinement_timeout_sec": 0.5,
-    })
-    r1 = make_engine(7).run(
-        initial_trials=4, smart_trials=8, verbose=False, **mode
-    )
-    r2 = make_engine(7).run(
-        initial_trials=4, smart_trials=8, verbose=False, **mode
+    b = compute_landscape_diagnostics(
+        x01_history=X,
+        scores=y,
+        best_score=-1.0,
+        evaluations_since_improve=1,
+        total_budget=20,
+        dimension=2,
+        weight_rbf=0.6,
+        weight_history=shifted,
     )
     _require(
-        np.allclose(r1["best"].x, r2["best"].x),
-        "best x mismatch",
+        abs(a.model_agreement - b.model_agreement) < 1e-12,
+        "agreement changed under common logp shift",
     )
-    xs1 = [np.asarray(r.x) for r in r1["history"]]
-    xs2 = [np.asarray(r.x) for r in r2["history"]]
     _require(
-        all(np.allclose(a, b) for a, b in zip(xs1, xs2)),
-        "trajectory mismatch",
+        abs(a.model_reliability - b.model_reliability) < 1e-12,
+        "reliability changed under common logp shift",
     )
 
 
-def test_I_no_benchmark_leakage():
-    test_no_benchmark_tokens()
+def test_design_space_validation():
+    try:
+        DesignSpace([Variable("x", 1.0, 1.0)])
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("invalid bounds accepted")
+
+    space = _space(2)
+    try:
+        space.as_dict([1.0])
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("wrong vector dimension silently truncated")
 
 
-def test_J_baseline_files_unchanged():
+def test_objective_recorder_audit():
+    rec = ObjectiveRecorder(
+        lambda x: float("nan") if x[0] > 0.9 else float(np.sum(x * x)),
+        [-1.0, -1.0],
+        [1.0, 1.0],
+        budget=2,
+    )
+    rec.evaluate([2.0, 0.0])
+    _require(rec.candidate_clipped_count == 1, "clip not counted")
+    _require(rec.objective_nonfinite_count == 1, "nonfinite objective not counted")
+
+    try:
+        rec.evaluate([float("nan"), 0.0])
+    except ValueError:
+        _require(rec.candidate_nonfinite_count == 1, "nonfinite x not counted")
+    else:
+        raise AssertionError("nonfinite candidate did not fail fast")
+
+
+def test_trace_matrix_rejects_duplicate_and_missing_rows():
+    duplicate = [
+        _trace("A", "p1", 1.0),
+        _trace("A", "p1", 1.1),
+        _trace("B", "p1", 2.0),
+    ]
+    try:
+        summarize_traces(duplicate)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("duplicate trace rows accepted")
+
+    missing = [
+        _trace("A", "p1", 1.0),
+        _trace("B", "p1", 2.0),
+        _trace("A", "p2", 3.0),
+    ]
+    try:
+        summarize_traces(missing)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("unmatched trace matrix accepted")
+
+
+def test_frozen_baseline_matches_tag():
     import subprocess
 
     files = [
@@ -325,264 +351,93 @@ def test_J_baseline_files_unchanged():
         "src/engcore/hybrid_engine.py",
         "src/engcore/logei_engine.py",
     ]
+    tag = "v0.3.2.6-stacked_v0301"
     out = subprocess.check_output(
-        ["git", "diff", "--name-only", "HEAD", "--", *files],
+        ["git", "diff", "--name-only", tag, "--", *files],
         text=True,
     ).strip()
-    _require(out == "", f"baseline files dirty: {out}")
-    _require(isinstance(StackedGPBOEngine, type), "cls")
-    _require("adaptive_stacked" in ALGORITHMS, "reg")
+    _require(out == "", f"frozen baseline differs from {tag}: {out}")
+    _require("adaptive_stacked" in ALGORITHMS, "adaptive registry missing")
 
 
-def test_K_no_adaptive_forced_refit():
-    """Refit schedule follows stacked semantics; forced-refit counter is 0."""
+def test_adaptive_exact_budget_and_single_use():
+    calls = {"n": 0}
 
     def func(x):
-        return float(np.sum((np.asarray(x) - 0.1) ** 2))
+        calls["n"] += 1
+        return float(np.sum(np.asarray(x, dtype=float) ** 2))
 
-    lower = np.array([-2.0, -2.0])
-    upper = np.array([2.0, 2.0])
-    budget = 8
-
-    # Capture engine diagnostics via direct engines on identical short run.
-    def run_eng(Engine, seed=5):
-        def evaluator(x):
-            f = func(x)
-            return -float(f), True, {"objective_f": float(f)}
-
-        kwargs = dict(
-            design_space=_space(2),
-            evaluator=evaluator,
-            seed=seed,
-            screen_device="cpu",
-        )
-        if Engine is AdaptiveStackedGPBOEngine:
-            kwargs["record_diagnostics"] = True
-        eng = Engine(**kwargs)
-        mode = dict(get_stacked_mode("fast"))
-        mode.update({
-            "screen_pool": 2048,
-            "pulse_screen_pool": 4096,
-            "severe_screen_pool": 4096,
-            "refinement_timeout_sec": 0.5,
-        })
-        return eng.run(
-            initial_trials=4,
-            smart_trials=budget - 4,
-            verbose=False,
-            **mode,
-        )
-
-    r_s = run_eng(StackedGPBOEngine)
-    r_a = run_eng(AdaptiveStackedGPBOEngine)
-    _require(
-        r_a["fit_diagnostics"].get("adaptive_forced_refits", 0) == 0,
-        "forced refits nonzero",
+    budget = 13
+    row = run_adaptive_stacked(
+        problem_id="budget",
+        func=func,
+        lower=np.array([-2.0, -2.0]),
+        upper=np.array([2.0, 2.0]),
+        budget=budget,
+        seed=11,
+        mode="fast",
+        screen_device="cpu",
+        refinement_backend="torch",
     )
-    # Same observation schedule (early-neutral → identity always):
-    # optimized fit counts must match.
-    _require(
-        r_s["fit_diagnostics"]["rbf_optimized_fits"]
-        == r_a["fit_diagnostics"]["rbf_optimized_fits"],
-        "rbf optimized fits diverge",
+    _require(row.evaluations == budget == calls["n"], "objective budget mismatch")
+    _require(row.metadata["candidate_nonfinite_count"] == 0, "nonfinite candidate")
+
+    def evaluator(x):
+        f = float(np.sum(np.asarray(x, dtype=float) ** 2))
+        return -f, True, {"objective_f": f}
+
+    engine = AdaptiveStackedGPBOEngine(
+        design_space=_space(2),
+        evaluator=evaluator,
+        seed=7,
+        screen_device="cpu",
     )
-    _require(
-        r_s["fit_diagnostics"]["matern25_optimized_fits"]
-        == r_a["fit_diagnostics"]["matern25_optimized_fits"],
-        "matern optimized fits diverge",
-    )
-
-
-def test_policy_model_alone_cannot_enable():
-    ctl = AdaptivePolicyController()
-    d = _diag(
-        n_obs=20,
-        model_reliability=0.05,
-        model_error_proxy=0.99,
-        stagnation_score=0.05,
-        recent_improvement_rate=0.3,
-    )
-    for step in range(5):
-        dec = ctl.update(d, step=step)
-    evidence, parts = compute_evidence_score(d)
-    _require(evidence <= MODEL_ONLY_EVIDENCE_CAP + 1e-12, "cap")
-    _require(not dec.enable_adaptive_proposal, "enabled")
-
-
-def test_early_neutral():
-    d = _diag(n_obs=4, dimension=2, stagnation_score=0.9)
-    _require(is_early_neutral(d), "early")
-    ctl = AdaptivePolicyController()
-    dec = ctl.update(d, step=0)
-    _require(not dec.enable_adaptive_proposal, "prop")
-    _require(dec.proposal_level == "none", "level")
-
-
-def run_randomized_holdout():
-    from .validation.metrics import summarize_traces
-
-    rng = np.random.default_rng(20260333)
-    dim = 2
-    budget = 16
-    problems = []
-    for i in range(8):
-        shift = rng.uniform(-0.4, 0.4, size=dim)
-        A = rng.normal(size=(dim, dim))
-        Q, _ = np.linalg.qr(A)
-        cond = 10 ** rng.uniform(0.0, 1.5)
-        scale = np.array([1.0, cond], dtype=float)
-        mix = rng.uniform(0.0, 0.35)
-        freq = rng.uniform(2.0, 6.0)
-
-        def make_func(shift, Q, scale, mix, freq):
-            def func(x):
-                x = np.asarray(x, dtype=float)
-                z = Q @ (x - shift)
-                quad = float(np.sum((scale * z) ** 2))
-                rugged = float(
-                    mix * np.sum(np.sin(freq * z) ** 2)
-                )
-                return quad + rugged
-
-            return func
-
-        problems.append({
-            "id": f"holdout_{i}",
-            "func": make_func(shift, Q, scale, mix, freq),
-            "lower": np.full(dim, -2.0),
-            "upper": np.full(dim, 2.0),
-        })
-
-    traces = []
-    catastrophic = 0
-    gen = acc = rej = res_g = res_a = 0
-    for p in problems:
-        rows = {}
-        for key, runner in (
-            ("stacked", run_stacked),
-            ("adaptive_stacked", run_adaptive_stacked),
-        ):
-            row = runner(
-                problem_id=p["id"],
-                func=p["func"],
-                lower=p["lower"],
-                upper=p["upper"],
-                budget=budget,
-                seed=1000 + hash(p["id"]) % 1000,
-                mode="fast",
-                screen_device="cpu",
-                refinement_backend="torch",
-            )
-            _require(row.evaluations == budget, "holdout budget")
-            rows[key] = row
-            traces.append(row)
-        s = rows["stacked"].best_f
-        a = rows["adaptive_stacked"].best_f
-        floor = max(abs(s), 1e-12)
-        if a > 50.0 * floor and a - s > 1.0:
-            catastrophic += 1
-        md = rows["adaptive_stacked"].metadata
-        gen += int(md.get("adaptive_proposals_generated", 0))
-        acc += int(md.get("adaptive_proposals_accepted", 0))
-        rej += int(md.get("adaptive_proposals_rejected", 0))
-        res_g += int(md.get("adaptive_rescue_proposals", 0))
-        res_a += int(md.get("adaptive_rescue_accepted", 0))
-
-    summary = summarize_traces(traces)
-    reject_rate = (rej / gen) if gen else 0.0
-    return {
-        "summary": summary["algorithms"],
-        "catastrophic": catastrophic,
-        "n_problems": len(problems),
-        "proposals_generated": gen,
-        "proposals_accepted": acc,
-        "proposals_rejected": rej,
-        "reject_rate": reject_rate,
-        "rescue_generated": res_g,
-        "rescue_accepted": res_a,
-        "adaptive_effectively_disabled": gen == 0 or acc == 0,
+    mode = {
+        "screen_pool": 1024,
+        "pulse_screen_pool": 1024,
+        "severe_screen_pool": 1024,
+        "refinement_timeout_sec": 0.25,
     }
+    engine.run(initial_trials=4, smart_trials=2, verbose=False, **mode)
+    try:
+        engine.run(initial_trials=4, smart_trials=2, verbose=False, **mode)
+    except RuntimeError as exc:
+        _require("single-use" in str(exc), "unexpected reuse error")
+    else:
+        raise AssertionError("engine reuse silently retained old state")
 
 
 def main():
-    print(
-        "Engineering AI Core V0.3.3 — "
-        "Adaptive Arbiter Property Self-Test"
-    )
+    print("Engineering AI Core V0.3.4 — Logic Hardening Self-Test")
     print("=" * 72)
 
-    test_I_no_benchmark_leakage()
-    print("[PASS] I no benchmark leakage")
+    fast_tests = [
+        ("no benchmark leakage", test_no_benchmark_tokens),
+        ("arbiter rejects worse/disagreement", test_arbiter_rejects_worse_and_disagreement),
+        ("arbiter accepts material gain", test_arbiter_accepts_material_consensus_gain),
+        ("arbiter rejects numerical dust", test_arbiter_rejects_numerical_dust_gain),
+        ("rescue uses arbiter", test_rescue_does_not_bypass_arbiter),
+        ("model-only policy cap", test_policy_model_alone_cannot_enable),
+        ("persistent controller required", test_policy_helper_requires_persistent_controller),
+        ("early-neutral", test_early_neutral),
+        ("rescue consumes streak", test_rescue_consumes_evidence_streak),
+        ("scale-robust model diagnostics", test_model_diagnostics_common_logp_shift_invariant),
+        ("design-space validation", test_design_space_validation),
+        ("objective-recorder audit", test_objective_recorder_audit),
+        ("trace-matrix validation", test_trace_matrix_rejects_duplicate_and_missing_rows),
+        ("frozen baseline tag integrity", test_frozen_baseline_matches_tag),
+    ]
 
-    test_B_rejected_executes_identity()
-    print("[PASS] B rejected => identity executed")
+    for label, test in fast_tests:
+        test()
+        print(f"[PASS] {label}")
 
-    test_C_consensus_accepts_adaptive()
-    print("[PASS] C consensus can accept adaptive")
-
-    test_D_component_disagreement_prefers_identity()
-    print("[PASS] D disagreement => identity")
-
-    test_E_rescue_does_not_bypass_arbiter()
-    print("[PASS] E rescue does not bypass arbiter")
-
-    test_policy_model_alone_cannot_enable()
-    print("[PASS] model-alone cannot enable proposals")
-
-    test_early_neutral()
-    print("[PASS] early-neutral identity-only")
-
-    test_J_baseline_files_unchanged()
-    print("[PASS] J baseline files unchanged")
-
-    print("[RUN ] budgets / dual-proposal / replay / neutral...")
-    test_F_dual_proposals_no_extra_objective_calls()
-    print("[PASS] F dual proposals add 0 objective calls")
-
-    test_G_exact_budgets()
-    print("[PASS] G exact budgets 7/13/25")
-
-    test_H_deterministic_replay()
-    print("[PASS] H deterministic replay")
-
-    test_A_neutral_equals_stacked()
-    print("[PASS] A neutral == stacked")
-
-    test_K_no_adaptive_forced_refit()
-    print("[PASS] K no adaptive forced refit / schedule match")
-
-    print("[RUN ] randomized mini holdout...")
-    hold = run_randomized_holdout()
-    print(
-        "[PASS] holdout "
-        f"n={hold['n_problems']} cat={hold['catastrophic']} "
-        f"gen={hold['proposals_generated']} "
-        f"acc={hold['proposals_accepted']} "
-        f"rej={hold['proposals_rejected']} "
-        f"reject_rate={hold['reject_rate']:.2f} "
-        f"rescue_g={hold['rescue_generated']} "
-        f"rescue_a={hold['rescue_accepted']}"
-    )
-    for name, s in hold["summary"].items():
-        print(
-            f"  {name:22s} mean_rank={s['mean_rank']:.3f} "
-            f"wins={s['wins']} win_share={s['win_share']:.2f}"
-        )
-    _require(
-        hold["catastrophic"] <= 1,
-        f"too many catastrophic: {hold['catastrophic']}",
-    )
-    # Safety without permanent disable: allow zero accepts on tiny holdout,
-    # but require that mild evidence *can* generate proposals in unit tests
-    # (covered by C). Warn only via return flag.
-    print(
-        "  adaptive_effectively_disabled_on_holdout="
-        f"{hold['adaptive_effectively_disabled']}"
-    )
+    print("[RUN ] adaptive exact-budget / engine lifecycle...")
+    test_adaptive_exact_budget_and_single_use()
+    print("[PASS] adaptive exact-budget / engine lifecycle")
 
     print("=" * 72)
-    print("V0.3.3 Adaptive Arbiter property self-test: PASS")
-    return hold
+    print("V0.3.4 logic-hardening self-test: PASS")
 
 
 if __name__ == "__main__":

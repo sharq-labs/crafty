@@ -19,6 +19,51 @@ DEFAULT_TARGET_DELTAS = (
 )
 
 
+def validate_trace_matrix(traces: list[Trace]) -> set[str]:
+    """
+    Validate matched-problem benchmark structure before computing ranks.
+
+    Every problem must contain exactly one row for every participating
+    algorithm. Duplicate (problem_id, algorithm) rows and missing algorithms
+    can silently corrupt ranks / win shares, so fail fast instead.
+    """
+    if not traces:
+        return set()
+
+    by_problem: dict[str, list[Trace]] = defaultdict(list)
+    for trace in traces:
+        by_problem[str(trace.problem_id)].append(trace)
+
+    expected_algorithms: set[str] | None = None
+
+    for problem_id, rows in by_problem.items():
+        names = [str(row.algorithm) for row in rows]
+        unique = set(names)
+        if len(unique) != len(names):
+            duplicates = sorted({
+                name for name in names
+                if names.count(name) > 1
+            })
+            raise ValueError(
+                "Duplicate benchmark trace row(s) for "
+                f"problem {problem_id}: {duplicates}"
+            )
+
+        if expected_algorithms is None:
+            expected_algorithms = unique
+            if not expected_algorithms:
+                raise ValueError("Benchmark trace matrix has no algorithms")
+        elif unique != expected_algorithms:
+            missing = sorted(expected_algorithms - unique)
+            extra = sorted(unique - expected_algorithms)
+            raise ValueError(
+                "Unmatched benchmark trace matrix for "
+                f"problem {problem_id}: missing={missing}, extra={extra}"
+            )
+
+    return set(expected_algorithms or set())
+
+
 def final_target_gap(trace: Trace) -> float | None:
     if trace.final_target is None:
         return None
@@ -162,6 +207,8 @@ def summarize_traces(
                 "unique_wins": "sole_best_only",
             },
         }
+
+    validate_trace_matrix(traces)
 
     by_problem = defaultdict(list)
     for t in traces:

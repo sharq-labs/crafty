@@ -1,17 +1,17 @@
 """
-V0.3.3 adaptive proposer policy — simplified.
+Adaptive proposer policy — V0.3.4 logic hardening.
 
-Role: decide whether an adaptive *proposal* may be generated, and with
-which search-allocation knobs. Does NOT alter model refit schedules.
-Does NOT execute candidates; the safety arbiter chooses among proposals.
+Role: decide whether an adaptive *proposal* may be generated, and with which
+search-allocation knobs. Does not alter model refit schedules and does not
+execute candidates; the safety arbiter chooses among proposals.
 
 Architecture:
   observations → baseline model fit → identity_proposal
                                     → (optional) adaptive_proposal
                                     → arbiter → ONE objective eval
 
-Constants justified by normalized [0,1] feature semantics and stability,
-not by smoke/BBOB scores. No benchmark identity.
+Constants are based on normalized [0,1] feature semantics and stability, not
+benchmark identity. No function / instance metadata is consumed.
 """
 
 from __future__ import annotations
@@ -21,16 +21,13 @@ from dataclasses import asdict, dataclass
 from .landscape_diagnostics import LandscapeDiagnostics
 
 
-# Early-neutral: stay at identity until enough samples exist.
 EARLY_NEUTRAL_ABS = 8
 EARLY_NEUTRAL_DIM_MULT = 3
 
-# Evidence construction (model capped; model-alone cannot enable proposals).
 MODEL_SUPPORT_CAP = 0.35
 MODEL_ONLY_EVIDENCE_CAP = 0.25
 SEARCH_FAIL_CAP = 0.85
 
-# Enable gates (sustained multi-signal evidence).
 EVIDENCE_MILD = 0.45
 EVIDENCE_SEVERE = 0.80
 SUSTAIN_MILD = 2
@@ -38,7 +35,6 @@ SUSTAIN_RESCUE = 4
 RECOVERY_STEPS = 2
 COOLDOWN_RESCUE = 4
 
-# Fixed mild / severe proposal amplitudes (no EMA strength machinery).
 POOL_MULT_MILD = 1.25
 POOL_MULT_SEVERE = 1.50
 DIVERSITY_MULT_MILD = 1.25
@@ -51,7 +47,7 @@ REFINE_ITER_DELTA_SEVERE = -10
 
 @dataclass(frozen=True)
 class AdaptiveDecision:
-    """Proposer knobs + enable flags (never forces model refit)."""
+    """Proposer knobs + enable flags. Never forces model refit."""
 
     enable_adaptive_proposal: bool
     enable_rescue_proposal: bool
@@ -64,19 +60,11 @@ class AdaptiveDecision:
     consecutive_evidence: int
     cooldown_remaining: int
     recovering: bool
-    proposal_level: str  # "none" | "mild" | "severe"
+    proposal_level: str
     reason: str
 
     def as_dict(self) -> dict:
         return asdict(self)
-
-
-def np_clip(value, lo, hi):
-    if value < lo:
-        return lo
-    if value > hi:
-        return hi
-    return value
 
 
 def _model_support(d: LandscapeDiagnostics) -> float:
@@ -106,6 +94,7 @@ def _search_failure(d: LandscapeDiagnostics) -> float:
         and d.stagnation_score >= 0.30
     ):
         score += 0.15
+
     need = max(
         EARLY_NEUTRAL_ABS,
         EARLY_NEUTRAL_DIM_MULT * int(d.dimension),
@@ -139,11 +128,7 @@ def is_early_neutral(d: LandscapeDiagnostics) -> bool:
 
 
 class AdaptivePolicyController:
-    """
-    Stateful proposer gate: early-neutral, sustain, cooldown, recovery.
-
-    Mutable state is intentionally small.
-    """
+    """Stateful proposer gate: early-neutral, sustain, cooldown, recovery."""
 
     def __init__(self):
         self.reset()
@@ -160,17 +145,16 @@ class AdaptivePolicyController:
         base_stagnation_trigger: int = 6,
         step: int = 0,
     ) -> AdaptiveDecision:
-        del base_stagnation_trigger  # unused; refits are never adaptive
+        del base_stagnation_trigger, step
         d = diagnostics
         evidence, parts = compute_evidence_score(d)
         early = is_early_neutral(d)
-        reasons = []
+        reasons: list[str] = []
 
         if early:
             evidence = min(evidence, MODEL_ONLY_EVIDENCE_CAP)
             reasons.append("early_neutral")
 
-        # Continuing improvement with weak search failure → do not escalate.
         improving_hold = (
             d.recent_improvement_rate > 0.0
             and parts["search_failure"] < 0.20
@@ -208,6 +192,8 @@ class AdaptivePolicyController:
             and self.cooldown_remaining == 0
         )
 
+        reported_streak = int(self.consecutive_evidence)
+
         if enable_severe:
             level = "severe"
             screen_mult = POOL_MULT_SEVERE
@@ -216,11 +202,15 @@ class AdaptivePolicyController:
             refine_iter_delta = REFINE_ITER_DELTA_SEVERE
             enable_rescue = True
             reasons.append("severe_proposal")
-            # Cooldown after authorizing a rescue-capable proposal step.
             self.cooldown_remaining = max(
                 self.cooldown_remaining,
                 COOLDOWN_RESCUE,
             )
+            # A rescue authorization consumes the sustained-evidence streak.
+            # Another severe rescue must earn a fresh streak while cooldown
+            # elapses; it cannot inherit pre-rescue evidence indefinitely.
+            self.consecutive_evidence = 0
+            self.consecutive_recovery = 0
         elif enable_mild:
             level = "mild"
             screen_mult = POOL_MULT_MILD
@@ -240,9 +230,7 @@ class AdaptivePolicyController:
 
         recovering = "recovering" in reasons
         return AdaptiveDecision(
-            enable_adaptive_proposal=bool(
-                enable_mild or enable_severe
-            ),
+            enable_adaptive_proposal=bool(enable_mild or enable_severe),
             enable_rescue_proposal=bool(enable_rescue),
             screen_pool_mult=float(screen_mult),
             diversity_radius_mult=float(div_mult),
@@ -250,12 +238,8 @@ class AdaptivePolicyController:
             refinement_maxiter_delta=int(refine_iter_delta),
             exploration_mix=float(explore_mix),
             evidence_score=float(evidence),
-            consecutive_evidence=int(
-                self.consecutive_evidence
-            ),
-            cooldown_remaining=int(
-                self.cooldown_remaining
-            ),
+            consecutive_evidence=reported_streak,
+            cooldown_remaining=int(self.cooldown_remaining),
             recovering=bool(recovering),
             proposal_level=str(level),
             reason="+".join(reasons),
@@ -269,12 +253,19 @@ def decide_adaptive_policy(
     controller: AdaptivePolicyController | None = None,
     step: int = 0,
 ) -> AdaptiveDecision:
-    ctl = (
-        controller
-        if controller is not None
-        else AdaptivePolicyController()
-    )
-    return ctl.update(
+    """
+    Stateful convenience wrapper.
+
+    A controller is required because proposal enablement depends on sustained
+    evidence across updates. Silently constructing a fresh controller on every
+    call would make that state impossible to accumulate.
+    """
+    if controller is None:
+        raise ValueError(
+            "decide_adaptive_policy requires a persistent "
+            "AdaptivePolicyController"
+        )
+    return controller.update(
         diagnostics,
         base_stagnation_trigger=base_stagnation_trigger,
         step=step,
@@ -292,15 +283,13 @@ def apply_decision_to_knobs(
     refinement_maxiter: int,
     top_k: int,
 ) -> dict:
-    """Materialize knobs for the adaptive *proposal* path only."""
+    """Materialize knobs for the adaptive proposal path only."""
 
     def _scale_pool(n):
         return int(
             max(
                 1024,
-                round(
-                    int(n) * float(decision.screen_pool_mult)
-                ),
+                round(int(n) * float(decision.screen_pool_mult)),
             )
         )
 
@@ -341,12 +330,8 @@ def apply_decision_to_knobs(
         "proposal_level": str(decision.proposal_level),
         "reason": decision.reason,
         "evidence_score": float(decision.evidence_score),
-        "consecutive_evidence": int(
-            decision.consecutive_evidence
-        ),
-        "cooldown_remaining": int(
-            decision.cooldown_remaining
-        ),
+        "consecutive_evidence": int(decision.consecutive_evidence),
+        "cooldown_remaining": int(decision.cooldown_remaining),
         "recovering": bool(decision.recovering),
     }
 
@@ -361,7 +346,8 @@ def identity_knobs(
     refinement_maxiter: int,
     top_k: int,
 ) -> dict:
-    """Exact stacked_v0301 search knobs for identity_proposal."""
+    """Exact baseline search knobs for identity_proposal."""
+    del top_k
     return {
         "screen_pool": int(screen_pool),
         "pulse_screen_pool": int(pulse_screen_pool),
