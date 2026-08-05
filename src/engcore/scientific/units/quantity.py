@@ -12,11 +12,20 @@ Invariants:
 * unit strings are normalized on construction, so serialization is
   deterministic;
 * incompatible operations raise :class:`UnitCompatibilityError` — the core
-  never silently strips or coerces units.
+  never silently strips or coerces units;
+* **a magnitude is always finite.** NaN and ±Inf are refused here, which is
+  what keeps them out of parameters, bounds, tolerances, results,
+  uncertainties and provenance without a check in each of those types.
+
+  The one sanctioned home for non-finite numbers is
+  :class:`~engcore.scientific.solvers.protocol.RawSolverOutput`: a diverged
+  backend must be able to report NaN honestly. The boundary is therefore
+  *raw backend output may be non-finite; interpreted science may not*.
 """
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Any, Mapping
 
@@ -79,7 +88,14 @@ class Quantity:
     units: str
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "magnitude", float(self.magnitude))
+        magnitude = float(self.magnitude)
+        if not math.isfinite(magnitude):
+            raise UnitCompatibilityError(
+                f"scientific magnitude must be finite, got {magnitude!r}; "
+                f"non-finite values belong in RawSolverOutput diagnostics, "
+                f"not in an interpreted scientific quantity"
+            )
+        object.__setattr__(self, "magnitude", magnitude)
         object.__setattr__(self, "units", normalize_unit(self.units))
 
     # ---- construction -------------------------------------------------

@@ -129,6 +129,73 @@ or `CandidateCodec`, which are the only sanctioned exits from the unit-aware
 world. A bare number is never silently interpreted: `Quantity.parse("42")`
 raises rather than assume dimensionless.
 
+Dimensional agreement is checked by **dimensionality, never by unit string**.
+A model declaring `kelvin` accepts a problem in `degC`; `m` and `cm` are
+interchangeable; `K` and `V` are not.
+
+## Finiteness policy
+
+`Quantity` refuses NaN and ±Inf. That single invariant keeps non-finite
+values out of parameters, bounds, tolerances, results, uncertainties,
+provenance and optimizer candidates without a check in each.
+
+The one sanctioned home for non-finite numbers is `RawSolverOutput`: a
+diverged backend must be able to report NaN honestly, and forcing an adapter
+to hide it would make it lie. The boundary is therefore **raw backend output
+may be non-finite; interpreted science may not.** `ObjectiveDefinition.weight`
+and `SolverSettings.tolerances` carry their own finiteness checks since they
+are plain floats rather than quantities.
+
+## Constraint semantics
+
+For measured `x`, bound `b`, tolerance `τ >= 0`:
+`<=` → `x <= b + τ` · `<` → `x < b − τ` · `>=` → `x >= b − τ` ·
+`>` → `x > b + τ` · `==` → `|x − b| <= τ`.
+
+Tolerance **relaxes** a non-strict bound and **tightens** a strict one; at
+`τ = 0` every operator has its exact mathematical meaning, so `x < b`
+correctly fails at `x == b`. Exact equality is permitted — a study may demand
+it — though non-zero tolerance is normally right for floating-point results.
+
+## Condition validation: what the core owns
+
+The universal core validates only dimension relationships that are true *by
+definition*:
+
+| Condition | Core enforces variable's dimension? |
+|---|---|
+| `InitialCondition` | **Yes** — it *is* the variable's value at t₀ |
+| Dirichlet | **Yes** — it *is* a prescribed field value |
+| Neumann | **No** — a derivative/flux, commonly `[variable]/[length]` |
+| Robin | **No** — mixed coefficients of several dimensions |
+| Periodic / Other | **No** — domain-defined |
+
+Forcing a Neumann flux to match its field would reject correct physics. That
+validation belongs to the domain or solver adapter, not here.
+
+## Optimizer boundary policy
+
+`CandidateCodec.encode` rejects a candidate outside its declared physical
+bounds; `decode` rejects any component outside `[0, 1]`. Extrapolating past a
+declared bound would silently invent a candidate the problem never
+authorized. A backend that legitimately proposes just outside a box
+constraint calls `clip()` — the explicit, recorded correction path.
+`ScientificVariable.require_within_bounds` is named for what it does: it
+rejects, it does not clamp.
+
+## Typed scientific values
+
+A parameter is not always dimensional. `ScientificValue` is a small **closed**
+union — `Quantity`, `IntegerValue`, `BooleanValue`, `CategoricalValue` — each
+schema-tagged and round-trip typed. Adding a kind is a deliberate contract
+change, not something a caller can do by passing an arbitrary object.
+
+**Representability is not optimizability.** A categorical parameter can be
+declared today; `CandidateCodec` still refuses to encode non-continuous
+*design variables*, because every naive encoding silently changes the search
+geometry. Model validity context is derived from typed parameters through
+`problem.validity_context(extra=...)` — `metadata` is never a side channel.
+
 ## Extension path for a new domain
 
 1. Define `ScientificModelDefinition`s with required variables, assumptions,

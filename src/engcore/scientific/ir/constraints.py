@@ -6,6 +6,30 @@ no ``exec``, and no dynamic expression compilation anywhere in the core.
 
 Symbolic expressions (``stress <= allowable_stress(T)``) are deferred; V0
 covers the ``metric OP bound`` form that real studies overwhelmingly use.
+
+Operator and tolerance semantics
+--------------------------------
+For a measured value ``x``, bound ``b`` and tolerance ``τ >= 0``:
+
+===============  ==========================
+``<=``           ``x <= b + τ``
+``<``            ``x <  b - τ``
+``>=``           ``x >= b - τ``
+``>``            ``x >  b + τ``
+``==``           ``|x - b| <= τ``
+===============  ==========================
+
+Tolerance therefore *relaxes* a non-strict bound and *tightens* a strict one;
+at ``τ = 0`` every operator reduces to its exact mathematical meaning, so
+``x < b`` correctly fails at ``x == b``.
+
+Exact equality (``==`` with ``τ = 0``) is permitted, because a study may
+legitimately demand it. For values produced by floating-point numerics a
+non-zero tolerance is normally the scientifically appropriate choice.
+
+``margin`` is expressed in the bound's units and is positive exactly when the
+constraint is satisfied with room to spare, negative when violated, and zero
+at the decision boundary (which for a strict operator means *not* satisfied).
 """
 
 from __future__ import annotations
@@ -119,23 +143,33 @@ class ConstraintDefinition:
             if self.tolerance is not None
             else 0.0
         )
-        delta = measured.magnitude - self.bound.magnitude
+        x = measured.magnitude
+        b = self.bound.magnitude
 
-        if self.operator in (
-            ConstraintOperator.LESS_EQUAL,
-            ConstraintOperator.LESS_THAN,
-        ):
-            margin = -delta          # positive when satisfied
-            satisfied = delta <= tol
-        elif self.operator in (
-            ConstraintOperator.GREATER_EQUAL,
-            ConstraintOperator.GREATER_THAN,
-        ):
-            margin = delta
-            satisfied = delta >= -tol
-        else:  # EQUAL
-            margin = tol - abs(delta)
-            satisfied = abs(delta) <= tol
+        # Strict and non-strict operators are genuinely different statements,
+        # so tolerance acts in opposite directions: it *relaxes* a non-strict
+        # bound (absorbing numerical noise at the boundary) and *tightens* a
+        # strict one (demanding a real margin inside it). At tol == 0 each
+        # reduces to its exact mathematical meaning.
+        if self.operator is ConstraintOperator.LESS_EQUAL:
+            limit = b + tol
+            satisfied = x <= limit
+            margin = limit - x
+        elif self.operator is ConstraintOperator.LESS_THAN:
+            limit = b - tol
+            satisfied = x < limit
+            margin = limit - x
+        elif self.operator is ConstraintOperator.GREATER_EQUAL:
+            limit = b - tol
+            satisfied = x >= limit
+            margin = x - limit
+        elif self.operator is ConstraintOperator.GREATER_THAN:
+            limit = b + tol
+            satisfied = x > limit
+            margin = x - limit
+        else:  # EQUAL — exact equality is permitted when tol == 0
+            margin = tol - abs(x - b)
+            satisfied = abs(x - b) <= tol
 
         return ConstraintCheck(
             constraint=self.name,

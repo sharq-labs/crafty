@@ -7,6 +7,7 @@ expected to carry, plus the direction of preference.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Mapping
@@ -51,6 +52,10 @@ class ObjectiveDefinition:
         )
         if self.weight is not None:
             weight = float(self.weight)
+            if not math.isfinite(weight):
+                raise InvalidScientificProblem(
+                    f"objective {name!r}: weight must be finite, got {weight!r}"
+                )
             if not weight > 0.0:
                 raise InvalidScientificProblem(
                     f"objective {name!r}: weight must be positive when given"

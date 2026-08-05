@@ -9,6 +9,16 @@ from .problem import (
     UncertaintyRequirement,
     UncertaintySpecification,
 )
+from .values import (
+    BooleanValue,
+    CategoricalValue,
+    IntegerValue,
+    ScientificValue,
+    ValueKind,
+    decode_value,
+    encode_value,
+    value_kind,
+)
 from .variables import (
     ScientificParameter,
     ScientificVariable,
@@ -17,6 +27,14 @@ from .variables import (
 )
 
 __all__ = [
+    "BooleanValue",
+    "CategoricalValue",
+    "IntegerValue",
+    "ScientificValue",
+    "ValueKind",
+    "decode_value",
+    "encode_value",
+    "value_kind",
     "BoundaryCondition",
     "BoundaryKind",
     "InitialCondition",

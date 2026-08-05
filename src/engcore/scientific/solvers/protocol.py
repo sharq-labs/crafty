@@ -17,6 +17,7 @@ implemented here — only the contract they will satisfy.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Mapping, Protocol, runtime_checkable
@@ -89,9 +90,16 @@ class SolverSettings:
     options: Mapping[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        object.__setattr__(
-            self, "tolerances", {str(k): float(v) for k, v in self.tolerances.items()}
-        )
+        tolerances: dict[str, float] = {}
+        for key, value in self.tolerances.items():
+            tolerance = float(value)
+            if not math.isfinite(tolerance):
+                raise ScientificCoreError(
+                    f"solver tolerance {str(key)!r} must be finite, got "
+                    f"{tolerance!r}"
+                )
+            tolerances[str(key)] = tolerance
+        object.__setattr__(self, "tolerances", tolerances)
         object.__setattr__(self, "options", dict(self.options))
 
     def to_dict(self) -> dict[str, Any]:
@@ -134,6 +142,12 @@ class RawSolverOutput:
     Values may be plain numbers here — this is the one place where numeric
     kernels are allowed to speak numbers. They become unit-carrying
     quantities in ``extract_metrics``.
+
+    **This is the sanctioned home for non-finite values.** A diverged solve
+    genuinely produces NaN or ±Inf, and forcing an adapter to hide that would
+    make it lie about what happened. The finiteness invariant begins one
+    layer up, at :class:`~engcore.scientific.units.Quantity`: raw output may
+    be non-finite, interpreted science may not.
     """
 
     convergence: ConvergenceState

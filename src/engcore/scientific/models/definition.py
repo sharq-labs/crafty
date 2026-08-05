@@ -16,11 +16,17 @@ from enum import Enum
 from typing import Any, Mapping
 
 from ..errors import InvalidScientificProblem, ModelValidityError
+from ..ir.values import ValueKind
+from ..ir.variables import VariableRole
 from ..serialization import require_schema, schema_string
-from ..units.quantity import Quantity
-from ..units.validation import require_same_dimension
+from ..units.quantity import Quantity, dimensionality
+from ..units.validation import require_same_dimension, require_unit
 
 MODEL_SCHEMA = schema_string("scientific_model_definition")
+MODEL_INPUT_SCHEMA = schema_string("model_input_spec")
+MODEL_OUTPUT_SCHEMA = schema_string("model_output_spec")
+BINDING_ISSUE_SCHEMA = schema_string("model_binding_issue")
+BINDING_REPORT_SCHEMA = schema_string("model_binding_report")
 RANGE_CONDITION_SCHEMA = schema_string("validity_range_condition")
 CATEGORY_CONDITION_SCHEMA = schema_string("validity_category_condition")
 FLAG_CONDITION_SCHEMA = schema_string("validity_flag_condition")
@@ -335,6 +341,226 @@ class ValidityDomain:
         )
 
 
+class InputSourceKind(str, Enum):
+    """Where a model input must come from in the problem IR."""
+
+    VARIABLE = "variable"
+    PARAMETER = "parameter"
+
+
+class BindingIssueKind(str, Enum):
+    """Why a model input could not be bound to the problem."""
+
+    MISSING = "missing"
+    WRONG_SOURCE_KIND = "wrong_source_kind"
+    WRONG_DIMENSION = "wrong_dimension"
+    WRONG_VALUE_TYPE = "wrong_value_type"
+    WRONG_ROLE = "wrong_role"
+
+
+@dataclass(frozen=True)
+class ModelInputSpec:
+    """A typed requirement, not a bare name.
+
+    ``unit_exemplar`` states the *dimension* the input must have by naming
+    any unit of that dimension; binding compares dimensionality, so a model
+    declaring ``"kelvin"`` accepts a problem in ``"degC"``.
+    """
+
+    name: str
+    source_kind: InputSourceKind
+    unit_exemplar: str | None = None
+    value_kind: ValueKind | None = None
+    role: VariableRole | None = None
+    required: bool = True
+    description: str = ""
+
+    def __post_init__(self) -> None:
+        name = str(self.name).strip()
+        if not name:
+            raise InvalidScientificProblem("model input requires a name")
+        object.__setattr__(self, "name", name)
+        object.__setattr__(self, "source_kind", InputSourceKind(self.source_kind))
+        if self.value_kind is not None:
+            object.__setattr__(self, "value_kind", ValueKind(self.value_kind))
+        if self.role is not None:
+            object.__setattr__(self, "role", VariableRole(self.role))
+
+        if self.unit_exemplar is not None:
+            object.__setattr__(
+                self,
+                "unit_exemplar",
+                require_unit(
+                    self.unit_exemplar, context=f"model input {name!r}"
+                ),
+            )
+            if self.value_kind is None:
+                object.__setattr__(self, "value_kind", ValueKind.QUANTITY)
+            elif self.value_kind is not ValueKind.QUANTITY:
+                raise InvalidScientificProblem(
+                    f"model input {name!r}: unit_exemplar is only meaningful "
+                    f"for quantity-valued inputs, not {self.value_kind.value!r}"
+                )
+        elif self.value_kind is ValueKind.QUANTITY:
+            raise InvalidScientificProblem(
+                f"model input {name!r}: a quantity-valued input must declare "
+                f"a unit_exemplar so its dimension can be checked"
+            )
+
+        if self.role is not None and self.source_kind is not InputSourceKind.VARIABLE:
+            raise InvalidScientificProblem(
+                f"model input {name!r}: role applies to variables only"
+            )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "schema": MODEL_INPUT_SCHEMA,
+            "name": self.name,
+            "source_kind": self.source_kind.value,
+            "unit_exemplar": self.unit_exemplar,
+            "value_kind": self.value_kind.value if self.value_kind else None,
+            "role": self.role.value if self.role else None,
+            "required": self.required,
+            "description": self.description,
+        }
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, Any]) -> "ModelInputSpec":
+        require_schema(payload, MODEL_INPUT_SCHEMA)
+        value_kind_raw = payload.get("value_kind")
+        role_raw = payload.get("role")
+        return cls(
+            name=payload["name"],
+            source_kind=InputSourceKind(payload["source_kind"]),
+            unit_exemplar=payload.get("unit_exemplar"),
+            value_kind=ValueKind(value_kind_raw) if value_kind_raw else None,
+            role=VariableRole(role_raw) if role_raw else None,
+            required=bool(payload.get("required", True)),
+            description=payload.get("description", ""),
+        )
+
+
+@dataclass(frozen=True)
+class ModelOutputSpec:
+    """A metric the model produces, with the dimension it will carry."""
+
+    metric: str
+    unit_exemplar: str
+    description: str = ""
+
+    def __post_init__(self) -> None:
+        metric = str(self.metric).strip()
+        if not metric:
+            raise InvalidScientificProblem("model output requires a metric name")
+        object.__setattr__(self, "metric", metric)
+        object.__setattr__(
+            self,
+            "unit_exemplar",
+            require_unit(self.unit_exemplar, context=f"model output {metric!r}"),
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "schema": MODEL_OUTPUT_SCHEMA,
+            "metric": self.metric,
+            "unit_exemplar": self.unit_exemplar,
+            "description": self.description,
+        }
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, Any]) -> "ModelOutputSpec":
+        require_schema(payload, MODEL_OUTPUT_SCHEMA)
+        return cls(
+            metric=payload["metric"],
+            unit_exemplar=payload["unit_exemplar"],
+            description=payload.get("description", ""),
+        )
+
+
+@dataclass(frozen=True)
+class BindingIssue:
+    """One reason a model does not fit a problem."""
+
+    name: str
+    kind: BindingIssueKind
+    detail: str = ""
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "kind", BindingIssueKind(self.kind))
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "schema": BINDING_ISSUE_SCHEMA,
+            "name": self.name,
+            "kind": self.kind.value,
+            "detail": self.detail,
+        }
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, Any]) -> "BindingIssue":
+        require_schema(payload, BINDING_ISSUE_SCHEMA)
+        return cls(
+            name=payload["name"],
+            kind=BindingIssueKind(payload["kind"]),
+            detail=payload.get("detail", ""),
+        )
+
+
+@dataclass(frozen=True)
+class ModelBindingReport:
+    """Structured outcome of checking a model against a problem.
+
+    A model is compatible only when there are no issues; there is no
+    "mostly satisfied" state, because a wrong-dimension binding is not a
+    partial success.
+    """
+
+    model_id: str
+    version: str
+    problem_id: str
+    valid_bindings: tuple[str, ...] = ()
+    issues: tuple[BindingIssue, ...] = ()
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "valid_bindings", tuple(self.valid_bindings))
+        object.__setattr__(self, "issues", tuple(self.issues))
+
+    @property
+    def is_satisfied(self) -> bool:
+        return not self.issues
+
+    def of_kind(self, kind: BindingIssueKind) -> tuple[BindingIssue, ...]:
+        return tuple(i for i in self.issues if i.kind is BindingIssueKind(kind))
+
+    @property
+    def missing(self) -> tuple[BindingIssue, ...]:
+        return self.of_kind(BindingIssueKind.MISSING)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "schema": BINDING_REPORT_SCHEMA,
+            "model_id": self.model_id,
+            "version": self.version,
+            "problem_id": self.problem_id,
+            "is_satisfied": self.is_satisfied,
+            "valid_bindings": list(self.valid_bindings),
+            "issues": [i.to_dict() for i in self.issues],
+        }
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, Any]) -> "ModelBindingReport":
+        require_schema(payload, BINDING_REPORT_SCHEMA)
+        return cls(
+            model_id=payload["model_id"],
+            version=payload["version"],
+            problem_id=payload["problem_id"],
+            valid_bindings=tuple(payload.get("valid_bindings", ())),
+            issues=tuple(
+                BindingIssue.from_dict(i) for i in payload.get("issues", ())
+            ),
+        )
+
+
 @dataclass(frozen=True)
 class ScientificModelDefinition:
     """A versioned scientific model contract."""
@@ -345,9 +571,8 @@ class ScientificModelDefinition:
     domain: str = ""
     model_type: ModelType = ModelType.APPROXIMATION
     description: str = ""
-    required_variables: tuple[str, ...] = ()
-    required_parameters: tuple[str, ...] = ()
-    provided_metrics: tuple[str, ...] = ()
+    inputs: tuple[ModelInputSpec, ...] = ()
+    outputs: tuple[ModelOutputSpec, ...] = ()
     assumptions: tuple[str, ...] = ()
     validity: ValidityDomain = field(default_factory=ValidityDomain)
     references: tuple[str, ...] = ()
@@ -364,11 +589,22 @@ class ScientificModelDefinition:
         object.__setattr__(
             self, "validation_status", ModelValidationStatus(self.validation_status)
         )
-        for label in (
-            "required_variables", "required_parameters", "provided_metrics",
-            "assumptions", "references",
-        ):
+        for label in ("inputs", "outputs", "assumptions", "references"):
             object.__setattr__(self, label, tuple(getattr(self, label)))
+        input_names = [spec.name for spec in self.inputs]
+        duplicates = {n for n in input_names if input_names.count(n) > 1}
+        if duplicates:
+            raise InvalidScientificProblem(
+                f"model {self.model_id!r} has duplicate input names: "
+                f"{sorted(duplicates)}"
+            )
+        output_names = [spec.metric for spec in self.outputs]
+        duplicates = {n for n in output_names if output_names.count(n) > 1}
+        if duplicates:
+            raise InvalidScientificProblem(
+                f"model {self.model_id!r} has duplicate output metrics: "
+                f"{sorted(duplicates)}"
+            )
         object.__setattr__(
             self, "required_capabilities", frozenset(self.required_capabilities)
         )
@@ -381,16 +617,147 @@ class ScientificModelDefinition:
     def assess_validity(self, context: Mapping[str, Any]) -> ValidityAssessment:
         return self.validity.assess(context)
 
-    def missing_requirements(self, problem) -> tuple[str, ...]:
-        """Names this model needs that the problem does not supply."""
-        available = {v.name for v in problem.variables}
-        available |= {p.name for p in problem.parameters}
-        missing = [
-            name
-            for name in (*self.required_variables, *self.required_parameters)
-            if name not in available
-        ]
-        return tuple(missing)
+    @property
+    def provided_metrics(self) -> tuple[str, ...]:
+        return tuple(spec.metric for spec in self.outputs)
+
+    def check_against(self, problem) -> ModelBindingReport:
+        """Bind this model's typed inputs and outputs to a problem.
+
+        Name matching alone is not binding: a model needing ``temperature``
+        is *not* satisfied by a variable called ``temperature`` measured in
+        volts, nor by a parameter when it declared it needs a variable.
+        Every such mismatch is reported as a typed issue.
+        """
+        variables = {v.name: v for v in problem.variables}
+        parameters = {p.name: p for p in problem.parameters}
+        issues: list[BindingIssue] = []
+        bound: list[str] = []
+
+        for spec in self.inputs:
+            source = (
+                variables.get(spec.name)
+                if spec.source_kind is InputSourceKind.VARIABLE
+                else parameters.get(spec.name)
+            )
+            if source is None:
+                other = (
+                    parameters.get(spec.name)
+                    if spec.source_kind is InputSourceKind.VARIABLE
+                    else variables.get(spec.name)
+                )
+                if other is not None:
+                    issues.append(
+                        BindingIssue(
+                            spec.name,
+                            BindingIssueKind.WRONG_SOURCE_KIND,
+                            f"required as {spec.source_kind.value}, but the "
+                            f"problem declares it as the other kind",
+                        )
+                    )
+                elif spec.required:
+                    issues.append(
+                        BindingIssue(
+                            spec.name,
+                            BindingIssueKind.MISSING,
+                            f"problem declares no {spec.source_kind.value} "
+                            f"named {spec.name!r}",
+                        )
+                    )
+                continue
+
+            issue = (
+                self._check_variable(spec, source)
+                if spec.source_kind is InputSourceKind.VARIABLE
+                else self._check_parameter(spec, source)
+            )
+            if issue is None:
+                bound.append(spec.name)
+            else:
+                issues.append(issue)
+
+        issues.extend(self._check_outputs(problem))
+
+        return ModelBindingReport(
+            model_id=self.model_id,
+            version=self.version,
+            problem_id=getattr(problem, "problem_id", ""),
+            valid_bindings=tuple(bound),
+            issues=tuple(issues),
+        )
+
+    def _check_variable(self, spec: ModelInputSpec, variable) -> BindingIssue | None:
+        if spec.role is not None and variable.role is not spec.role:
+            return BindingIssue(
+                spec.name,
+                BindingIssueKind.WRONG_ROLE,
+                f"expected role {spec.role.value!r}, found "
+                f"{variable.role.value!r}",
+            )
+        if spec.unit_exemplar is not None:
+            if dimensionality(variable.unit) != dimensionality(spec.unit_exemplar):
+                return BindingIssue(
+                    spec.name,
+                    BindingIssueKind.WRONG_DIMENSION,
+                    f"expected dimension of {spec.unit_exemplar!r} "
+                    f"[{dimensionality(spec.unit_exemplar)}], found "
+                    f"{variable.unit!r} [{dimensionality(variable.unit)}]",
+                )
+        return None
+
+    def _check_parameter(self, spec: ModelInputSpec, parameter) -> BindingIssue | None:
+        if spec.value_kind is not None and parameter.kind is not spec.value_kind:
+            return BindingIssue(
+                spec.name,
+                BindingIssueKind.WRONG_VALUE_TYPE,
+                f"expected {spec.value_kind.value!r} value, found "
+                f"{parameter.kind.value!r}",
+            )
+        if spec.unit_exemplar is not None:
+            if parameter.kind is not ValueKind.QUANTITY:
+                return BindingIssue(
+                    spec.name,
+                    BindingIssueKind.WRONG_VALUE_TYPE,
+                    f"expected a quantity with the dimension of "
+                    f"{spec.unit_exemplar!r}, found "
+                    f"{parameter.kind.value!r}",
+                )
+            found = parameter.value.units
+            if dimensionality(found) != dimensionality(spec.unit_exemplar):
+                return BindingIssue(
+                    spec.name,
+                    BindingIssueKind.WRONG_DIMENSION,
+                    f"expected dimension of {spec.unit_exemplar!r} "
+                    f"[{dimensionality(spec.unit_exemplar)}], found "
+                    f"{found!r} [{dimensionality(found)}]",
+                )
+        return None
+
+    def _check_outputs(self, problem) -> list[BindingIssue]:
+        """Outputs must agree dimensionally with metrics the problem declares.
+
+        A metric the problem never references is not an error: a model may
+        legitimately produce more than the study asks for.
+        """
+        declared = getattr(problem, "metric_units", lambda: {})()
+        issues: list[BindingIssue] = []
+        for spec in self.outputs:
+            expected = declared.get(spec.metric)
+            if expected is None:
+                continue
+            if dimensionality(expected) != dimensionality(spec.unit_exemplar):
+                issues.append(
+                    BindingIssue(
+                        spec.metric,
+                        BindingIssueKind.WRONG_DIMENSION,
+                        f"model produces {spec.metric!r} in "
+                        f"{spec.unit_exemplar!r} "
+                        f"[{dimensionality(spec.unit_exemplar)}] but the "
+                        f"problem declares it as {expected!r} "
+                        f"[{dimensionality(expected)}]",
+                    )
+                )
+        return issues
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -401,9 +768,8 @@ class ScientificModelDefinition:
             "domain": self.domain,
             "model_type": self.model_type.value,
             "description": self.description,
-            "required_variables": list(self.required_variables),
-            "required_parameters": list(self.required_parameters),
-            "provided_metrics": list(self.provided_metrics),
+            "inputs": [spec.to_dict() for spec in self.inputs],
+            "outputs": [spec.to_dict() for spec in self.outputs],
             "assumptions": list(self.assumptions),
             "validity": self.validity.to_dict(),
             "references": list(self.references),
@@ -422,9 +788,12 @@ class ScientificModelDefinition:
             domain=payload.get("domain", ""),
             model_type=ModelType(payload.get("model_type", "approximation")),
             description=payload.get("description", ""),
-            required_variables=tuple(payload.get("required_variables", ())),
-            required_parameters=tuple(payload.get("required_parameters", ())),
-            provided_metrics=tuple(payload.get("provided_metrics", ())),
+            inputs=tuple(
+                ModelInputSpec.from_dict(s) for s in payload.get("inputs", ())
+            ),
+            outputs=tuple(
+                ModelOutputSpec.from_dict(s) for s in payload.get("outputs", ())
+            ),
             assumptions=tuple(payload.get("assumptions", ())),
             validity=ValidityDomain.from_dict(payload["validity"])
             if payload.get("validity")

@@ -14,9 +14,12 @@ import sys
 
 from src.engcore.scientific import (
     AmbiguousSolverError,
+    BindingIssueKind,
+    BooleanValue,
     BoundaryCondition,
     BoundaryKind,
     CandidateCodec,
+    CategoricalValue,
     CategoryCondition,
     ConstraintDefinition,
     ConstraintOperator,
@@ -27,8 +30,13 @@ from src.engcore.scientific import (
     ExperimentBudget,
     FlagCondition,
     InitialCondition,
+    InputSourceKind,
+    IntegerValue,
     InvalidScientificProblem,
+    ModelBindingReport,
+    ModelInputSpec,
     ModelNotFoundError,
+    ModelOutputSpec,
     ModelReference,
     ModelRegistry,
     ModelType,
@@ -40,6 +48,7 @@ from src.engcore.scientific import (
     Quantity,
     RangeCondition,
     RawSolverOutput,
+    ScientificCoreError,
     ScientificEvaluation,
     ScientificExperiment,
     ScientificModelDefinition,
@@ -60,8 +69,11 @@ from src.engcore.scientific import (
     ValidationReport,
     ValidityDomain,
     ValidityStatus,
+    ValueKind,
     VariableKind,
     VariableRole,
+    decode_value,
+    normalize_unit,
 )
 from src.engcore.scientific.solvers.capability import SolverCapability
 
@@ -234,13 +246,8 @@ def test_invalid_bounds_rejected():
         lower=Quantity(5.0, "meter"),
         upper=Quantity(1.0, "meter"),
     )
-    _raises(
-        InvalidScientificProblem,
-        ScientificVariable,
-        name="x",
-        unit="meter",
-        lower=Quantity(float("inf"), "meter"),
-    )
+    # A non-finite bound is now refused one layer earlier, by Quantity itself.
+    _raises(UnitCompatibilityError, Quantity, float("inf"), "meter")
     _raises(InvalidScientificProblem, ScientificVariable, name="", unit="meter")
 
 
@@ -417,8 +424,28 @@ def _demo_model() -> ScientificModelDefinition:
         name="Synthetic linear response",
         domain="synthetic",
         model_type=ModelType.APPROXIMATION,
-        required_variables=("drive_level", "scale_factor"),
-        provided_metrics=("response", "load"),
+        inputs=(
+            ModelInputSpec(
+                name="drive_level",
+                source_kind=InputSourceKind.VARIABLE,
+                unit_exemplar="volt",
+                role=VariableRole.DESIGN,
+            ),
+            ModelInputSpec(
+                name="scale_factor",
+                source_kind=InputSourceKind.VARIABLE,
+                unit_exemplar="ohm",
+            ),
+            ModelInputSpec(
+                name="ambient",
+                source_kind=InputSourceKind.PARAMETER,
+                unit_exemplar="kelvin",
+            ),
+        ),
+        outputs=(
+            ModelOutputSpec(metric="response", unit_exemplar="ampere"),
+            ModelOutputSpec(metric="load", unit_exemplar="watt"),
+        ),
         assumptions=("synthetic demo model", "no physical law implemented"),
         validity=ValidityDomain(
             conditions=(
@@ -499,10 +526,209 @@ def test_model_serialization_round_trip():
     assert ScientificModelDefinition.from_dict(model.to_dict()) == model
 
 
-def test_model_missing_requirements():
-    model = _demo_model()
-    assert model.missing_requirements(build_algebraic_problem()) == ()
-    assert "drive_level" in model.missing_requirements(build_time_state_problem())
+# =====================================================================
+# G/H. Typed model binding (replaces name-only requirements)
+# =====================================================================
+
+def test_model_binding_accepts_correct_problem():
+    report = _demo_model().check_against(build_algebraic_problem())
+    assert report.is_satisfied, [i.detail for i in report.issues]
+    assert set(report.valid_bindings) == {
+        "drive_level", "scale_factor", "ambient"
+    }
+
+
+def test_model_binding_reports_missing_inputs():
+    report = _demo_model().check_against(build_time_state_problem())
+    assert not report.is_satisfied
+    missing = {i.name for i in report.missing}
+    assert {"drive_level", "scale_factor", "ambient"} <= missing
+
+
+def test_model_binding_rejects_wrong_dimension():
+    """The defect this contract exists to prevent: a name match in volts
+    satisfying a requirement declared in kelvin."""
+    model = ScientificModelDefinition(
+        model_id="m", version="1",
+        inputs=(
+            ModelInputSpec(
+                name="temperature",
+                source_kind=InputSourceKind.VARIABLE,
+                unit_exemplar="kelvin",
+            ),
+        ),
+    )
+    problem = ScientificProblem(
+        problem_id="p", variables=(ScientificVariable("temperature", "volt"),)
+    )
+    report = model.check_against(problem)
+    assert not report.is_satisfied
+    issue, = report.of_kind(BindingIssueKind.WRONG_DIMENSION)
+    assert issue.name == "temperature"
+
+
+def test_model_binding_accepts_compatible_but_different_units():
+    """degC and kelvin are the same dimension; exact unit strings are not
+    required."""
+    model = ScientificModelDefinition(
+        model_id="m", version="1",
+        inputs=(
+            ModelInputSpec(
+                name="temperature",
+                source_kind=InputSourceKind.VARIABLE,
+                unit_exemplar="kelvin",
+            ),
+        ),
+    )
+    problem = ScientificProblem(
+        problem_id="p", variables=(ScientificVariable("temperature", "degC"),)
+    )
+    assert model.check_against(problem).is_satisfied
+
+
+def test_model_binding_rejects_wrong_source_kind():
+    """A required variable supplied as a parameter (and vice versa)."""
+    as_variable = ScientificModelDefinition(
+        model_id="m", version="1",
+        inputs=(
+            ModelInputSpec(
+                name="mass", source_kind=InputSourceKind.VARIABLE,
+                unit_exemplar="kilogram",
+            ),
+        ),
+    )
+    problem_with_parameter = ScientificProblem(
+        problem_id="p",
+        parameters=(ScientificParameter("mass", Quantity(2.0, "kilogram")),),
+    )
+    report = as_variable.check_against(problem_with_parameter)
+    assert not report.is_satisfied
+    assert report.of_kind(BindingIssueKind.WRONG_SOURCE_KIND)
+
+    as_parameter = ScientificModelDefinition(
+        model_id="m2", version="1",
+        inputs=(
+            ModelInputSpec(
+                name="mass", source_kind=InputSourceKind.PARAMETER,
+                unit_exemplar="kilogram",
+            ),
+        ),
+    )
+    problem_with_variable = ScientificProblem(
+        problem_id="p2", variables=(ScientificVariable("mass", "kilogram"),)
+    )
+    report = as_parameter.check_against(problem_with_variable)
+    assert not report.is_satisfied
+    assert report.of_kind(BindingIssueKind.WRONG_SOURCE_KIND)
+
+
+def test_model_binding_rejects_wrong_value_type():
+    model = ScientificModelDefinition(
+        model_id="m", version="1",
+        inputs=(
+            ModelInputSpec(
+                name="phase", source_kind=InputSourceKind.PARAMETER,
+                value_kind=ValueKind.CATEGORICAL,
+            ),
+        ),
+    )
+    problem = ScientificProblem(
+        problem_id="p",
+        parameters=(ScientificParameter("phase", BooleanValue(True)),),
+    )
+    report = model.check_against(problem)
+    assert not report.is_satisfied
+    assert report.of_kind(BindingIssueKind.WRONG_VALUE_TYPE)
+
+
+def test_model_binding_rejects_wrong_role():
+    model = ScientificModelDefinition(
+        model_id="m", version="1",
+        inputs=(
+            ModelInputSpec(
+                name="x", source_kind=InputSourceKind.VARIABLE,
+                unit_exemplar="meter", role=VariableRole.DESIGN,
+            ),
+        ),
+    )
+    problem = ScientificProblem(
+        problem_id="p",
+        variables=(
+            ScientificVariable("x", "meter", role=VariableRole.OBSERVABLE),
+        ),
+    )
+    report = model.check_against(problem)
+    assert not report.is_satisfied
+    assert report.of_kind(BindingIssueKind.WRONG_ROLE)
+
+
+def test_model_binding_optional_input_is_not_missing():
+    model = ScientificModelDefinition(
+        model_id="m", version="1",
+        inputs=(
+            ModelInputSpec(
+                name="optional_hint", source_kind=InputSourceKind.PARAMETER,
+                value_kind=ValueKind.BOOLEAN, required=False,
+            ),
+        ),
+    )
+    assert model.check_against(ScientificProblem(problem_id="p")).is_satisfied
+
+
+def test_model_output_dimensional_check():
+    """A model producing load in amperes cannot serve a problem that
+    declares load in watts."""
+    model = ScientificModelDefinition(
+        model_id="m", version="1",
+        outputs=(ModelOutputSpec(metric="load", unit_exemplar="ampere"),),
+    )
+    report = model.check_against(build_algebraic_problem())
+    assert not report.is_satisfied
+    issue, = report.of_kind(BindingIssueKind.WRONG_DIMENSION)
+    assert issue.name == "load"
+
+    # A metric the problem never references is not an error.
+    unreferenced = ScientificModelDefinition(
+        model_id="m2", version="1",
+        outputs=(ModelOutputSpec(metric="not_requested", unit_exemplar="ampere"),),
+    )
+    assert unreferenced.check_against(build_algebraic_problem()).is_satisfied
+
+
+def test_model_input_spec_validation_and_round_trip():
+    spec = ModelInputSpec(
+        name="t", source_kind=InputSourceKind.VARIABLE, unit_exemplar="kelvin"
+    )
+    assert spec.value_kind is ValueKind.QUANTITY  # inferred from the exemplar
+    assert ModelInputSpec.from_dict(spec.to_dict()) == spec
+
+    output = ModelOutputSpec(metric="load", unit_exemplar="watt")
+    assert ModelOutputSpec.from_dict(output.to_dict()) == output
+
+    # A quantity-valued input must state a dimension to be checkable.
+    _raises(
+        InvalidScientificProblem, ModelInputSpec, name="t",
+        source_kind=InputSourceKind.PARAMETER, value_kind=ValueKind.QUANTITY,
+    )
+    # A unit exemplar is meaningless for a non-quantity input.
+    _raises(
+        InvalidScientificProblem, ModelInputSpec, name="t",
+        source_kind=InputSourceKind.PARAMETER, unit_exemplar="kelvin",
+        value_kind=ValueKind.BOOLEAN,
+    )
+    # Role applies to variables only.
+    _raises(
+        InvalidScientificProblem, ModelInputSpec, name="t",
+        source_kind=InputSourceKind.PARAMETER, value_kind=ValueKind.BOOLEAN,
+        role=VariableRole.DESIGN,
+    )
+    _raises(UnitCompatibilityError, ModelInputSpec, name="t",
+            source_kind=InputSourceKind.VARIABLE, unit_exemplar="not_a_unit_xyz")
+
+
+def test_model_binding_report_round_trip():
+    report = _demo_model().check_against(build_time_state_problem())
+    assert ModelBindingReport.from_dict(report.to_dict()) == report
 
 
 # =====================================================================
@@ -604,7 +830,7 @@ def test_capability_identifier_is_extensible():
         required_capabilities=frozenset({"electrical:dc"}),
     )
     assert registry.resolve(problem).identity.solver_id == "dc"
-    _raises(Exception, SolverCapability, "has whitespace")
+    _raises(ScientificCoreError, SolverCapability, "has whitespace")
 
 
 # =====================================================================
@@ -661,8 +887,11 @@ def test_result_serialization_round_trip():
 
 
 def test_result_rejects_bare_numbers_and_missing_provenance():
-    _raises(Exception, _result, values={"load": 2.5})
-    _raises(Exception, ScientificResult, result_id="r", values={}, provenance=None)
+    _raises(ScientificCoreError, _result, values={"load": 2.5})
+    _raises(
+        ScientificCoreError, ScientificResult, result_id="r", values={},
+        provenance=None,
+    )
 
 
 def test_result_uncertainty_defaults_to_unknown():
@@ -787,7 +1016,7 @@ def test_uncertainty_rules():
         Exception, Uncertainty, kind=UncertaintyKind.STANDARD,
         standard_uncertainty=Quantity(0.1, "watt"),
     )
-    _raises(Exception, Uncertainty, kind=UncertaintyKind.INTERVAL,
+    _raises(ScientificCoreError, Uncertainty, kind=UncertaintyKind.INTERVAL,
             lower=Quantity(1.0, "watt"), method="m")
 
 
@@ -804,8 +1033,8 @@ def test_provenance_deterministic_round_trip():
 
 
 def test_provenance_requires_units_and_run_id():
-    _raises(Exception, ProvenanceRecord, run_id="")
-    _raises(Exception, ProvenanceRecord, run_id="r", inputs={"x": 1.0})
+    _raises(ScientificCoreError, ProvenanceRecord, run_id="")
+    _raises(ScientificCoreError, ProvenanceRecord, run_id="r", inputs={"x": 1.0})
 
 
 def test_provenance_lineage():
@@ -846,7 +1075,7 @@ def test_experiment_records_and_budget():
     experiment.record(_evaluation(2, 3.0))
     assert experiment.observations == 2 and experiment.remaining_observations == 0
     assert experiment.is_exhausted
-    _raises(Exception, experiment.record, _evaluation(3, 1.0))
+    _raises(ScientificCoreError, experiment.record, _evaluation(3, 1.0))
 
 
 def test_experiment_failed_evaluation_does_not_consume_observation_budget():
@@ -871,7 +1100,7 @@ def test_experiment_best_respects_direction():
     experiment.record(_evaluation(3, 9.0))
     best = experiment.best("minimize_load")
     assert best is not None and best.evaluation_id == "eval-2"
-    _raises(Exception, experiment.best, "no_such_objective")
+    _raises(ScientificCoreError, experiment.best, "no_such_objective")
 
 
 def test_experiment_round_trip_and_objective_subset_rule():
@@ -889,21 +1118,21 @@ def test_experiment_round_trip_and_objective_subset_rule():
         name="not_declared", metric="x", direction=ObjectiveDirection.MAXIMIZE
     )
     _raises(
-        Exception, ScientificExperiment, "exp-bad", problem,
+        ScientificCoreError, ScientificExperiment, "exp-bad", problem,
         ExperimentBudget(max_observations=1), objectives=(foreign,),
     )
 
 
 def test_failed_evaluation_may_not_carry_a_result():
     _raises(
-        Exception, ScientificEvaluation, evaluation_id="e",
+        ScientificCoreError, ScientificEvaluation, evaluation_id="e",
         candidate={}, status=EvaluationStatus.FAILED, result=_result(),
     )
 
 
 def test_ok_evaluation_requires_a_result():
     _raises(
-        Exception, ScientificEvaluation, evaluation_id="e",
+        ScientificCoreError, ScientificEvaluation, evaluation_id="e",
         candidate={}, status=EvaluationStatus.OK,
     )
 
@@ -944,8 +1173,11 @@ def test_codec_accepts_compatible_units_and_rejects_bare_numbers():
     assert abs(restored["drive_level"].magnitude - 6.5) < 1e-9
     assert abs(restored["scale_factor"].magnitude - 505.0) < 1e-6
 
-    _raises(Exception, codec.encode, {"drive_level": 6.5, "scale_factor": Quantity(1.0, "ohm")})
-    _raises(Exception, codec.decode, (0.5,))
+    _raises(
+        ScientificCoreError, codec.encode,
+        {"drive_level": 6.5, "scale_factor": Quantity(1.0, "ohm")},
+    )
+    _raises(ScientificCoreError, codec.decode, (0.5,))
 
 
 def test_codec_requires_bounded_continuous_variables():
@@ -977,7 +1209,7 @@ def test_optimizer_adapter_encodes_objective_direction():
     assert adapter.objective.encode(Quantity(3.0, "watt")) == -3.0
     assert adapter.objective.decode(-3.0) == Quantity(3.0, "watt")
     assert adapter.objective.encode(Quantity(3000.0, "milliwatt")) == -3.0
-    _raises(Exception, adapter.objective.encode, 3.0)
+    _raises(ScientificCoreError, adapter.objective.encode, 3.0)
     assert adapter.to_dict()["objective_sense"] == -1
 
 
@@ -1095,6 +1327,439 @@ def test_scientific_core_does_not_import_the_optimizer_stack():
                     if name in stripped:
                         offenders.append(f"{path.name}: {stripped}")
     assert not offenders, f"Scientific Core must not bind to an optimizer: {offenders}"
+
+
+# =====================================================================
+# V0.0.1 HARDENING — adversarial tests for each confirmed defect
+# =====================================================================
+
+NAN = float("nan")
+POS_INF = float("inf")
+NEG_INF = float("-inf")
+
+
+# ---- A/B/C/D. non-finite policy, by layer ---------------------------
+
+def test_quantity_rejects_non_finite():
+    for bad in (NAN, POS_INF, NEG_INF):
+        _raises(UnitCompatibilityError, Quantity, bad, "meter")
+
+
+def test_non_finite_cannot_reach_interpreted_science():
+    """One invariant in Quantity closes every downstream layer at once.
+
+    Each case is deferred through a lambda because the rejection now happens
+    at Quantity construction — which is precisely the point: a non-finite
+    value cannot even be *expressed* as a scientific quantity, so it can
+    never be handed to a parameter, bound, result or provenance record.
+    """
+    cases = {
+        "parameter": lambda: ScientificParameter("p", Quantity(NAN, "meter")),
+        "constraint bound": lambda: ConstraintDefinition(
+            name="c", metric="m", operator=ConstraintOperator.LESS_EQUAL,
+            bound=Quantity(NAN, "kelvin"),
+        ),
+        "constraint tolerance": lambda: ConstraintDefinition(
+            name="c", metric="m", operator=ConstraintOperator.LESS_EQUAL,
+            bound=Quantity(1.0, "kelvin"), tolerance=Quantity(NAN, "kelvin"),
+        ),
+        "uncertainty": lambda: Uncertainty(
+            kind=UncertaintyKind.STANDARD,
+            standard_uncertainty=Quantity(NAN, "watt"), method="m",
+        ),
+        "result value": lambda: ScientificResult(
+            result_id="r", values={"v": Quantity(NAN, "watt")},
+            provenance=ProvenanceRecord(run_id="r"),
+        ),
+        "provenance input": lambda: ProvenanceRecord(
+            run_id="r", inputs={"i": Quantity(POS_INF, "meter")},
+        ),
+        "initial condition": lambda: InitialCondition(
+            variable="s", value=Quantity(NAN, "meter"),
+        ),
+        "variable bound": lambda: ScientificVariable(
+            "x", "meter", lower=Quantity(NEG_INF, "meter"),
+        ),
+    }
+    for label, construct in cases.items():
+        try:
+            construct()
+        except UnitCompatibilityError:
+            continue
+        raise AssertionError(f"non-finite value accepted by {label}")
+
+
+def test_raw_solver_output_still_permits_non_finite():
+    """A diverged backend must be able to report NaN honestly."""
+    raw = RawSolverOutput(
+        convergence=ConvergenceState.DIVERGED,
+        values={"x": NAN, "y": POS_INF},
+        residuals={"r": NAN},
+    )
+    assert raw.values["x"] != raw.values["x"]      # NaN preserved
+    assert raw.values["y"] == POS_INF
+    assert not raw.succeeded
+    assert RawSolverOutput.from_dict(raw.to_dict()).convergence is (
+        ConvergenceState.DIVERGED
+    )
+
+
+def test_objective_weight_rejects_non_finite():
+    for bad in (NAN, POS_INF, NEG_INF):
+        _raises(
+            InvalidScientificProblem, ObjectiveDefinition, name="o",
+            metric="m", direction=ObjectiveDirection.MINIMIZE, weight=bad,
+        )
+
+
+def test_solver_tolerance_rejects_non_finite():
+    from src.engcore.scientific import SolverSettings
+
+    for bad in (NAN, POS_INF, NEG_INF):
+        _raises(ScientificCoreError, SolverSettings, tolerances={"rtol": bad})
+    assert SolverSettings(tolerances={"rtol": 1e-9}).tolerances["rtol"] == 1e-9
+
+
+# ---- E/F. typed scientific values ------------------------------------
+
+def test_typed_parameter_round_trips():
+    cases = {
+        "mass": Quantity(2.0, "kilogram"),
+        "segment_count": IntegerValue(5),
+        "steady_state": BooleanValue(True),
+        "material": CategoricalValue("aluminum", vocabulary=("aluminum", "steel")),
+    }
+    for name, value in cases.items():
+        parameter = ScientificParameter(name, value)
+        restored = ScientificParameter.from_dict(parameter.to_dict())
+        assert restored == parameter
+        assert type(restored.value) is type(value)   # type preserved
+        assert json.loads(json.dumps(parameter.to_dict(), sort_keys=True)) == (
+            parameter.to_dict()
+        )
+
+    kinds = {
+        n: ScientificParameter(n, v).kind for n, v in cases.items()
+    }
+    assert kinds == {
+        "mass": ValueKind.QUANTITY,
+        "segment_count": ValueKind.INTEGER,
+        "steady_state": ValueKind.BOOLEAN,
+        "material": ValueKind.CATEGORICAL,
+    }
+
+
+def test_typed_values_reject_invalid_payloads():
+    # bool is an int subclass; the union must not erase the distinction
+    _raises(InvalidScientificProblem, IntegerValue, True)
+    _raises(InvalidScientificProblem, IntegerValue, 1.5)
+    _raises(InvalidScientificProblem, BooleanValue, 1)
+    _raises(InvalidScientificProblem, CategoricalValue, "")
+    _raises(
+        InvalidScientificProblem, CategoricalValue, "copper",
+        vocabulary=("aluminum", "steel"),
+    )
+    # raw python objects are still refused as parameter values
+    _raises(InvalidScientificProblem, ScientificParameter, "p", "aluminum")
+    _raises(InvalidScientificProblem, ScientificParameter, "p", True)
+    _raises(InvalidScientificProblem, ScientificParameter, "p", 5)
+    _raises(InvalidScientificProblem, ScientificParameter, "p", object())
+    # unknown / mistyped serialized payloads
+    _raises(ScientificCoreError, decode_value, {"schema": "bogus/1", "value": 1})
+    _raises(
+        InvalidScientificProblem, IntegerValue.from_dict,
+        {"schema": "integer_value/1", "value": True},
+    )
+
+
+def test_validity_context_derives_from_typed_parameters():
+    problem = ScientificProblem(
+        problem_id="ctx",
+        parameters=(
+            ScientificParameter("ambient", Quantity(300.0, "kelvin")),
+            ScientificParameter("regime", CategoricalValue("linear")),
+            ScientificParameter("steady_state", BooleanValue(True)),
+        ),
+    )
+    context = problem.validity_context()
+    assert context["regime"] == "linear"
+    assert context["steady_state"] is True
+    assert isinstance(context["ambient"], Quantity)
+
+    model = _demo_model()
+    assert model.assess_validity(context).status is ValidityStatus.IN_DOMAIN
+
+    # callers extend explicitly; metadata is not a secret channel
+    extended = problem.validity_context({"regime": "turbulent"})
+    assert model.assess_validity(extended).status is (
+        ValidityStatus.OUTSIDE_VALIDATED_DOMAIN
+    )
+
+
+# ---- I. constraint operator boundaries -------------------------------
+
+def test_constraint_operators_at_exact_boundary_zero_tolerance():
+    """x == b with tolerance 0: strict operators must FAIL."""
+    expected = {
+        ConstraintOperator.LESS_THAN: False,
+        ConstraintOperator.LESS_EQUAL: True,
+        ConstraintOperator.GREATER_THAN: False,
+        ConstraintOperator.GREATER_EQUAL: True,
+        ConstraintOperator.EQUAL: True,
+    }
+    for operator, should_pass in expected.items():
+        constraint = ConstraintDefinition(
+            name="c", metric="x", operator=operator,
+            bound=Quantity(10.0, "kelvin"),
+        )
+        check = constraint.check(Quantity(10.0, "kelvin"))
+        assert check.satisfied is should_pass, f"{operator.value} at boundary"
+        # margin is zero exactly at the decision boundary
+        assert abs(check.margin.magnitude) < 1e-12
+
+
+def test_constraint_operators_away_from_boundary():
+    below = Quantity(9.0, "kelvin")
+    above = Quantity(11.0, "kelvin")
+    bound = Quantity(10.0, "kelvin")
+
+    def check(operator, value):
+        return ConstraintDefinition(
+            name="c", metric="x", operator=operator, bound=bound
+        ).check(value)
+
+    assert check(ConstraintOperator.LESS_THAN, below).satisfied
+    assert not check(ConstraintOperator.LESS_THAN, above).satisfied
+    assert check(ConstraintOperator.GREATER_THAN, above).satisfied
+    assert not check(ConstraintOperator.GREATER_THAN, below).satisfied
+    assert check(ConstraintOperator.LESS_THAN, below).margin.magnitude > 0
+    assert check(ConstraintOperator.LESS_THAN, above).margin.magnitude < 0
+
+
+def test_constraint_tolerance_relaxes_non_strict_and_tightens_strict():
+    tol = Quantity(0.5, "kelvin")
+    bound = Quantity(10.0, "kelvin")
+
+    def check(operator, value):
+        return ConstraintDefinition(
+            name="c", metric="x", operator=operator, bound=bound, tolerance=tol
+        ).check(Quantity(value, "kelvin")).satisfied
+
+    # <= relaxed to 10.5 ; < tightened to strictly below 9.5
+    assert check(ConstraintOperator.LESS_EQUAL, 10.4)
+    assert not check(ConstraintOperator.LESS_EQUAL, 10.6)
+    assert check(ConstraintOperator.LESS_THAN, 9.4)
+    assert not check(ConstraintOperator.LESS_THAN, 9.5)
+
+    # >= relaxed to 9.5 ; > tightened to strictly above 10.5
+    assert check(ConstraintOperator.GREATER_EQUAL, 9.6)
+    assert not check(ConstraintOperator.GREATER_EQUAL, 9.4)
+    assert check(ConstraintOperator.GREATER_THAN, 10.6)
+    assert not check(ConstraintOperator.GREATER_THAN, 10.5)
+
+    # == within tolerance
+    assert check(ConstraintOperator.EQUAL, 10.4)
+    assert not check(ConstraintOperator.EQUAL, 10.6)
+
+
+def test_exact_equality_with_zero_tolerance_is_permitted():
+    constraint = ConstraintDefinition(
+        name="c", metric="x", operator=ConstraintOperator.EQUAL,
+        bound=Quantity(10.0, "kelvin"),
+    )
+    assert constraint.check(Quantity(10.0, "kelvin")).satisfied
+    assert not constraint.check(Quantity(10.000001, "kelvin")).satisfied
+
+
+# ---- J/K/L. condition dimensional rules ------------------------------
+
+def test_initial_condition_dimensional_mismatch_rejected():
+    _raises(
+        UnitCompatibilityError, ScientificProblem, problem_id="p",
+        variables=(ScientificVariable("temperature", "kelvin"),),
+        initial_conditions=(
+            InitialCondition(variable="temperature", value=Quantity(12.0, "volt")),
+        ),
+    )
+
+
+def test_initial_condition_compatible_unit_accepted():
+    problem = ScientificProblem(
+        problem_id="p",
+        variables=(ScientificVariable("temperature", "kelvin"),),
+        initial_conditions=(
+            InitialCondition(variable="temperature", value=Quantity(20.0, "degC")),
+        ),
+    )
+    assert problem.is_time_dependent
+
+
+def test_dirichlet_dimensional_mismatch_rejected():
+    _raises(
+        UnitCompatibilityError, ScientificProblem, problem_id="p",
+        variables=(ScientificVariable("temperature", "kelvin"),),
+        boundary_conditions=(
+            BoundaryCondition(
+                name="wall", variable="temperature",
+                kind=BoundaryKind.DIRICHLET, region="w",
+                value=Quantity(12.0, "volt"),
+            ),
+        ),
+    )
+
+
+def test_neumann_is_not_forced_to_the_field_dimension():
+    """A Neumann condition is a flux/derivative; requiring it to match the
+    field would reject correct physics. The core must stay out of it."""
+    problem = ScientificProblem(
+        problem_id="p",
+        variables=(ScientificVariable("temperature", "kelvin"),),
+        boundary_conditions=(
+            BoundaryCondition(
+                name="flux", variable="temperature",
+                kind=BoundaryKind.NEUMANN, region="w",
+                value=Quantity(500.0, "watt / meter**2"),
+            ),
+        ),
+    )
+    assert problem.boundary_conditions[0].kind is BoundaryKind.NEUMANN
+
+
+def test_robin_and_periodic_are_not_dimensionally_constrained_by_core():
+    problem = ScientificProblem(
+        problem_id="p",
+        variables=(ScientificVariable("temperature", "kelvin"),),
+        boundary_conditions=(
+            BoundaryCondition(
+                name="convective", variable="temperature",
+                kind=BoundaryKind.ROBIN, region="w",
+                coefficients={
+                    "h": Quantity(25.0, "watt / meter**2 / kelvin"),
+                    "T_inf": Quantity(300.0, "kelvin"),
+                },
+            ),
+            BoundaryCondition(
+                name="wrap", variable="temperature",
+                kind=BoundaryKind.PERIODIC, region="edges",
+            ),
+        ),
+    )
+    assert len(problem.boundary_conditions) == 2
+
+
+# ---- M. codec bound enforcement --------------------------------------
+
+def _bounded_codec() -> CandidateCodec:
+    return CandidateCodec(
+        variables=(
+            ScientificVariable(
+                "x", "volt", lower=Quantity(1.0, "volt"),
+                upper=Quantity(10.0, "volt"),
+            ),
+        )
+    )
+
+
+def test_codec_encode_rejects_out_of_bounds_candidate():
+    codec = _bounded_codec()
+    assert codec.encode({"x": Quantity(1.0, "volt")}) == (0.0,)
+    assert codec.encode({"x": Quantity(10.0, "volt")}) == (1.0,)
+    _raises(
+        InvalidScientificProblem, codec.encode, {"x": Quantity(50.0, "volt")}
+    )
+    _raises(
+        InvalidScientificProblem, codec.encode, {"x": Quantity(0.5, "volt")}
+    )
+
+
+def test_codec_decode_rejects_components_outside_unit_cube():
+    codec = _bounded_codec()
+    assert codec.decode((0.0,))["x"] == Quantity(1.0, "volt")
+    assert codec.decode((1.0,))["x"] == Quantity(10.0, "volt")
+    for bad in (-0.001, 1.001, -2.0, 3.0):
+        _raises(ScientificCoreError, codec.decode, (bad,))
+    for bad in (NAN, POS_INF, NEG_INF):
+        _raises(ScientificCoreError, codec.decode, (bad,))
+
+
+def test_codec_clip_remains_the_explicit_correction_path():
+    codec = _bounded_codec()
+    assert codec.clip((-2.0,)) == (0.0,)
+    assert codec.clip((3.0,)) == (1.0,)
+    assert codec.clip((0.25,)) == (0.25,)
+    # a clipped proposal decodes cleanly — the correction is explicit
+    assert codec.decode(codec.clip((3.0,)))["x"] == Quantity(10.0, "volt")
+    _raises(ScientificCoreError, codec.clip, (NAN,))
+
+
+def test_require_within_bounds_replaces_clamp_to_bounds():
+    variable = ScientificVariable(
+        "x", "volt", lower=Quantity(1.0, "volt"), upper=Quantity(10.0, "volt")
+    )
+    assert variable.require_within_bounds(Quantity(5.0, "volt")).magnitude == 5.0
+    _raises(
+        InvalidScientificProblem, variable.require_within_bounds,
+        Quantity(50.0, "volt"),
+    )
+    assert not hasattr(variable, "clamp_to_bounds")
+
+
+# ---- N. metric dimensional coherence ---------------------------------
+
+def test_metric_units_must_be_dimensionally_coherent():
+    _raises(
+        InvalidScientificProblem, ScientificProblem, problem_id="p",
+        objectives=(
+            ObjectiveDefinition(
+                name="o", metric="temperature",
+                direction=ObjectiveDirection.MINIMIZE, unit="kelvin",
+            ),
+        ),
+        constraints=(
+            ConstraintDefinition(
+                name="c", metric="temperature",
+                operator=ConstraintOperator.LESS_EQUAL,
+                bound=Quantity(5.0, "volt"),
+            ),
+        ),
+    )
+
+
+def test_compatible_units_for_one_metric_are_accepted():
+    for objective_unit, bound in (("kelvin", Quantity(350.0, "degC")),
+                                  ("meter", Quantity(5.0, "cm"))):
+        problem = ScientificProblem(
+            problem_id="p",
+            objectives=(
+                ObjectiveDefinition(
+                    name="o", metric="m",
+                    direction=ObjectiveDirection.MINIMIZE, unit=objective_unit,
+                ),
+            ),
+            constraints=(
+                ConstraintDefinition(
+                    name="c", metric="m",
+                    operator=ConstraintOperator.LESS_EQUAL, bound=bound,
+                ),
+            ),
+        )
+        assert problem.metric_units()["m"] == normalize_unit(objective_unit)
+
+
+def test_two_constraints_on_one_metric_must_agree():
+    _raises(
+        InvalidScientificProblem, ScientificProblem, problem_id="p",
+        constraints=(
+            ConstraintDefinition(
+                name="lo", metric="m", operator=ConstraintOperator.GREATER_EQUAL,
+                bound=Quantity(1.0, "kelvin"),
+            ),
+            ConstraintDefinition(
+                name="hi", metric="m", operator=ConstraintOperator.LESS_EQUAL,
+                bound=Quantity(5.0, "volt"),
+            ),
+        ),
+    )
 
 
 # =====================================================================

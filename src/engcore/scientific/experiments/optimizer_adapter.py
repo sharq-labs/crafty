@@ -20,6 +20,7 @@ number. The codec is where — and only where — those two facts meet.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Any, Mapping, Protocol, Sequence, runtime_checkable
 
@@ -104,7 +105,12 @@ class CandidateCodec:
 
     # ---- translation -----------------------------------------------------
     def encode(self, candidate: Mapping[str, Quantity]) -> tuple[float, ...]:
-        """Scientific candidate -> normalized vector in [0, 1]^d."""
+        """Scientific candidate -> normalized vector in [0, 1]^d.
+
+        Rejects a candidate outside its declared physical bounds. Producing a
+        component outside the unit cube would break this codec's own contract
+        and hand a search backend a point the problem never authorized.
+        """
         vector: list[float] = []
         for variable in self.variables:
             if variable.name not in candidate:
@@ -117,14 +123,30 @@ class CandidateCodec:
                     f"candidate value {variable.name!r} must be a Quantity — "
                     f"the codec never accepts unit-less scientific input"
                 )
-            magnitude = value.to(variable.unit).magnitude
+            # Raises on out-of-bounds; conversion also proves dimensionality.
+            magnitude = variable.require_within_bounds(value).magnitude
             low = variable.lower.magnitude
             high = variable.upper.magnitude
-            vector.append((magnitude - low) / (high - low))
+            component = (magnitude - low) / (high - low)
+            # Defensive: bound membership already guarantees this, but a
+            # silent escape here would be unrecoverable downstream.
+            if not 0.0 <= component <= 1.0:
+                raise ScientificCoreError(
+                    f"variable {variable.name!r} normalized to {component!r}, "
+                    f"outside the unit cube"
+                )
+            vector.append(component)
         return tuple(vector)
 
     def decode(self, vector: Sequence[float]) -> dict[str, Quantity]:
-        """Normalized vector -> scientific candidate with units restored."""
+        """Normalized vector -> scientific candidate with units restored.
+
+        Rejects any component outside ``[0, 1]``: extrapolating past a
+        declared design bound would silently invent a candidate the problem
+        never authorized. A backend that legitimately proposes just outside
+        the cube must call :meth:`clip` explicitly, so the correction is
+        recorded rather than assumed.
+        """
         values = list(vector)
         if len(values) != self.dimension:
             raise ScientificCoreError(
@@ -134,9 +156,15 @@ class CandidateCodec:
         candidate: dict[str, Quantity] = {}
         for variable, component in zip(self.variables, values):
             component = float(component)
-            if component != component or abs(component) == float("inf"):
+            if not math.isfinite(component):
                 raise ScientificCoreError(
                     f"non-finite component for variable {variable.name!r}"
+                )
+            if not 0.0 <= component <= 1.0:
+                raise ScientificCoreError(
+                    f"component {component!r} for variable "
+                    f"{variable.name!r} lies outside [0, 1]; use clip() to "
+                    f"correct a proposal explicitly"
                 )
             low = variable.lower.magnitude
             high = variable.upper.magnitude
@@ -146,8 +174,20 @@ class CandidateCodec:
         return candidate
 
     def clip(self, vector: Sequence[float]) -> tuple[float, ...]:
-        """Clamp a proposal into the unit cube without changing its meaning."""
-        return tuple(min(1.0, max(0.0, float(v))) for v in vector)
+        """Explicitly clamp a proposal into the unit cube.
+
+        The sanctioned correction path for backends that propose slightly
+        outside a box constraint. Never called implicitly by encode/decode.
+        """
+        clipped: list[float] = []
+        for value in vector:
+            component = float(value)
+            if not math.isfinite(component):
+                raise ScientificCoreError(
+                    "cannot clip a non-finite component"
+                )
+            clipped.append(min(1.0, max(0.0, component)))
+        return tuple(clipped)
 
 
 @dataclass(frozen=True)

@@ -13,8 +13,9 @@ from typing import Any, Mapping
 
 from ..errors import InvalidScientificProblem
 from ..serialization import require_schema, schema_string
-from ..units.quantity import Quantity
-from .conditions import BoundaryCondition, InitialCondition
+from ..units.quantity import Quantity, dimensionality
+from ..units.validation import require_same_dimension
+from .conditions import BoundaryCondition, BoundaryKind, InitialCondition
 from .constraints import ConstraintDefinition
 from .objectives import ObjectiveDefinition
 from .variables import ScientificParameter, ScientificVariable, VariableRole
@@ -148,7 +149,9 @@ class ScientificProblem:
 
         self._require_unique_names()
         self._require_condition_targets()
+        self._require_condition_dimensions()
         self._require_objective_metrics()
+        self._require_metric_coherence()
 
     # ---- invariants ----------------------------------------------------
     def _require_unique_names(self) -> None:
@@ -192,6 +195,75 @@ class ScientificProblem:
                     f"variable {condition.variable!r}"
                 )
 
+    def _require_condition_dimensions(self) -> None:
+        """Enforce only the dimension relationships that are true *by
+        definition*, and leave the rest to domain/solver adapters.
+
+        * An initial condition **is** the variable's own value at t0, so it
+          must share the variable's dimension. Universal.
+        * A Dirichlet boundary condition **is** a prescribed value of the
+          field, so it must too. Universal.
+        * A Neumann condition is a normal derivative or flux — commonly
+          ``[variable]/[length]`` or an energy flux entirely unlike the
+          variable. Requiring it to match the field would reject correct
+          physics, so the core does not check it.
+        * Robin mixes coefficients of several different dimensions; periodic
+          carries no value. Both are domain-specific.
+        """
+        units = {v.name: v.unit for v in self.variables}
+
+        for condition in self.initial_conditions:
+            require_same_dimension(
+                condition.value,
+                units[condition.variable],
+                context=(
+                    f"initial condition on variable "
+                    f"{condition.variable!r}"
+                ),
+            )
+
+        for condition in self.boundary_conditions:
+            if condition.kind is not BoundaryKind.DIRICHLET:
+                continue  # see docstring: not universally constrained
+            if condition.value is None:
+                continue
+            require_same_dimension(
+                condition.value,
+                units[condition.variable],
+                context=(
+                    f"Dirichlet boundary condition {condition.name!r} on "
+                    f"variable {condition.variable!r}"
+                ),
+            )
+
+    def _require_metric_coherence(self) -> None:
+        """Reject contradictory unit declarations for one metric.
+
+        An objective measuring ``temperature`` in kelvin alongside a
+        constraint bounding ``temperature`` in volts is a specification
+        error. Units need not be identical (K and degC, m and cm are fine) —
+        only dimensionally compatible.
+        """
+        declared: dict[str, tuple[str, str]] = {}  # metric -> (unit, source)
+        entries = [
+            (o.metric, o.unit, f"objective {o.name!r}") for o in self.objectives
+        ]
+        entries += [
+            (c.metric, c.unit, f"constraint {c.name!r}") for c in self.constraints
+        ]
+        for metric, unit, source in entries:
+            if metric not in declared:
+                declared[metric] = (unit, source)
+                continue
+            first_unit, first_source = declared[metric]
+            if dimensionality(unit) != dimensionality(first_unit):
+                raise InvalidScientificProblem(
+                    f"metric {metric!r} is declared with incompatible units: "
+                    f"{first_source} uses {first_unit!r} "
+                    f"[{dimensionality(first_unit)}] but {source} uses "
+                    f"{unit!r} [{dimensionality(unit)}]"
+                )
+
     def _require_objective_metrics(self) -> None:
         if not self.objectives:
             return
@@ -224,13 +296,39 @@ class ScientificProblem:
         return {p.name: p.value for p in self.parameters}
 
     def metric_units(self) -> dict[str, str]:
-        """Declared units per referenced metric, for result validation."""
+        """Declared units per referenced metric, for result validation.
+
+        Safe to use as a single source of truth: construction already proved
+        that every declaration of a given metric is dimensionally compatible,
+        so no contradiction can hide behind this collapse.
+        """
         units: dict[str, str] = {}
         for objective in self.objectives:
             units[objective.metric] = objective.unit
         for constraint in self.constraints:
             units.setdefault(constraint.metric, constraint.unit)
         return units
+
+    def validity_context(
+        self, extra: Mapping[str, Any] | None = None
+    ) -> dict[str, Any]:
+        """Base context for evaluating a model's :class:`ValidityDomain`.
+
+        Derived from typed parameters — Quantities stay Quantities for range
+        predicates, categories and flags unwrap to str/bool. ``extra`` lets a
+        domain or solver adapter add computed context (a Reynolds number, a
+        detected regime) **explicitly**.
+
+        Deliberately not sourced from ``metadata``: validity context is a
+        scientific input, not a side channel.
+        """
+        context: dict[str, Any] = {
+            parameter.name: parameter.context_value()
+            for parameter in self.parameters
+        }
+        if extra:
+            context.update(dict(extra))
+        return context
 
     @property
     def is_time_dependent(self) -> bool:

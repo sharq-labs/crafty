@@ -15,6 +15,15 @@ from ..errors import InvalidScientificProblem
 from ..serialization import require_schema, schema_string
 from ..units.quantity import Quantity, coerce_quantity
 from ..units.validation import require_same_dimension, require_unit
+from .values import (
+    ScientificValue,
+    ValueKind,
+    as_context_value,
+    decode_value,
+    encode_value,
+    require_scientific_value,
+    value_kind,
+)
 
 VARIABLE_SCHEMA = schema_string("scientific_variable")
 PARAMETER_SCHEMA = schema_string("scientific_parameter")
@@ -110,8 +119,13 @@ class ScientificVariable:
     def is_bounded(self) -> bool:
         return self.lower is not None and self.upper is not None
 
-    def clamp_to_bounds(self, value: Quantity) -> Quantity:
-        """Convert into the variable's unit and verify bound membership."""
+    def require_within_bounds(self, value: Quantity) -> Quantity:
+        """Convert into the variable's unit and verify bound membership.
+
+        Named for what it does: it *rejects* an out-of-bounds value rather
+        than silently moving it. Explicit correction is the caller's job
+        (see ``CandidateCodec.clip``).
+        """
         converted = value.to(self.unit)
         if self.lower is not None and converted.magnitude < self.lower.magnitude:
             raise InvalidScientificProblem(
@@ -155,10 +169,15 @@ class ScientificVariable:
 
 @dataclass(frozen=True)
 class ScientificParameter:
-    """A fixed, configured value of a problem (not searched over)."""
+    """A fixed, configured value of a problem (not searched over).
+
+    Accepts any member of the typed :data:`ScientificValue` union — a
+    dimensional Quantity, or an integer count, flag or category. It does not
+    accept raw Python objects: units are never implicit, and neither is type.
+    """
 
     name: str
-    value: Quantity
+    value: ScientificValue
     description: str = ""
     metadata: Mapping[str, Any] = field(default_factory=dict)
 
@@ -167,18 +186,26 @@ class ScientificParameter:
         if not name:
             raise InvalidScientificProblem("parameter name must be non-empty")
         object.__setattr__(self, "name", name)
-        if not isinstance(self.value, Quantity):
-            raise InvalidScientificProblem(
-                f"parameter {name!r} value must be a Quantity "
-                f"(units are never implicit)"
-            )
+        require_scientific_value(self.value, context=f"parameter {name!r}")
         object.__setattr__(self, "metadata", dict(self.metadata))
+
+    @property
+    def kind(self) -> ValueKind:
+        return value_kind(self.value)
+
+    @property
+    def is_quantity(self) -> bool:
+        return self.kind is ValueKind.QUANTITY
+
+    def context_value(self) -> Any:
+        """Plain form for model validity predicates."""
+        return as_context_value(self.value)
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "schema": PARAMETER_SCHEMA,
             "name": self.name,
-            "value": self.value.to_dict(),
+            "value": encode_value(self.value),
             "description": self.description,
             "metadata": dict(sorted(self.metadata.items())),
         }
@@ -188,7 +215,7 @@ class ScientificParameter:
         require_schema(payload, PARAMETER_SCHEMA)
         return cls(
             name=payload["name"],
-            value=Quantity.from_dict(payload["value"]),
+            value=decode_value(payload["value"]),
             description=payload.get("description", ""),
             metadata=dict(payload.get("metadata", {})),
         )

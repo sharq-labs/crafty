@@ -248,5 +248,7 @@ def candidate_from_parameters(
             raise ScientificCoreError(
                 f"candidate is missing design variable {variable.name!r}"
             )
-        candidate[variable.name] = variable.clamp_to_bounds(values[variable.name])
+        candidate[variable.name] = variable.require_within_bounds(
+            values[variable.name]
+        )
     return candidate
