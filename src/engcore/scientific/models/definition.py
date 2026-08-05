@@ -69,11 +69,26 @@ class ValidityStatus(str, Enum):
 
 @dataclass(frozen=True)
 class RangeCondition:
-    """``minimum <= context[name] <= maximum`` with unit awareness."""
+    """A bounded validity range, with open or closed endpoints.
+
+    Both bounds default to **inclusive**, so ``minimum <= x <= maximum``. Set
+    an inclusivity flag to ``False`` for a strict endpoint — a model valid
+    only for ``x > 0`` (a positive resistance, an absolute temperature, a
+    non-degenerate length) states that exactly rather than approximating it
+    with an epsilon.
+
+    An inclusivity flag has no effect when its bound is ``None``.
+
+    This is exact contract logic: no tolerance and no epsilon is applied to a
+    validity range. Numerical tolerance belongs to result validation, not to
+    the question of whether a model was applicable in the first place.
+    """
 
     name: str
     minimum: Quantity | None = None
     maximum: Quantity | None = None
+    minimum_inclusive: bool = True
+    maximum_inclusive: bool = True
     description: str = ""
 
     def __post_init__(self) -> None:
@@ -102,17 +117,29 @@ class RangeCondition:
     def evaluate(self, value: Any) -> ValidityStatus:
         if not isinstance(value, Quantity):
             return ValidityStatus.UNKNOWN
-        reference = self.minimum or self.maximum
+        reference = self.minimum if self.minimum is not None else self.maximum
         if not value.is_compatible_with(reference):
             raise ModelValidityError(
                 f"validity condition {self.name!r}: value {value} is not "
                 f"dimensionally compatible with {reference}"
             )
         if self.minimum is not None:
-            if value.to(self.minimum.units).magnitude < self.minimum.magnitude:
+            magnitude = value.to(self.minimum.units).magnitude
+            outside = (
+                magnitude < self.minimum.magnitude
+                if self.minimum_inclusive
+                else magnitude <= self.minimum.magnitude
+            )
+            if outside:
                 return ValidityStatus.OUTSIDE_VALIDATED_DOMAIN
         if self.maximum is not None:
-            if value.to(self.maximum.units).magnitude > self.maximum.magnitude:
+            magnitude = value.to(self.maximum.units).magnitude
+            outside = (
+                magnitude > self.maximum.magnitude
+                if self.maximum_inclusive
+                else magnitude >= self.maximum.magnitude
+            )
+            if outside:
                 return ValidityStatus.OUTSIDE_VALIDATED_DOMAIN
         return ValidityStatus.IN_DOMAIN
 
@@ -122,6 +149,8 @@ class RangeCondition:
             "name": self.name,
             "minimum": self.minimum.to_dict() if self.minimum else None,
             "maximum": self.maximum.to_dict() if self.maximum else None,
+            "minimum_inclusive": self.minimum_inclusive,
+            "maximum_inclusive": self.maximum_inclusive,
             "description": self.description,
         }
 
@@ -133,6 +162,10 @@ class RangeCondition:
             name=payload["name"],
             minimum=Quantity.from_dict(minimum) if minimum else None,
             maximum=Quantity.from_dict(maximum) if maximum else None,
+            # Records written before open ranges existed described closed
+            # ranges, so a missing flag means inclusive.
+            minimum_inclusive=bool(payload.get("minimum_inclusive", True)),
+            maximum_inclusive=bool(payload.get("maximum_inclusive", True)),
             description=payload.get("description", ""),
         )
 

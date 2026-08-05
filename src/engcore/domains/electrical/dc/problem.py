@@ -33,11 +33,18 @@ from ....scientific.ir.variables import (
     ScientificVariable,
     VariableRole,
 )
-from .circuit import DCCircuit
+from .circuit import CANONICAL_SCHEMA, DOMAIN_ARTIFACT_TYPE, DCCircuit
 from .components import CURRENT_UNIT, RESISTANCE_UNIT, VOLTAGE_UNIT
-from .models import DC_MODELS, ELECTRICAL_DC_LINEAR
+from .errors import CircuitBindingError
+from .models import ELECTRICAL_DC_LINEAR, models_for_circuit
 
 ANALYSIS_TYPE = "dc_steady_state"
+
+# Problem-metadata keys carrying domain artifact identity.
+DOMAIN_ARTIFACT_TYPE_KEY = "domain_artifact_type"
+DOMAIN_ARTIFACT_FINGERPRINT_KEY = "domain_artifact_fingerprint"
+DOMAIN_ARTIFACT_SCHEMA_KEY = "domain_artifact_schema"
+DOMAIN_ARTIFACT_LABEL_KEY = "domain_artifact_label"
 
 
 def node_voltage_name(node_id: str) -> str:
@@ -168,8 +175,10 @@ def build_dc_problem(
         parameters=tuple(parameters),
         objectives=tuple(objectives),
         constraints=tuple(constraints),
+        # Only the models this circuit actually invokes.
         models=tuple(
-            ModelReference(model.model_id, model.version) for model in DC_MODELS
+            ModelReference(model.model_id, model.version)
+            for model in models_for_circuit(circuit)
         ),
         required_capabilities=frozenset({ELECTRICAL_DC_LINEAR.name}),
         validation_requirements=frozenset(
@@ -177,12 +186,68 @@ def build_dc_problem(
                 "dimensional_consistency",
                 "linear_system_residual",
                 "kirchhoff_current_law",
-                "resistor_constitutive_relation",
+                "resistor_metric_consistency",
                 "voltage_source_relation",
                 "power_balance",
             }
         ),
+        # Identity, not hidden science: the scientific values all live in
+        # typed IR fields above. This records *which* circuit artifact those
+        # values were taken from, so a problem can never be paired with a
+        # different circuit without detection.
+        metadata={
+            DOMAIN_ARTIFACT_TYPE_KEY: DOMAIN_ARTIFACT_TYPE,
+            DOMAIN_ARTIFACT_FINGERPRINT_KEY: circuit.fingerprint(),
+            DOMAIN_ARTIFACT_SCHEMA_KEY: CANONICAL_SCHEMA,
+            DOMAIN_ARTIFACT_LABEL_KEY: circuit.circuit_id,
+        },
     )
+
+
+def problem_fingerprint(problem: ScientificProblem) -> str | None:
+    """The circuit fingerprint a problem claims, if any."""
+    value = problem.metadata.get(DOMAIN_ARTIFACT_FINGERPRINT_KEY)
+    return str(value) if value is not None else None
+
+
+def verify_problem_matches_circuit(
+    problem: ScientificProblem, circuit: DCCircuit
+) -> None:
+    """Prove that a problem and a circuit describe the same physical system.
+
+    Raises :class:`CircuitBindingError` on any disagreement. This runs before
+    assembly and before any numerical work: a result whose provenance
+    contradicts the circuit that produced it is worse than no result at all.
+
+    The problem is never silently rebuilt and the circuit is never silently
+    replaced — only the caller knows which artifact is the correct one.
+    """
+    artifact_type = problem.metadata.get(DOMAIN_ARTIFACT_TYPE_KEY)
+    if artifact_type != DOMAIN_ARTIFACT_TYPE:
+        raise CircuitBindingError(
+            f"problem {problem.problem_id!r} does not describe an "
+            f"{DOMAIN_ARTIFACT_TYPE} (found {artifact_type!r}); it was not "
+            f"built by build_dc_problem()"
+        )
+
+    expected = problem_fingerprint(problem)
+    actual = circuit.fingerprint()
+    if expected != actual:
+        raise CircuitBindingError(
+            f"circuit/problem mismatch for problem {problem.problem_id!r}: "
+            f"problem expects circuit fingerprint {_short(expected)}, but the "
+            f"supplied circuit {circuit.circuit_id!r} has {_short(actual)}. "
+            f"They describe different physical systems; rebuild the problem "
+            f"from this circuit or supply the matching circuit."
+        )
+
+
+def _short(fingerprint: str | None) -> str:
+    """Enough of a digest to identify it in an error, without dumping a
+    serialized circuit into a traceback."""
+    if not fingerprint:
+        return "<none>"
+    return f"{fingerprint[:12]}…"
 
 
 def resistor_relation_problem(resistor) -> ScientificProblem:

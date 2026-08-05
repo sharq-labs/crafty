@@ -93,9 +93,11 @@ RESISTOR_OHM_MODEL = ScientificModelDefinition(
             RangeCondition(
                 name="resistance",
                 minimum=Quantity(0.0, "ohm"),
+                minimum_inclusive=False,      # strictly R > 0
                 description=(
-                    "Positive resistance only; zero is a short and negative "
-                    "resistance is an active device, both outside V0 scope."
+                    "Strictly positive resistance; zero is a short and "
+                    "negative resistance is an active device, both outside "
+                    "V0 scope."
                 ),
             ),
         ),
@@ -196,7 +198,92 @@ IDEAL_VOLTAGE_SOURCE_MODEL = ScientificModelDefinition(
 )
 
 
-DC_MODELS = (RESISTOR_OHM_MODEL, KCL_MODEL, IDEAL_VOLTAGE_SOURCE_MODEL)
+IDEAL_CURRENT_SOURCE_MODEL = ScientificModelDefinition(
+    model_id="electrical.dc.ideal_current_source",
+    version=DC_MODEL_VERSION,
+    name="Ideal independent DC current source relation",
+    domain="electrical",
+    model_type=ModelType.APPROXIMATION,
+    description=(
+        "Imposes a fixed current from_node -> to_node inside the source, "
+        "irrespective of the terminal voltage that develops across it. An "
+        "idealisation: real sources have finite output impedance and a "
+        "limited compliance voltage."
+    ),
+    inputs=(
+        ModelInputSpec(
+            name="source_current",
+            source_kind=InputSourceKind.PARAMETER,
+            unit_exemplar="ampere",
+            description="Imposed current, positive from_node -> to_node.",
+        ),
+    ),
+    outputs=(
+        ModelOutputSpec(
+            metric="terminal_voltage",
+            unit_exemplar="volt",
+            description=(
+                "V(from_node) - V(to_node) that the surrounding network "
+                "develops across the source."
+            ),
+        ),
+    ),
+    assumptions=_DC_ASSUMPTIONS + (
+        "infinite output impedance",
+        "unlimited compliance voltage",
+    ),
+    validity=ValidityDomain(
+        description=(
+            "Idealisation; not validated against real source behaviour near "
+            "compliance limits."
+        )
+    ),
+    required_capabilities=frozenset({ELECTRICAL_DC_LINEAR.name}),
+    validation_status=ModelValidationStatus.SELF_CONSISTENT,
+)
+
+
+DC_MODELS = (
+    KCL_MODEL,
+    RESISTOR_OHM_MODEL,
+    IDEAL_VOLTAGE_SOURCE_MODEL,
+    IDEAL_CURRENT_SOURCE_MODEL,
+)
+
+
+def models_for_circuit(circuit) -> tuple[ScientificModelDefinition, ...]:
+    """The models a specific circuit actually invokes.
+
+    Attaching every domain model to every circuit would overstate what a
+    result depends on: a resistor-only network makes no claim about ideal
+    voltage sources, and a reader auditing that result should not be told it
+    does. Order is fixed, so the tuple is deterministic.
+
+    Kirchhoff's current law is always present — it is the balance every
+    nodal analysis solves, regardless of which element types appear.
+    """
+    active: list[ScientificModelDefinition] = [KCL_MODEL]
+    if circuit.resistors:
+        active.append(RESISTOR_OHM_MODEL)
+    if circuit.voltage_sources:
+        active.append(IDEAL_VOLTAGE_SOURCE_MODEL)
+    if circuit.current_sources:
+        active.append(IDEAL_CURRENT_SOURCE_MODEL)
+    return tuple(active)
+
+
+def assumptions_for_models(models) -> tuple[str, ...]:
+    """Deterministic, de-duplicated union of the models' assumptions.
+
+    First-seen order is preserved so the same active set always yields the
+    same sequence — a result's assumption list must not depend on set
+    iteration order.
+    """
+    seen: dict[str, None] = {}
+    for model in models:
+        for assumption in model.assumptions:
+            seen.setdefault(assumption, None)
+    return tuple(seen)
 
 
 def build_dc_model_registry() -> ModelRegistry:

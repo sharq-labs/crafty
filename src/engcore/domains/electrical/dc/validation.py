@@ -1,11 +1,25 @@
-"""Independent validation of a computed DC solution.
+"""Validation of a computed DC solution.
 
-A converged linear solve is not a validated result. Every check here is
-**reconstructed from the circuit elements and the extracted quantities** — in
-particular the KCL check walks the component list and sums signed branch
-currents rather than re-evaluating a row of the MNA matrix. Re-using the
-matrix would only prove that ``A x = z`` was solved, which the residual check
-already establishes; it would not catch an incorrect *stamp*.
+A converged linear solve is not a validated result. Six checks run, and they
+are **not equally strong** — saying "six independent checks" would overstate
+the evidence, so each is classified explicitly:
+
+======================================  ====================================
+``dimensional_consistency``             dimensional contract check
+``linear_system_residual``              numerical equation-solve check
+``kirchhoff_current_law``               **independently reconstructed**
+                                        topology/physics cross-check
+``resistor_metric_consistency``         internal constitutive consistency
+                                        (self-derived, not independent)
+``voltage_source_relation``             **independently reconstructed**
+                                        source-constraint check
+``power_balance``                       global physical consistency
+======================================  ====================================
+
+The genuinely independent ones rebuild quantities from the component list
+rather than re-evaluating a row of the MNA matrix. Re-using the matrix would
+only re-prove that ``A x = z`` was solved — which the residual check already
+establishes — and could never catch an incorrect *stamp*.
 
 Sign conventions (identical to those documented on the components):
 
@@ -22,6 +36,7 @@ No ``abs()`` is applied anywhere to make a sign work out.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
 import numpy as np
@@ -34,6 +49,7 @@ from ....scientific.results.validation import (
 )
 from ....scientific.units.quantity import Quantity
 from .components import CURRENT_UNIT, POWER_UNIT, VOLTAGE_UNIT
+from .errors import ElectricalDCError
 from .mna import PreparedDCSystem
 
 
@@ -41,7 +57,13 @@ from .mna import PreparedDCSystem
 class DCValidationSettings:
     """Central tolerances. Scattering literals through production code makes
     a tolerance decision unauditable, so they live here and are recorded in
-    provenance and in the solver settings."""
+    provenance and in the solver settings.
+
+    Every tolerance must be finite and non-negative. Zero is allowed and
+    means an exact check; NaN would make every comparison silently false
+    (turning validation into a rubber stamp) and infinity would make every
+    comparison silently true, so both are refused.
+    """
 
     residual_atol: float = 1e-9
     residual_rtol: float = 1e-9
@@ -49,6 +71,23 @@ class DCValidationSettings:
     ohm_atol_volt: float = 1e-9
     source_atol_volt: float = 1e-9
     power_atol_watt: float = 1e-9
+
+    def __post_init__(self) -> None:
+        for name in (
+            "residual_atol", "residual_rtol", "kcl_atol_ampere",
+            "ohm_atol_volt", "source_atol_volt", "power_atol_watt",
+        ):
+            value = float(getattr(self, name))
+            if not math.isfinite(value):
+                raise ElectricalDCError(
+                    f"validation tolerance {name!r} must be finite, got "
+                    f"{value!r}"
+                )
+            if value < 0.0:
+                raise ElectricalDCError(
+                    f"validation tolerance {name!r} must be >= 0, got {value!r}"
+                )
+            object.__setattr__(self, name, value)
 
     def as_mapping(self) -> dict[str, float]:
         return {
@@ -183,12 +222,23 @@ def check_resistor_relation(
     solution: np.ndarray,
     settings: DCValidationSettings,
 ) -> ValidationCheck:
-    """``V_ab - I_ab R = 0`` recomputed per resistor."""
+    """Internal consistency of the reported resistor metrics.
+
+    Honest description of what this proves: the current is *derived* here as
+    ``I = V/R``, so ``V - I·R`` is self-derived and vanishes to rounding by
+    construction. It is a useful guard against a defective metric-extraction
+    path or a corrupted quantity, and it is **not** independent physical
+    evidence about the solution.
+
+    The KCL check is the strong element-level cross-check: it reconstructs
+    signed branch currents from the topology and can therefore catch a wrong
+    conductance stamp, which this check cannot.
+    """
     circuit = prepared.circuit
     voltages = _voltages(prepared, solution)
     if not circuit.resistors:
         return ValidationCheck(
-            name="resistor_constitutive_relation",
+            name="resistor_metric_consistency",
             outcome=ValidationOutcome.NOT_RUN,
             detail="circuit contains no resistors",
         )
@@ -205,9 +255,12 @@ def check_resistor_relation(
 
     passed = abs(worst_residual) <= settings.ohm_atol_volt
     return ValidationCheck(
-        name="resistor_constitutive_relation",
+        name="resistor_metric_consistency",
         outcome=ValidationOutcome.PASS if passed else ValidationOutcome.FAIL,
-        detail=f"worst resistor {worst_id!r}: V - I R = {worst_residual:.3e} V",
+        detail=(
+            f"worst resistor {worst_id!r}: V - I R = {worst_residual:.3e} V "
+            f"(internal metric consistency, not independent evidence)"
+        ),
         residual=abs(worst_residual),
         tolerance=settings.ohm_atol_volt,
     )

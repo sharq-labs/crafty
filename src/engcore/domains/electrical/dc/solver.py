@@ -49,10 +49,18 @@ from ....scientific.solvers.protocol import (
     SolverSettings,
 )
 from ....scientific.units.quantity import Quantity
-from .circuit import DCCircuit
+from .circuit import CANONICAL_SCHEMA, DCCircuit
 from .components import CURRENT_UNIT, POWER_UNIT, VOLTAGE_UNIT
+from .errors import CircuitBindingError, ElectricalDCError
 from .mna import PreparedDCSystem, assemble
-from .models import DC_MODELS, ELECTRICAL_DC_LINEAR, dc_solver_capabilities
+from .models import (
+    DC_MODELS,
+    ELECTRICAL_DC_LINEAR,
+    assumptions_for_models,
+    dc_solver_capabilities,
+    models_for_circuit,
+)
+from .problem import verify_problem_matches_circuit
 from .validation import DCValidationSettings, build_validation_report
 
 SOLVER_ID = "electrical.dc.mna"
@@ -61,10 +69,6 @@ BACKEND = "scipy.linalg.solve"
 
 NODE_VOLTAGE_METRIC = "node_voltage"
 SOURCE_CURRENT_METRIC = "source_current"
-
-
-class ElectricalDCError(ScientificCoreError):
-    """A domain-level failure in Electrical DC analysis."""
 
 
 @dataclass
@@ -92,10 +96,28 @@ class ElectricalDCSolver:
 
     # ---- domain-local circuit binding -----------------------------------
     def bind_circuit(self, circuit: DCCircuit, problem_id: str) -> None:
-        """Associate a circuit with the problem that describes it."""
+        """Associate a circuit with the problem that describes it.
+
+        Rebinding is idempotent for the *same* physical system and rejected
+        for a different one: silently swapping the circuit behind a problem
+        id would let two results claim the same identity while describing
+        different systems.
+        """
         if not isinstance(circuit, DCCircuit):
             raise ElectricalDCError("bind_circuit expects a DCCircuit")
-        self._circuits[str(problem_id)] = circuit
+        key = str(problem_id)
+        existing = self._circuits.get(key)
+        if existing is not None:
+            previous = existing.fingerprint()
+            incoming = circuit.fingerprint()
+            if previous != incoming:
+                raise CircuitBindingError(
+                    f"problem {key!r} is already bound to a different circuit "
+                    f"(bound {previous[:12]}…, incoming {incoming[:12]}…); "
+                    f"rebinding to a different physical system is refused — "
+                    f"use a fresh solver or a distinct problem id"
+                )
+        self._circuits[key] = circuit
 
     def bound_circuit(self, problem_id: str) -> DCCircuit | None:
         return self._circuits.get(str(problem_id))
@@ -134,6 +156,9 @@ class ElectricalDCSolver:
                 f"problem {problem.problem_id!r} is not an Electrical DC "
                 f"linear analysis"
             )
+        # Integrity gate: prove the problem and the bound circuit describe
+        # the same physical system before anything is assembled or solved.
+        verify_problem_matches_circuit(problem, circuit)
         system = assemble(circuit)
         return PreparedSolve(
             problem=problem,
@@ -325,10 +350,12 @@ def solve_circuit(
     unique solution is a scientific finding worth keeping, not an exception
     to swallow.
     """
-    from .problem import build_dc_problem
+    from .problem import build_dc_problem, verify_problem_matches_circuit
 
     solver = solver or ElectricalDCSolver()
     problem = problem or build_dc_problem(circuit)
+    # Reject an inconsistent pairing before binding, assembling or solving.
+    verify_problem_matches_circuit(problem, circuit)
     solver.bind_circuit(circuit, problem.problem_id)
 
     prepared = solver.prepare(problem)
@@ -344,14 +371,21 @@ def solve_circuit(
     for source in circuit.current_sources:
         inputs[f"Is:{source.component_id}"] = source.current
 
+    # One active model set, used identically in the problem, the result and
+    # the provenance — these three must never disagree about what a result
+    # depends on.
+    active_models = models_for_circuit(circuit)
+    model_identities = tuple((m.model_id, m.version) for m in active_models)
+    assumptions = assumptions_for_models(active_models)
+
     provenance = ProvenanceRecord(
         run_id=run_id,
         software_version=software_version,
         git_commit=git_commit,
-        models=tuple((m.model_id, m.version) for m in DC_MODELS),
+        models=model_identities,
         solvers=((SOLVER_ID, SOLVER_VERSION),),
         inputs=inputs,
-        assumptions=DC_MODELS[0].assumptions,
+        assumptions=assumptions,
         tolerances=solver.settings.as_mapping(),
         environment=dict(environment or {}),
         timestamp=timestamp,
@@ -361,6 +395,13 @@ def solve_circuit(
             "reference_node": circuit.reference_node,
             "formulation": "modified_nodal_analysis",
             "backend": BACKEND,
+            # Identity plus the full canonical topology: element values alone
+            # cannot say which nodes they were wired between, so a fingerprint
+            # answers "was it this circuit?" and the canonical record answers
+            # "what exactly was solved?".
+            "circuit_fingerprint": circuit.fingerprint(),
+            "circuit_canonical_schema": CANONICAL_SCHEMA,
+            "circuit_canonical": circuit.canonical_dict(),
         },
     )
 
@@ -368,7 +409,7 @@ def solve_circuit(
         result_id=run_id,
         problem_id=problem.problem_id,
         values=metrics,
-        models=tuple((m.model_id, m.version) for m in DC_MODELS),
+        models=model_identities,
         solver=solver.identity,
         convergence=raw.convergence,
         validation=report,
@@ -381,8 +422,11 @@ def solve_circuit(
             )
             for name in metrics
         },
-        assumptions=DC_MODELS[0].assumptions,
+        assumptions=assumptions,
         warnings=raw.warnings,
         provenance=provenance,
-        metadata={"circuit_id": circuit.circuit_id},
+        metadata={
+            "circuit_id": circuit.circuit_id,
+            "circuit_fingerprint": circuit.fingerprint(),
+        },
     )

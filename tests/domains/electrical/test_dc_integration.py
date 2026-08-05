@@ -82,7 +82,7 @@ def _divider() -> DCCircuit:
 
 def test_dc_models_are_registered_and_honest():
     registry = build_dc_model_registry()
-    assert len(registry) == 3
+    assert len(registry) == 4
     resistor_model = registry.get("electrical.dc.resistor_ohm", "0.1.0")
     assert resistor_model.model_type is ModelType.CONSTITUTIVE_MODEL
 
@@ -91,6 +91,9 @@ def test_dc_models_are_registered_and_honest():
 
     source = registry.get("electrical.dc.ideal_voltage_source", "0.1.0")
     assert source.model_type is ModelType.APPROXIMATION
+
+    current_source = registry.get("electrical.dc.ideal_current_source", "0.1.0")
+    assert current_source.model_type is ModelType.APPROXIMATION
 
     for model in registry:
         # Passing unit tests is not experimental validation, and no external
@@ -103,7 +106,7 @@ def test_dc_models_are_registered_and_honest():
 def test_model_registry_instances_are_independent():
     first, second = build_dc_model_registry(), build_dc_model_registry()
     first.unregister("electrical.dc.kcl", "0.1.0")
-    assert len(first) == 2 and len(second) == 3
+    assert len(first) == 3 and len(second) == 4
 
 
 # ---- model binding under a real domain --------------------------------
@@ -200,14 +203,21 @@ def test_problem_carries_scientific_meaning_not_metadata():
     assert parameters["analysis_type"].kind is ValueKind.CATEGORICAL
 
     assert ELECTRICAL_DC_LINEAR.name in problem.required_capabilities
+    # only the models this circuit actually invokes: no current source here
     assert {m.model_id for m in problem.models} == {
-        "electrical.dc.resistor_ohm",
         "electrical.dc.kcl",
+        "electrical.dc.resistor_ohm",
         "electrical.dc.ideal_voltage_source",
     }
     assert "kirchhoff_current_law" in problem.validation_requirements
-    # metadata is not used to smuggle topology
-    assert problem.metadata == {}
+    # metadata carries identity only; every scientific value is in typed IR
+    assert set(problem.metadata) == {
+        "domain_artifact_type",
+        "domain_artifact_fingerprint",
+        "domain_artifact_schema",
+        "domain_artifact_label",
+    }
+    assert problem.metadata["domain_artifact_type"] == "electrical_dc_circuit"
 
 
 def test_problem_round_trips_through_the_universal_ir():

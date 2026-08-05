@@ -8,6 +8,8 @@ solver receives topology through the prepared-solve payload.
 
 from __future__ import annotations
 
+import hashlib
+import json
 from dataclasses import dataclass
 from typing import Any, Mapping
 
@@ -21,6 +23,11 @@ from .components import (
 )
 
 CIRCUIT_SCHEMA = schema_string("electrical_dc_circuit")
+CANONICAL_SCHEMA = schema_string("electrical_dc_circuit_canonical")
+
+#: Marks a ScientificProblem as describing a DC circuit, so a fingerprint
+#: found in problem metadata can be interpreted unambiguously.
+DOMAIN_ARTIFACT_TYPE = "electrical_dc_circuit"
 
 
 @dataclass(frozen=True)
@@ -125,6 +132,73 @@ class DCCircuit:
 
     def resistors_at(self, node_id: str) -> tuple[Resistor, ...]:
         return tuple(r for r in self.resistors if node_id in r.nodes)
+
+    # ---- canonical scientific identity ----------------------------------
+    def canonical_dict(self) -> dict[str, Any]:
+        """A deterministic, unit-normalised description of the *physical*
+        system, used to compute :meth:`fingerprint`.
+
+        Three deliberate differences from :meth:`to_dict`:
+
+        * **Values are normalised to domain base units** (ohm, volt, ampere),
+          so ``1 kohm`` and ``1000 ohm`` describe the same physical circuit
+          and therefore share an identity. A cosmetic unit choice must not
+          create a different scientific system. ``to_dict`` keeps the units
+          the caller wrote, for display and round-tripping.
+        * ``circuit_id`` and ``description`` are **excluded**: they are
+          labels. Renaming a circuit does not change the physics.
+        * Terminal order within a component is **preserved, never sorted**.
+          Swapping a resistor's terminals or a source's polarity flips the
+          sign of the reported metrics, so it is a different measurement
+          convention and must produce a different identity.
+
+        Components and nodes are sorted by id, so insertion order cannot
+        affect the result.
+        """
+        return {
+            "schema": CANONICAL_SCHEMA,
+            "reference_node": self.reference_node,
+            "nodes": sorted(self.node_ids),
+            "resistors": [
+                {
+                    "component_id": r.component_id,
+                    "node_a": r.node_a,
+                    "node_b": r.node_b,
+                    "resistance_ohm": r.resistance.magnitude_in("ohm"),
+                }
+                for r in sorted(self.resistors, key=lambda c: c.component_id)
+            ],
+            "voltage_sources": [
+                {
+                    "component_id": s.component_id,
+                    "positive_node": s.positive_node,
+                    "negative_node": s.negative_node,
+                    "voltage_volt": s.voltage.magnitude_in("volt"),
+                }
+                for s in sorted(self.voltage_sources, key=lambda c: c.component_id)
+            ],
+            "current_sources": [
+                {
+                    "component_id": s.component_id,
+                    "from_node": s.from_node,
+                    "to_node": s.to_node,
+                    "current_ampere": s.current.magnitude_in("ampere"),
+                }
+                for s in sorted(self.current_sources, key=lambda c: c.component_id)
+            ],
+        }
+
+    def fingerprint(self) -> str:
+        """SHA-256 of the canonical description — a stable scientific identity.
+
+        Deterministic across runs and processes: it uses a cryptographic hash
+        over sorted, compact JSON, never Python's ``hash()``, object identity,
+        a random UUID or a timestamp.
+        """
+        payload = json.dumps(
+            self.canonical_dict(), sort_keys=True, separators=(",", ":")
+        )
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
     # ---- serialization --------------------------------------------------
     def to_dict(self) -> dict[str, Any]:

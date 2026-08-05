@@ -107,26 +107,33 @@ Power balance sums *absorbed* power over every element and must vanish
 
 ## Validation strategy
 
-A converged linear solve is **not** a validated result. Six independent
-checks run on every analysis, all reconstructed from circuit elements and
-extracted quantities — the KCL check walks the component list and sums signed
-branch currents rather than re-evaluating a row of `A`. Re-using the matrix
-would only re-prove that `A x = z` was solved; it could never catch an
-incorrect *stamp*. (A test deliberately corrupts a stamp to prove the
-distinction is real.)
+A converged linear solve is **not** a validated result. Six checks run on
+every analysis, and they are **not equally strong** — calling them "six
+independent checks" would overstate the evidence, so each is classified:
 
-| Check | What it verifies | Default tolerance |
+| Check | Kind of evidence | Default tolerance |
 |---|---|---|
-| `dimensional_consistency` | every metric carries the dimension its name implies | exact |
-| `linear_system_residual` | `‖A x − z‖` | `1e-9 + 1e-9·‖z‖` |
-| `kirchhoff_current_law` | signed current balance at every non-reference node | `1e-9 A` |
-| `resistor_constitutive_relation` | `V_ab − I_ab·R` per resistor | `1e-9 V` |
-| `voltage_source_relation` | `(V_p − V_n) − Vs` per source | `1e-9 V` |
-| `power_balance` | total absorbed power | `1e-9 W + 1e-9·Σ|P|` |
+| `dimensional_consistency` | dimensional contract check | exact |
+| `linear_system_residual` | numerical equation-solve check, `‖A x − z‖` | `1e-9 + 1e-9·‖z‖` |
+| `kirchhoff_current_law` | **independently reconstructed** topology/physics cross-check | `1e-9 A` |
+| `resistor_metric_consistency` | internal constitutive consistency — *self-derived, not independent* | `1e-9 V` |
+| `voltage_source_relation` | **independently reconstructed** source-constraint check | `1e-9 V` |
+| `power_balance` | global physical consistency (Tellegen) | `1e-9 W + 1e-9·Σ|P|` |
+
+The genuinely independent checks rebuild quantities from the component list
+rather than re-evaluating a row of `A`. Re-using the matrix would only
+re-prove that `A x = z` was solved; it could never catch an incorrect
+*stamp*. A test deliberately corrupts a stamp to prove the distinction is
+real. `resistor_metric_consistency` derives `I = V/R` and then checks
+`V − I·R`, so it vanishes by construction: useful against a defective
+metric-extraction path, but not physical evidence — which is exactly why it
+is no longer named `resistor_constitutive_relation`.
 
 Tolerances live in one `DCValidationSettings` object, are carried in
 `SolverSettings`, and are recorded in provenance — never scattered as
-literals through production code.
+literals through production code. Each must be finite and non-negative: NaN
+would make every comparison silently false (turning validation into a rubber
+stamp) and infinity would make every comparison silently true.
 
 ### Validation-level honesty
 
@@ -189,6 +196,53 @@ hardening under a real domain: a parameter *named* `resistance` but carrying
 volts is rejected, and a required parameter supplied as a variable is
 reported.
 
+## Scientific identity and binding integrity
+
+A `ScientificProblem` and a `DCCircuit` are separate artifacts, so nothing
+inherently stops a caller pairing the wrong two. `DCCircuit.fingerprint()`
+closes that: a SHA-256 over `canonical_dict()`, which is
+
+* **unit-normalised** to ohm / volt / ampere, so `1 kΩ` and `1000 Ω` are the
+  same physical system and share an identity — a cosmetic unit choice must
+  not create a different scientific artifact;
+* **order-independent** (nodes and components sorted by id), so declaration
+  order cannot change identity;
+* **label-independent** — `circuit_id` and `description` are excluded, since
+  renaming a circuit does not change the physics;
+* **terminal-order sensitive** — resistor terminals and source polarity are
+  preserved, never sorted, because swapping them flips the sign of the
+  reported metrics.
+
+`build_dc_problem` records the fingerprint in problem metadata
+(`domain_artifact_type`, `domain_artifact_fingerprint`,
+`domain_artifact_schema`, `domain_artifact_label`). That is identity and
+provenance, not hidden science: every scientific value remains in a typed IR
+field. `verify_problem_matches_circuit` is enforced in `prepare()` and in
+`solve_circuit()`, **before** assembly or any numerical work. A mismatch
+raises `CircuitBindingError` naming the problem id and truncated digests —
+never a serialized circuit in a traceback. The problem is never silently
+rebuilt and the circuit never silently replaced: only the caller knows which
+artifact is correct.
+
+`bind_circuit()` is idempotent for the same physical system and refuses to
+rebind a problem id to a different one.
+
+Provenance records both `circuit_fingerprint` (*was it this circuit?*) and
+the full `circuit_canonical` topology (*what exactly was solved?*). Element
+values alone cannot identify a circuit — two differently wired networks can
+share every component value — so the topology record is what makes a result
+reproducible.
+
+## Active model set
+
+Attaching every domain model to every circuit would overstate what a result
+depends on. `models_for_circuit()` returns only the models a circuit
+actually invokes: KCL always, plus the resistor, ideal-voltage-source and
+ideal-current-source models when those component types are present. The same
+set appears in `ScientificProblem.models`, `ScientificResult.models` and
+`ProvenanceRecord.models` — they can never disagree. Result assumptions are
+the deterministic, de-duplicated union of the active models' assumptions.
+
 ## Uncertainty
 
 `UNKNOWN` for every metric, always, in V0. Element values are taken as exact
@@ -203,7 +257,11 @@ and no tolerance propagation is performed. Reporting anything else — even
 * Near-singular circuits are reported through SciPy's ill-conditioning
   warning path rather than an explicit condition-number policy.
 * No `ValidationLevel` exists for "internally physically consistent", so the
-  KCL/Ohm/source/power checks establish no level. This is a candidate future
-  core addition, not something the domain should work around.
+  KCL/source/power checks establish no level. This is a candidate future core
+  addition, not something the domain should work around.
+* The fingerprint identifies a circuit *artifact*, not a canonical electrical
+  network: two topologically equivalent circuits that use different node or
+  component ids have different fingerprints. Graph-isomorphism-based identity
+  is deliberately out of scope.
 * Ground is explicit by design: a node named `"0"` or `"gnd"` is **not**
   automatically the datum.

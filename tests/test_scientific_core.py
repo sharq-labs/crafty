@@ -1763,6 +1763,163 @@ def test_two_constraints_on_one_metric_must_agree():
 
 
 # =====================================================================
+# V0.0.2 — open/closed validity ranges
+# =====================================================================
+
+def _range_status(value, **kwargs):
+    return RangeCondition(name="x", **kwargs).evaluate(value)
+
+
+def test_inclusive_bounds_are_the_default_and_accept_the_endpoint():
+    condition = RangeCondition(
+        name="t", minimum=Quantity(0.0, "kelvin"), maximum=Quantity(100.0, "kelvin")
+    )
+    assert condition.minimum_inclusive is True
+    assert condition.maximum_inclusive is True
+    assert condition.evaluate(Quantity(0.0, "kelvin")) is ValidityStatus.IN_DOMAIN
+    assert condition.evaluate(Quantity(100.0, "kelvin")) is ValidityStatus.IN_DOMAIN
+    assert condition.evaluate(Quantity(50.0, "kelvin")) is ValidityStatus.IN_DOMAIN
+
+
+def test_exclusive_minimum_rejects_the_endpoint():
+    kwargs = {"minimum": Quantity(0.0, "ohm"), "minimum_inclusive": False}
+    assert _range_status(Quantity(0.0, "ohm"), **kwargs) is (
+        ValidityStatus.OUTSIDE_VALIDATED_DOMAIN
+    )
+    assert _range_status(Quantity(1e-12, "ohm"), **kwargs) is ValidityStatus.IN_DOMAIN
+    assert _range_status(Quantity(-1.0, "ohm"), **kwargs) is (
+        ValidityStatus.OUTSIDE_VALIDATED_DOMAIN
+    )
+
+
+def test_inclusive_minimum_accepts_the_endpoint():
+    kwargs = {"minimum": Quantity(0.0, "ohm")}
+    assert _range_status(Quantity(0.0, "ohm"), **kwargs) is ValidityStatus.IN_DOMAIN
+
+
+def test_exclusive_maximum_rejects_the_endpoint():
+    kwargs = {"maximum": Quantity(1.0, "meter"), "maximum_inclusive": False}
+    assert _range_status(Quantity(1.0, "meter"), **kwargs) is (
+        ValidityStatus.OUTSIDE_VALIDATED_DOMAIN
+    )
+    assert _range_status(Quantity(0.999, "meter"), **kwargs) is (
+        ValidityStatus.IN_DOMAIN
+    )
+
+
+def test_double_bounded_open_interval():
+    kwargs = {
+        "minimum": Quantity(0.0, "meter"),
+        "maximum": Quantity(1.0, "meter"),
+        "minimum_inclusive": False,
+        "maximum_inclusive": False,
+    }
+    assert _range_status(Quantity(0.0, "meter"), **kwargs) is (
+        ValidityStatus.OUTSIDE_VALIDATED_DOMAIN
+    )
+    assert _range_status(Quantity(1.0, "meter"), **kwargs) is (
+        ValidityStatus.OUTSIDE_VALIDATED_DOMAIN
+    )
+    assert _range_status(Quantity(0.5, "meter"), **kwargs) is ValidityStatus.IN_DOMAIN
+
+
+def test_half_open_interval():
+    kwargs = {
+        "minimum": Quantity(0.0, "second"),
+        "maximum": Quantity(10.0, "second"),
+        "minimum_inclusive": False,
+    }
+    assert _range_status(Quantity(0.0, "second"), **kwargs) is (
+        ValidityStatus.OUTSIDE_VALIDATED_DOMAIN
+    )
+    assert _range_status(Quantity(10.0, "second"), **kwargs) is (
+        ValidityStatus.IN_DOMAIN
+    )
+
+
+def test_inclusivity_flag_is_inert_when_its_bound_is_absent():
+    """A maximum_inclusive flag with no maximum must not affect anything."""
+    strict_min_only = RangeCondition(
+        name="x", minimum=Quantity(1.0, "meter"),
+        minimum_inclusive=False, maximum_inclusive=False,
+    )
+    assert strict_min_only.evaluate(Quantity(1000.0, "meter")) is (
+        ValidityStatus.IN_DOMAIN
+    )
+    assert strict_min_only.evaluate(Quantity(1.0, "meter")) is (
+        ValidityStatus.OUTSIDE_VALIDATED_DOMAIN
+    )
+
+
+def test_boundary_inclusivity_survives_unit_conversion():
+    """1 m and 100 cm are the same boundary, so the endpoint decision must be
+    identical regardless of the unit the value arrives in."""
+    inclusive = RangeCondition(name="x", minimum=Quantity(1.0, "meter"))
+    exclusive = RangeCondition(
+        name="x", minimum=Quantity(1.0, "meter"), minimum_inclusive=False
+    )
+    assert inclusive.evaluate(Quantity(100.0, "cm")) is ValidityStatus.IN_DOMAIN
+    assert exclusive.evaluate(Quantity(100.0, "cm")) is (
+        ValidityStatus.OUTSIDE_VALIDATED_DOMAIN
+    )
+    assert exclusive.evaluate(Quantity(101.0, "cm")) is ValidityStatus.IN_DOMAIN
+
+
+def test_range_condition_round_trip_preserves_inclusivity():
+    for minimum_inclusive in (True, False):
+        for maximum_inclusive in (True, False):
+            condition = RangeCondition(
+                name="x",
+                minimum=Quantity(0.0, "ohm"),
+                maximum=Quantity(10.0, "ohm"),
+                minimum_inclusive=minimum_inclusive,
+                maximum_inclusive=maximum_inclusive,
+            )
+            payload = condition.to_dict()
+            assert payload["minimum_inclusive"] is minimum_inclusive
+            assert payload["maximum_inclusive"] is maximum_inclusive
+            assert RangeCondition.from_dict(payload) == condition
+            assert json.loads(json.dumps(payload, sort_keys=True)) == payload
+
+
+def test_legacy_range_payload_defaults_to_inclusive():
+    """Records written before open ranges existed described closed ranges."""
+    legacy = {
+        "schema": "validity_range_condition/1",
+        "name": "resistance",
+        "minimum": Quantity(0.0, "ohm").to_dict(),
+        "maximum": None,
+        "description": "written by an older version",
+    }
+    restored = RangeCondition.from_dict(legacy)
+    assert restored.minimum_inclusive is True
+    assert restored.maximum_inclusive is True
+    assert restored.evaluate(Quantity(0.0, "ohm")) is ValidityStatus.IN_DOMAIN
+
+
+def test_open_range_inside_a_validity_domain():
+    """The end-to-end path a domain model uses: R > 0 as a validity claim."""
+    model = ScientificModelDefinition(
+        model_id="m", version="1",
+        validity=ValidityDomain(
+            conditions=(
+                RangeCondition(
+                    name="resistance",
+                    minimum=Quantity(0.0, "ohm"),
+                    minimum_inclusive=False,
+                ),
+            )
+        ),
+    )
+    assert model.assess_validity(
+        {"resistance": Quantity(0.0, "ohm")}
+    ).status is ValidityStatus.OUTSIDE_VALIDATED_DOMAIN
+    assert model.assess_validity(
+        {"resistance": Quantity(1.0, "kohm")}
+    ).status is ValidityStatus.IN_DOMAIN
+
+
+# =====================================================================
 # standalone runner (pytest optional)
 # =====================================================================
 
