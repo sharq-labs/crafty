@@ -72,6 +72,13 @@ class AttributedCause(str, Enum):
     INFEASIBLE = "infeasible"
     HYPOTHESIS_CONTRADICTION = "hypothesis_contradiction"
     INCONCLUSIVE = "inconclusive"
+    #: Added in M2A. "It failed and we do not know why" — the honest reading of
+    #: a legacy flat FAILED with no corroborating provenance. Distinct from
+    #: NONE, which asserts there was no failure to attribute. Records carrying
+    #: this are structurally ineligible for supervised failure learning:
+    #: guessing a cause here is how historical ambiguity becomes mislabeled
+    #: training data.
+    UNATTRIBUTED = "unattributed"
 
 
 class BlameAssignment(str, Enum):
