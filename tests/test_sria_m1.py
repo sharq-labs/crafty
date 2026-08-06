@@ -11,6 +11,7 @@ the wrong thing and asserts that the architecture refuses.
 from __future__ import annotations
 
 import json
+import secrets
 import sys
 from pathlib import Path
 
@@ -20,6 +21,10 @@ from src.engcore.scientific import (
     ScientificResult,
     Uncertainty,
     ValidationLevel,
+)
+from src.engcore.sria.admission import (
+    DecisionBinding,
+    _issue_registrar_capability,
 )
 from src.engcore.sria import (
     AcceptanceCriterion,
@@ -154,6 +159,46 @@ def make_gateway() -> BeliefUpdateGateway:
     return BeliefUpdateGateway(authorities=make_registry())
 
 
+#: M3.1 required an accepting declaration to name a VALID assurance decision.
+#: M3.2 made that binding non-forgeable, and M3.3 made the mechanism one-way:
+#: the Arbiter draws a random code and registers only its commitment, so the
+#: authority holds no key material. M1's tests play the Arbiter role directly —
+#: without importing the assurance layer, which sits above this one.
+TEST_ARBITER_ID = "arbiter.m1.synthetic"
+#: M3.4: registration needs a registrar capability. These tests play the
+#: Arbiter role, so they hold one — obtaining it is exactly the seam an
+#: ordinary AdmissionAuthority holder does not have.
+TEST_REGISTRAR = _issue_registrar_capability(TEST_ARBITER_ID)
+
+
+def valid_binding(evidence: Evidence, verdict: str = "valid") -> DecisionBinding:
+    """A genuine capability for this record, minted as a real Arbiter would."""
+    decision_id = f"dec-{evidence.evidence_id}"
+    decision_hash = f"hash-{evidence.evidence_id}"
+    payload = AdmissionAuthority.authorization_payload(
+        decision_id=decision_id,
+        decision_hash=decision_hash,
+        subject_record_hash=evidence.record_hash,
+        verdict=verdict,
+        policy_id="sria.arbiter",
+        policy_version="test",
+        arbiter_id=TEST_ARBITER_ID,
+    )
+    code = secrets.token_hex(32)
+    TEST_AUTHORITY.register_authorization(
+        TEST_REGISTRAR, AdmissionAuthority.commitment_for(code, payload), payload
+    )
+    return DecisionBinding(
+        decision_id=decision_id,
+        decision_hash=decision_hash,
+        verdict=verdict,
+        policy_id="sria.arbiter",
+        policy_version="test",
+        arbiter_id=TEST_ARBITER_ID,
+        authorization_code=code,
+    )
+
+
 def make_admission(
     evidence: Evidence, admitted: bool = True
 ) -> AdmissionDeclaration:
@@ -161,6 +206,7 @@ def make_admission(
     return TEST_AUTHORITY.issue(
         admitted=admitted,
         subject_record_hash=evidence.record_hash,
+        authorization=valid_binding(evidence) if admitted else None,
         arbiter_version="0.1",
         rationale="all critics passed" if admitted else "critic failed",
     )
@@ -349,9 +395,37 @@ def test_gateway_rejection_leaves_scientific_standing_unchanged():
     gateway = make_gateway()
     stranger = AdmissionAuthority("arbiter.rogue", secret="not-registered")
     evidence = assessed_evidence()
+    # An authority that has been told no commitment cannot sign this.
+    _raises(
+        AdmissionAuthorityError,
+        stranger.issue,
+        admitted=True,
+        subject_record_hash=evidence.record_hash,
+        authorization=valid_binding(evidence),
+    )
+    # Give the stranger its own registered commitment so it *can* sign, and
+    # prove the gateway still refuses it for being an unregistered issuer.
+    stranger_payload = AdmissionAuthority.authorization_payload(
+        decision_id="d-stranger",
+        decision_hash="h-stranger",
+        subject_record_hash=evidence.record_hash,
+        verdict="valid",
+    )
+    stranger_code = secrets.token_hex(32)
+    stranger.register_authorization(
+        _issue_registrar_capability("arbiter.stranger"),
+        AdmissionAuthority.commitment_for(stranger_code, stranger_payload),
+        stranger_payload,
+    )
     fabricated = stranger.issue(
         admitted=True,
         subject_record_hash=evidence.record_hash,
+        authorization=DecisionBinding(
+            decision_id="d-stranger",
+            decision_hash="h-stranger",
+            verdict="valid",
+            authorization_code=stranger_code,
+        ),
         rationale="self-granted",
     )
     presented = evidence.admit(fabricated)
@@ -380,6 +454,7 @@ def test_fabricated_admission_is_rejected():
         admitted=True,
         arbiter_id="arbiter.test",
         subject_record_hash=evidence.record_hash,
+        authorization=valid_binding(evidence),
     )
     _raises(AdmissionAuthorityError, gateway.submit, evidence.admit(unsigned))
 
@@ -389,20 +464,23 @@ def test_fabricated_admission_is_rejected():
         admitted=True,
         arbiter_id="arbiter.test",
         subject_record_hash=evidence.record_hash,
+        authorization=valid_binding(evidence),
         issuer_id=genuine.issuer_id,
         issued_signature=genuine.issued_signature,
         rationale="tampered rationale",
     )
     _raises(AdmissionAuthorityError, gateway.submit, evidence.admit(tampered))
 
-    # 3. Genuine declaration from an unregistered authority.
+    # 3. An unregistered authority. M3.2 stops this at issue(): the rogue
+    #    recognises no Arbiter, so it cannot sign an accepting declaration at
+    #    all — a stronger refusal than the gateway rejection M1.1 relied on.
     rogue = AdmissionAuthority("arbiter.rogue", secret="s")
     _raises(
         AdmissionAuthorityError,
-        gateway.submit,
-        evidence.admit(
-            rogue.issue(admitted=True, subject_record_hash=evidence.record_hash)
-        ),
+        rogue.issue,
+        admitted=True,
+        subject_record_hash=evidence.record_hash,
+        authorization=valid_binding(evidence),
     )
 
     # 4. A gateway trusting nobody admits nothing, even a valid declaration.
@@ -412,7 +490,7 @@ def test_fabricated_admission_is_rejected():
     assert len(empty.belief) == 0
 
     assert len(gateway.belief) == 0
-    assert len(gateway.rejection_log) == 3
+    assert len(gateway.rejection_log) == 2
 
 
 def test_authorized_admission_succeeds():

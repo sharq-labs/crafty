@@ -262,6 +262,8 @@ class BeliefUpdateGateway:
                 f"declaration; the Arbiter must admit before belief is written"
             )
 
+        # verify_admission checks issuer signature, subject binding, and (M3.1)
+        # that an accepting declaration names a VALID assurance decision.
         attempt = self.verify_admission(evidence)
         if not attempt.succeeded:
             self._reject(evidence, attempt)
@@ -277,6 +279,12 @@ class BeliefUpdateGateway:
             claim_payload=dict(evidence.claim_payload),
         )
         self._belief._apply(_TOKEN, entry)
+        # M3.4: retire the authorization. It admitted once; replaying it to
+        # re-activate suspended or superseded evidence would let a stale
+        # decision override a later scientific judgement.
+        self._authorities.consume(
+            evidence.admission, subject_record_hash=evidence.record_hash
+        )
         return entry
 
     def update_standing(self, candidate: Any) -> BeliefEntry:
