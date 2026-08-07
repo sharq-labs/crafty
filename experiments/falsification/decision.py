@@ -196,18 +196,40 @@ def evsi(
     expected utility is averaged under the predictive density of ``y``.
     """
     predicted = action.predict(grid)
-    nodes, quad, density = _predictive_nodes(grid, weights, action)
-
     utilities = np.vstack([spec.utility_vector(grid, d) for d in spec.decisions])
 
-    # Unnormalized posterior for every (y, theta), then per-y renormalization.
+    # One Gaussian kernel serves both the predictive density and the per-y
+    # posterior update; computing it twice was pure waste.
+    mean = float(np.dot(weights, predicted))
+    spread = float(np.dot(weights, (predicted - mean) ** 2))
+    sigma_total = math.sqrt(max(spread, 0.0) + action.sigma**2)
+    nodes = np.linspace(
+        mean - Y_SPAN_SIGMAS * sigma_total,
+        mean + Y_SPAN_SIGMAS * sigma_total,
+        Y_NODES,
+    )
+    step = nodes[1] - nodes[0]
+    quad = np.full(Y_NODES, step)
+    quad[0] *= 0.5
+    quad[-1] *= 0.5
+
     residual = nodes[:, None] - predicted[None, :]
-    log_kernel = -0.5 * (residual / action.sigma) ** 2
-    log_kernel -= log_kernel.max(axis=1, keepdims=True)
-    updated = np.exp(log_kernel) * weights[None, :]
-    totals = updated.sum(axis=1, keepdims=True)
+    residual /= action.sigma
+    residual *= residual
+    residual *= -0.5                                   # now log N kernel + const
+    unnormalized = np.exp(residual - residual.max(axis=1, keepdims=True))
+
+    joint = unnormalized * weights[None, :]
+    totals = joint.sum(axis=1, keepdims=True)
+    # Predictive density, recovered from the same kernel: the shift removed
+    # above is put back so the density is on its true scale.
+    density = (
+        totals[:, 0]
+        * np.exp(residual.max(axis=1))
+        / (action.sigma * math.sqrt(2.0 * math.pi))
+    )
     safe = totals > 0.0
-    updated = np.where(safe, updated / np.where(safe, totals, 1.0), 0.0)
+    updated = np.where(safe, joint / np.where(safe, totals, 1.0), 0.0)
 
     # max_d E[u | y] for each y, then integrate against the predictive.
     per_y_best = (updated @ utilities.T).max(axis=1)

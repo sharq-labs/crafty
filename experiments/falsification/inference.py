@@ -50,9 +50,23 @@ class ParameterGrid:
         return len(self.a_values) * len(self.b_values)
 
     def mesh(self) -> tuple[np.ndarray, np.ndarray]:
-        """(a, b) meshes, each flattened to one entry per grid point."""
-        a_mesh, b_mesh = np.meshgrid(self.a_values, self.b_values, indexing="ij")
-        return a_mesh.ravel(), b_mesh.ravel()
+        """(a, b) meshes, each flattened to one entry per grid point.
+
+        Memoized because the grid is frozen and the sweep asks for this
+        hundreds of thousands of times. Pure caching: the arrays are identical
+        to the freshly built ones, and are handed out read-only so a caller
+        cannot corrupt the cache.
+        """
+        cached = getattr(self, "_mesh_cache", None)
+        if cached is None:
+            a_mesh, b_mesh = np.meshgrid(
+                self.a_values, self.b_values, indexing="ij"
+            )
+            cached = (a_mesh.ravel(), b_mesh.ravel())
+            for array in cached:
+                array.flags.writeable = False
+            object.__setattr__(self, "_mesh_cache", cached)
+        return cached
 
     def predict(self, x: float) -> np.ndarray:
         """f(x; theta) for every theta on the grid."""
