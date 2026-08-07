@@ -56,6 +56,7 @@ from ..evidence import Evidence
 from ..gateway import BeliefUpdateGateway
 from .budget import BudgetExhausted, BudgetLedger
 from ..decision.replay import candidate_decision_identity, canonical_digest
+from .certification import CertificationRequirement
 from .checkpoint import (
     CampaignCheckpoint,
     CheckpointStore,
@@ -190,6 +191,7 @@ class CampaignRunner:
         stopping: ArbiterStoppingReview | None = None,
         stopping_criteria: Sequence[StoppingCriterion] = (),
         stopping_evaluators: Mapping[str, Any] | None = None,
+        certification_requirements: Sequence[CertificationRequirement] = (),
         checkpoints: CheckpointStore | None = None,
         clock: Callable[[], str] | None = None,
         charter_version: str = "1",
@@ -208,6 +210,10 @@ class CampaignRunner:
         self._stopping = stopping or ArbiterStoppingReview(arbiter)
         self._stopping_criteria = tuple(stopping_criteria)
         self._stopping_evaluators = dict(stopping_evaluators or {})
+        # V0.1 — finite, declared certification evidence. An economic stop does
+        # not discharge it, and it carries no status of its own: see
+        # _satisfied_certification_actions.
+        self._certification_requirements = tuple(certification_requirements)
         self._checkpoints = checkpoints or CheckpointStore()
         self._clock = clock or deterministic_clock(run_id)
         self._charter_version = charter_version
@@ -483,6 +489,16 @@ class CampaignRunner:
                 "displaced_action_id": (
                     ruling.displaced_action_id if ruling and ruling.overrides else ""
                 ),
+                # Why this action is being executed, recorded as what it is. A
+                # certification requirement is not positive information value
+                # and is not written down as though it were.
+                "execution_reason": self._execution_reason(
+                    selected, recommendation, ruling
+                ),
+                # The prediction this action is answerable to, captured here
+                # because the log orders ACTION_SELECTED strictly before
+                # EXECUTION_STARTED. Empty for actions that carry none.
+                "prediction_ref": self._prediction_ref(selected),
             },
             at=self._clock(),
         )
@@ -514,6 +530,41 @@ class CampaignRunner:
         )
 
     # -- step helpers ------------------------------------------------------
+    @staticmethod
+    def _prediction_ref(action: CandidateAction) -> str:
+        """The prediction reference a candidate declares, if any.
+
+        Recorded, never validated. V0.1 checks that a reference exists before
+        execution and nothing about what it points at — see
+        :mod:`~engcore.sria.campaign.certification` for what that does and does
+        not guarantee.
+        """
+        for member in action.members:
+            reference = str(member.action.metadata.get("prediction_ref", ""))
+            if reference:
+                return reference
+        return ""
+
+    def _execution_reason(
+        self,
+        action: CandidateAction,
+        recommendation: DecisionRecommendation,
+        ruling: LivenessRuling | None,
+    ) -> str:
+        """Why this action reached execution.
+
+        Three routes exist and they are recorded apart. Pretending a mandatory
+        probe was bought for its information value would put a false statement
+        in the audit trail and hide the one thing the record is for.
+        """
+        if ruling is not None and ruling.overrides and (
+            ruling.forced_action_id == action.action_id
+        ):
+            return "VALIDATION_LIVENESS"
+        if recommendation.outcome in _NON_SELECTING:
+            return "CERTIFICATION_REQUIREMENT"
+        return "POSITIVE_NET_VALUE"
+
     def _effect_subject(self, action: CandidateAction) -> str:
         """Bind an effect key to the action's *content*, not just its label.
 
@@ -633,9 +684,128 @@ class CampaignRunner:
 
         if ruling.overrides and ruling.forced_action_id in by_id:
             return by_id[ruling.forced_action_id], ruling
+        # V0.1 — a declared certification requirement outranks an economic
+        # stop. This is the whole of the routing fix: the loop already refuses
+        # to APPROVE a stop while the requirement is outstanding, and now it
+        # also knows what to do about it instead of pausing.
+        required = self._certification_route(by_id, costs, recommendation)
+        if required is not None:
+            return required, ruling
         if recommendation.outcome in _NON_SELECTING:
             return None, ruling
         return recommended, ruling
+
+    def _satisfied_certification_actions(self) -> frozenset[str]:
+        """Which required actions have been discharged, read from the log.
+
+        Derived rather than stored, for the same reason :meth:`step` reads
+        interruption from the log: a stored flag is a second source of truth a
+        resume can contradict.
+
+        An action counts only if BOTH hold. Its evidence was admitted — an
+        execution that produced nothing belief-bearing has discharged nothing.
+        And its selection carried a prediction reference, which the log orders
+        strictly before ``EXECUTION_STARTED``; a validation action whose
+        prediction was written after its observation tests nothing, and a
+        requirement discharged by one would certify a check that never happened.
+        """
+        selected: dict[int, tuple[str, str]] = {}
+        admitted: set[int] = set()
+        for event in self._events:
+            if event.event_type is CampaignEventType.ACTION_SELECTED:
+                selected[event.iteration] = (
+                    str(event.payload.get("action_id", "")),
+                    str(event.payload.get("prediction_ref", "")),
+                )
+            elif event.event_type is CampaignEventType.EVIDENCE_ADMITTED:
+                admitted.add(event.iteration)
+        return frozenset(
+            action_id
+            for iteration, (action_id, prediction_ref) in selected.items()
+            if action_id and prediction_ref and iteration in admitted
+        )
+
+    def _certification_route(
+        self,
+        by_id: Mapping[str, CandidateAction],
+        costs: Mapping[str, float | None],
+        recommendation: DecisionRecommendation,
+    ) -> CandidateAction | None:
+        """The cheapest affordable outstanding required candidate.
+
+        Only consulted when the scoring engine declined to select, so this
+        never displaces an action that was worth buying on its own terms. It
+        ranks a fixed declared set by price — it is not a planner, it proposes
+        nothing, and it computes no value of information. The action it returns
+        keeps whatever score the engine gave it, which is typically negative.
+
+        Nothing here branches on action family, and it must not: every family
+        is an eligible peer scored by the same engine, and a runner that read a
+        family to decide what happens next would be a mode machine wearing a
+        different name. Affordability is asked of the ledger using each
+        candidate's OWN family, so a VALIDATE requirement draws on the
+        validation reservation and anything else draws on the general pool —
+        the ledger's existing rule, applied without the runner restating it.
+        """
+        if not self._certification_requirements:
+            return None
+        if recommendation.outcome not in _NON_SELECTING:
+            return None
+        satisfied = self._satisfied_certification_actions()
+        eligible: list[tuple[float, int, str]] = []
+        for requirement in self._certification_requirements:
+            for order, action_id in enumerate(requirement.outstanding(satisfied)):
+                candidate = by_id.get(action_id)
+                if candidate is None:
+                    continue
+                cost = costs.get(action_id)
+                if cost is None:
+                    continue
+                if not self._budget.affordable(cost, family=candidate.family):
+                    continue
+                eligible.append((float(cost), order, action_id))
+        if not eligible:
+            return None
+        eligible.sort()
+        return by_id[eligible[0][2]]
+
+    def certification_status(
+        self, candidates: Sequence[CandidateAction] = ()
+    ) -> dict[str, str]:
+        """Per-requirement status, derived. Read-only."""
+        satisfied = self._satisfied_certification_actions()
+        reachable = [c.action_id for c in candidates] if candidates else None
+        return {
+            requirement.requirement_id: requirement.status(
+                satisfied, reachable_action_ids=reachable
+            ).value
+            for requirement in self._certification_requirements
+        }
+
+    def adopt_prior_assurance(
+        self, obligation_state: Mapping[str, bool]
+    ) -> CampaignRun:
+        """Begin from evidence admitted before this run object existed.
+
+        The smallest supported entry point for a campaign that continues work
+        already assessed elsewhere. Without it the stopping review short-
+        circuits at "obligations were never assessed" and never reaches the
+        registered criterion — the state in which a certification question
+        actually arises is the one the runner could not be started in.
+
+        This is the existing checkpoint/restore seam with the boilerplate
+        removed; it adds no persistence, no discovery and no replay.
+        """
+        return self.restore(
+            CampaignCheckpoint(
+                run=self._run,
+                events=self._events,
+                budget=self._budget,
+                effects=self._effects,
+                plan=self._plan,
+                obligation_state=dict(obligation_state),
+            )
+        )
 
     def _handle_no_selection(
         self,

@@ -36,6 +36,7 @@ Module layout is deliberately several small pieces rather than one
 from __future__ import annotations
 
 from .budget import BudgetCharge, BudgetExhausted, BudgetLedger
+from .certification import CertificationRequirement, RequirementStatus
 from .checkpoint import (
     CampaignCheckpoint,
     CheckpointStore,
@@ -106,6 +107,8 @@ __all__ = [
     "ChainBroken",
     # budget
     "BudgetLedger",
+    "CertificationRequirement",
+    "RequirementStatus",
     "BudgetCharge",
     "BudgetExhausted",
     # checkpoint
