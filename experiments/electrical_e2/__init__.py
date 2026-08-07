@@ -40,4 +40,9 @@ from __future__ import annotations
 #: checks transitively that every sibling they reach is itself on this list.
 DECISION_PATH_MODULES = ("e2_config", "e2_model", "e2_adequacy")
 
-E2_VERSION = "1.0.0"
+#: Must equal :data:`e2_config.EXPERIMENT_VERSION`. It is duplicated here only
+#: so the package advertises its version without importing the config, and a
+#: regression test asserts the two agree — a package that reported 1.0.0 while
+#: the run it produced was 1.1.0 would misattribute a corrected result to the
+#: superseded rule.
+E2_VERSION = "1.1.0"

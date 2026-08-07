@@ -27,7 +27,7 @@ from pathlib import Path
 
 import numpy as np
 
-from experiments.electrical_e2 import DECISION_PATH_MODULES
+from experiments.electrical_e2 import DECISION_PATH_MODULES, E2_VERSION
 from experiments.electrical_e2 import e2_truth
 from experiments.electrical_e2.e2_adequacy import (
     CERTIFY_ALLOWED_PARAMETERS,
@@ -51,6 +51,7 @@ from experiments.electrical_e2.e2_config import (
     CHALLENGE_ACTIONS,
     E1_CONFIG_HASH,
     E1_FROZEN_FILE_DIGESTS,
+    EXPERIMENT_VERSION,
     K_MIN_EXTREME,
     NULL_SIMULATION_DRAWS,
     SUPERSEDED_CONFIG_HASH,
@@ -138,6 +139,25 @@ def test_1_frozen_e2_config_hash_is_stable():
         SUPERSEDED_CONFIG_HASH
     )
     assert first != SUPERSEDED_CONFIG_HASH
+
+
+def test_1b_package_version_matches_the_preregistered_config_version():
+    """The package must not advertise a version the run did not use.
+
+    E2_VERSION is duplicated in __init__ so the package can report itself
+    without importing the config; a drift between the two would attribute a
+    v1.1.0 result — produced under the corrected joint aggregate — to the
+    superseded v1.0.0 Fisher/chi-square rule, which is the one claim this
+    experiment must never make about itself.
+    """
+    assert E2_VERSION == EXPERIMENT_VERSION
+    assert E2_VERSION == "1.1.0"
+    # ...and the version the artifacts were produced under agrees with both.
+    result = e2_result()
+    assert result["config"]["experiment_version"] == E2_VERSION
+    # The version is inside the config hash, so it cannot drift silently.
+    assert result["config_hash"] == config_hash()
+    assert result["config_hash"] != SUPERSEDED_CONFIG_HASH
 
 
 # =====================================================================
