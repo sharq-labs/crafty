@@ -15,11 +15,43 @@ approximation was ever made.
 
     Strategy cost ratios live in :mod:`strategy_relationships`.
 
-**Status in M2: FIDELITY LEARNING = INSUFFICIENT REAL DATA.** The repository
-contains no genuine low/high-fidelity model pairs — no coarse/fine mesh runs,
-no surrogate-vs-full comparisons, nothing where two rungs computed the same
-quantity at different accuracy. So this module ships the contract and the
-guard, and nothing here has been empirically validated.
+**Status in M2: FIDELITY LEARNING = INSUFFICIENT REAL DATA.** At M2 the
+repository contained no genuine low/high-fidelity model pairs, so this module
+shipped the contract and the guard with nothing empirically validated behind
+them.
+
+**That statement about the repository is now out of date, and the correction
+matters more than the original claim.** The frozen thermal experiments built
+exactly the ladder M2 said did not exist: one 1D conduction model discretized
+at three rungs (coarse 8x10, medium 64x80, reference 512x640 cells x steps),
+computing the same quantity at measured terminal errors of roughly 1.7e-02,
+1.6e-03 and 3.6e-04. T1 established it, T2 showed across repeated draws that
+the coarse rung's bias is systematic rather than a draw artifact, and T3
+priced escalation across it.
+
+The contract below needed no change to carry it. T1 registered its three
+rungs as :class:`FidelityRung` values and its cost ratios as
+``STRUCTURE_TRANSFERABLE`` :class:`ModelFidelityRelationship` values with
+``metric="work_proxy_ratio"``, and :func:`fidelity_corpus_status` then
+reported a real ladder — with no edit to this module. That is the useful
+result: the M2 contract was shaped correctly before there was any data to
+shape it against, and the first real ladder fit it as-is.
+
+Two things are deliberately still absent, and neither is an oversight:
+
+* **No ladder is registered here.** The thermal rungs are constructed by the
+  experiment at run time, not persisted into a production corpus. Registering
+  a frozen experiment's discretization choices as production calibration data
+  is not something any evidence asks for.
+* **No rung carries a cost or an accuracy field.** Cost is already expressible
+  as a relationship ``median_ratio``, which is how T1 recorded it, so a
+  per-rung cost field would be redundant rather than missing. Accuracy stays
+  ``DOMAIN_OWNED`` by the rule below, and T1 explicitly did not route around
+  that: its measured bias lives in the experiment's results, not here.
+
+The consequence for a reader: :func:`fidelity_corpus_status` reports on what
+has been *registered*, which is still nothing. It is not a claim that no
+fidelity evidence exists in this repository. Since T1, it does.
 
 The guard matters more than the contract: :func:`assert_not_a_strategy_identity`
 refuses to let an optimizer name be registered as a fidelity rung, so the
