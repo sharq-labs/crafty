@@ -293,6 +293,13 @@ class BeliefUpdateGateway:
         Suspension, supersession and invalidation all flow through here, so a
         withdrawn claim stops influencing the active view without its history
         being deleted.
+
+        **This path only ever lowers standing.** Restoring a withdrawn claim to
+        active belief is a fresh scientific judgement — it needs a fresh
+        assessment, a fresh Arbiter decision and a fresh authorization — so it
+        must go through :meth:`submit`, where all three are checked. Allowing it
+        here would mean any caller holding the record could re-activate
+        evidence a reviewer had withdrawn, by supplying a sentence of prose.
         """
         evidence = self._require_evidence(candidate)
         known = self._belief.audit_log()
@@ -310,6 +317,24 @@ class BeliefUpdateGateway:
             raise BeliefWriteViolation(
                 f"evidence {evidence.evidence_id!r} changed content while in "
                 f"belief; accepted evidence cannot be silently mutated"
+            )
+
+        # Standing may fall here; it may not rise. Reactivating withdrawn
+        # evidence is a fresh scientific judgement and belongs to the
+        # Critics -> Arbiter -> AdmissionAuthority -> submit() path.
+        current = self._belief._entries.get(evidence.evidence_id)
+        if (
+            evidence.status is BELIEF_BEARING_STATUS
+            and current is not None
+            and current.status is not BELIEF_BEARING_STATUS
+        ):
+            raise AdmissionError(
+                f"evidence {evidence.evidence_id!r} is recorded as "
+                f"{current.status.value} and cannot be returned to "
+                f"{BELIEF_BEARING_STATUS.value} through update_standing(). "
+                f"Reinstating withdrawn evidence requires a fresh assessment, a "
+                f"fresh Arbiter decision and a fresh admission authorization; "
+                f"submit() is the only path that verifies all three."
             )
 
         entry = BeliefEntry(

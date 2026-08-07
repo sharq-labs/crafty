@@ -1,0 +1,56 @@
+name: SRIA Tests
+
+# The authoritative suite. The existing logic-hardening workflow compiles
+# sources and runs a few inline probes; it never invokes pytest and never
+# triggers on an SRIA branch, so nothing was gating this work.
+#
+# Deliberately minimal: one job, one Python, one command — the same command a
+# developer runs locally. A failure here fails the check, which is the whole
+# point of adding it.
+
+on:
+  push:
+    branches:
+      - 'sria/**'
+      - main
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'pyproject.toml'
+      - '.github/workflows/sria-tests.yml'
+  workflow_dispatch:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # Dependencies only, not the project itself. pyproject declares no
+      # [build-system], and a flat layout with both src/ and tests/ at the root
+      # makes `pip install -e .` depend on setuptools auto-discovery. The suite
+      # imports `src.engcore...` through pytest's `pythonpath = ["."]`, which is
+      # exactly how it runs locally, so packaging is not on the path here.
+      - name: Install dependencies
+        run: |
+          python -m pip install --disable-pip-version-check --upgrade pip
+          python -m pip install --disable-pip-version-check \
+            "numpy>=1.26" "scipy>=1.11" "scikit-learn>=1.4" "pint>=0.23" \
+            "pytest>=8.0"
+
+      - name: Show environment
+        run: |
+          python --version
+          python -m pytest --version
+
+      # No -x, no -k, no deselection: the full suite or nothing. Warnings are
+      # shown rather than suppressed so a new one is visible in the log.
+      - name: Run the authoritative test suite
+        run: python -m pytest tests/ -q -rsxX

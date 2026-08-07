@@ -20,6 +20,7 @@ import sys
 from src.engcore.sria import (
     AdmissionAuthorityError,
     AdmissionAuthorityRegistry,
+    AdmissionError,
     BeliefUpdateGateway,
     EvidenceStatus,
 )
@@ -227,13 +228,37 @@ def test_5_stale_authorization_cannot_reactivate_suspended_evidence():
     _raises(AdmissionAuthorityError, gateway.submit, admitted)
     assert len(gateway.belief) == 0
 
-    # Reinstatement requires a fresh Arbiter decision and a fresh authorization.
-    fresh_decision = valid_decision(arbiter, evidence, decision_id="d-fresh")
-    fresh = arbiter.authorize_admission(fresh_decision, evidence)
-    reinstated = suspended.reinstate("measurement did not arrive")
-    gateway.update_standing(reinstated)
-    assert len(gateway.belief) == 1
+    # Nor may a bare lifecycle move. `reinstate()` produces ACCEPTED status
+    # carrying no fresh authorization, and update_standing() only lowers
+    # standing — this is the bypass this test previously asserted as correct.
+    unauthorized = suspended.reinstate("looks fine to me", actor="anyone")
+    assert unauthorized.status is EvidenceStatus.ACCEPTED
+    _raises(AdmissionError, gateway.update_standing, unauthorized)
+    assert len(gateway.belief) == 0
+
+    # ...and submit() refuses it too, because the stale declaration it still
+    # carries no longer binds the mutated record.
+    _raises(AdmissionAuthorityError, gateway.submit, unauthorized)
+    assert len(gateway.belief) == 0
+
+    # The only way back is a fresh decision and a fresh authorization, actually
+    # consumed by submit().
+    fresh_decision = valid_decision(arbiter, suspended, decision_id="d-fresh")
+    fresh = arbiter.authorize_admission(fresh_decision, suspended)
     assert fresh.authorization.decision_id == "d-fresh"
+    reinstated = suspended.admit(fresh, actor="arbiter")
+    gateway.submit(reinstated)
+    assert len(gateway.belief) == 1
+
+    # That fresh authorization is now spent, exactly like the first one.
+    assert (
+        authority.verifies_authorization(
+            fresh.authorization, subject_record_hash=suspended.record_hash
+        )
+        is False
+    )
+    _raises(AdmissionAuthorityError, gateway.submit, reinstated)
+    assert len(gateway.belief) == 1
 
 
 def test_5b_authorization_is_single_use():
@@ -259,16 +284,28 @@ def test_5b_authorization_is_single_use():
 
 
 def test_5c_update_standing_still_works_after_consumption():
-    """Suspension must not require a live authorization."""
+    """Withdrawing standing must not require a live authorization.
+
+    Lowering standing is always available — a reviewer must be able to pull a
+    result without asking anyone for a token. Raising it is the asymmetric
+    half, and needs the full path.
+    """
     _authority, arbiter, gateway, evidence = setup("reg5c")
     decision = valid_decision(arbiter, evidence)
     admitted = evidence.admit(arbiter.authorize_admission(decision, evidence))
     gateway.submit(admitted)
 
-    gateway.update_standing(admitted.suspend("review"))
+    suspended = admitted.suspend("review")
+    gateway.update_standing(suspended)          # no authorization needed
     assert len(gateway.belief) == 0
-    gateway.update_standing(admitted.suspend("review").reinstate("cleared"))
-    assert len(gateway.belief) == 1
+
+    # ...but the same method cannot put it back.
+    _raises(
+        AdmissionError,
+        gateway.update_standing,
+        suspended.reinstate("cleared"),
+    )
+    assert len(gateway.belief) == 0
 
 
 def _all_tests():

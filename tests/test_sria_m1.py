@@ -573,10 +573,13 @@ def test_suspended_evidence_leaves_active_view():
     # The audit trail still records that it once contributed.
     assert len(gateway.belief.audit_log()) == 1
 
-    # Reinstatement restores influence without losing history.
+    # Reinstatement is a fresh scientific judgement, not a lifecycle move.
+    # update_standing() lowers standing only; restoring influence has to go
+    # back through the authorized admission path.
     reinstated = suspended.reinstate("measurement did not arrive")
-    gateway.update_standing(reinstated)
-    assert gateway.belief.supports(key) is True
+    _raises(AdmissionError, gateway.update_standing, reinstated)
+    assert gateway.belief.supports(key) is False
+    assert len(gateway.belief.audit_log()) == 1
 
 
 def test_mutated_evidence_cannot_replace_accepted_evidence():
