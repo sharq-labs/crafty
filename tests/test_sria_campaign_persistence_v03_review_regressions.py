@@ -693,3 +693,48 @@ def test_effect_applied_direct_mutation_cannot_persist_stale_reference() -> None
     assert effects.reference("k") == "reference-A"
     assert latest is not None
     assert latest.effects.reference("k") == effects.reference("k")
+
+
+def test_effect_applied_attribute_rebind_fails_closed() -> None:
+    effects = EffectLedger()
+    effects.mark("k", "reference-A")
+
+    with pytest.raises(ResumeViolation, match="EffectLedger.mark/once"):
+        effects.applied = {"k": "reference-B"}
+
+    assert effects.reference("k") == "reference-A"
+    assert effects.entries_from(0) == (("k", "reference-A"),)
+
+
+def test_checkpoint_record_obligation_state_mutation_fails_closed() -> None:
+    events = CampaignEventLog(RUN_ID)
+    events.append(CampaignEventType.CAMPAIGN_CREATED, iteration=0)
+    budget = BudgetLedger(total_budget=10.0, reserved_validation_budget=1.0)
+    run = CampaignRun(
+        run_id=RUN_ID,
+        campaign_id="v03-review-campaign",
+        state=ExecutionState.READY,
+        iteration=1,
+        max_iterations=1,
+        event_log_digest=events.head_digest,
+    )
+    store = IncrementalCheckpointStore()
+    store.save_state(
+        run=run,
+        events=events,
+        budget=budget,
+        effects=EffectLedger(),
+        obligation_state={"pending-obligation": True},
+    )
+    record = store.latest_record
+    assert record is not None
+    before = record.digest
+
+    with pytest.raises(PersistenceIntegrityError, match="immutable"):
+        record.obligation_state["pending-obligation"] = False
+
+    assert record.obligation_state == {"pending-obligation": True}
+    assert record.digest == before
+    assert store.to_dict()["checkpoints"][-1]["obligation_state"] == {
+        "pending-obligation": True
+    }

@@ -160,11 +160,20 @@ class EffectLedger:
         default_factory=list, init=False, repr=False, compare=False
     )
 
+    def __setattr__(self, name: str, value: Any) -> None:
+        if name == "applied" and name in self.__dict__:
+            raise ResumeViolation(_EffectAppliedMapping._MUTATION_MESSAGE)
+        super().__setattr__(name, value)
+
     def __post_init__(self) -> None:
         # Preserve the frozen ledger's declared mapping semantics exactly. The
         # private journal is only an append-order acceleration and is not part of
         # serialization/equality.
-        self.applied = _EffectAppliedMapping(dict(self.applied))
+        object.__setattr__(
+            self,
+            "applied",
+            _EffectAppliedMapping(dict(self.applied)),
+        )
         self._journal = list(self.applied.items())
 
     def key(self, run_id: str, iteration: int, kind: str, subject: str) -> str:

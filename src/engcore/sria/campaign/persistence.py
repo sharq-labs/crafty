@@ -45,6 +45,39 @@ class PersistenceIntegrityError(ResumeViolation):
     """Stored persistence state cannot be trusted for deterministic resume."""
 
 
+class _ImmutableCheckpointMapping(dict[str, bool]):
+    """Dict-compatible checkpoint payload mapping that rejects mutation."""
+
+    _MUTATION_MESSAGE = "checkpoint record mappings are immutable"
+
+    def _reject_mutation(self, *args: Any, **kwargs: Any) -> None:
+        raise PersistenceIntegrityError(self._MUTATION_MESSAGE)
+
+    def __setitem__(self, key: str, value: bool) -> None:
+        self._reject_mutation()
+
+    def __delitem__(self, key: str) -> None:
+        self._reject_mutation()
+
+    def clear(self) -> None:
+        self._reject_mutation()
+
+    def pop(self, key: str, default: Any = None) -> Any:
+        self._reject_mutation()
+
+    def popitem(self) -> tuple[str, bool]:
+        self._reject_mutation()
+
+    def setdefault(self, key: str, default: bool = False) -> bool:
+        self._reject_mutation()
+
+    def update(self, *args: Any, **kwargs: Any) -> None:
+        self._reject_mutation()
+
+    def __ior__(self, other: Mapping[str, bool]) -> "_ImmutableCheckpointMapping":
+        self._reject_mutation()
+
+
 @dataclass(frozen=True)
 class BudgetDeclaration:
     """Run-level budget configuration stored once rather than per checkpoint."""
@@ -396,7 +429,9 @@ class CampaignCheckpointV3:
         object.__setattr__(
             self,
             "obligation_state",
-            {str(k): bool(v) for k, v in dict(self.obligation_state).items()},
+            _ImmutableCheckpointMapping(
+                {str(k): bool(v) for k, v in dict(self.obligation_state).items()}
+            ),
         )
 
     def _chain_payload(self) -> dict[str, Any]:
