@@ -140,21 +140,13 @@ class CampaignEventLog:
         return tuple(self._events)
 
     def event_at(self, sequence: int) -> CampaignEvent:
-        """Return one event without copying the whole history.
-
-        Core V0.3 persistence uses this to compare the previously committed head
-        in O(1) rather than materializing ``events`` just to inspect one record.
-        It exposes no mutation: :class:`CampaignEvent` itself is frozen.
-        """
+        """Return one absolute sequence entry without copying whole history."""
+        if sequence < 0 or sequence >= len(self._events):
+            raise IndexError("event sequence outside the log")
         return self._events[sequence]
 
     def events_from(self, sequence: int) -> tuple[CampaignEvent, ...]:
-        """Return only the suffix beginning at ``sequence``.
-
-        Checkpoint persistence writes new history only.  Slicing the internal
-        list here costs O(delta) rather than copying the already-persisted O(N)
-        prefix on every checkpoint.
-        """
+        """Return only the suffix beginning at ``sequence``."""
         if sequence < 0 or sequence > len(self._events):
             raise IndexError("event suffix starts outside the log")
         return tuple(self._events[sequence:])
