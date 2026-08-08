@@ -11,7 +11,7 @@ from typing import Any
 
 from .budget import BudgetLedger
 from .checkpoint import EffectLedger
-from .events import CampaignEventLog
+from .events import CampaignEvent, CampaignEventLog
 from .persistence import IncrementalCheckpointStore
 from .runner import CampaignRunner
 
@@ -52,6 +52,13 @@ class IncrementalCampaignRunner(CampaignRunner):
             obligation_state=dict(self._obligation_state),
         )
 
+    @staticmethod
+    def _adopt_events(events: CampaignEventLog) -> CampaignEventLog:
+        frozen_events = tuple(
+            CampaignEvent.from_dict(event.to_dict()) for event in events.events
+        )
+        return CampaignEventLog(events.run_id, frozen_events)
+
     def restore(self, checkpoint):
         """Adopt materialized V0.3 state without replay or re-derivation.
 
@@ -59,9 +66,7 @@ class IncrementalCampaignRunner(CampaignRunner):
         executor-enforced budget-cap declaration that V0.3 persists explicitly.
         """
         self._run = checkpoint.run
-        self._events = CampaignEventLog(
-            checkpoint.run.run_id, checkpoint.events.events
-        )
+        self._events = self._adopt_events(checkpoint.events)
         self._budget = BudgetLedger(
             total_budget=checkpoint.budget.total_budget,
             reserved_validation_budget=checkpoint.budget.reserved_validation_budget,

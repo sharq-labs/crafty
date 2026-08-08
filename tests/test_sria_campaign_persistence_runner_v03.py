@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
+import pytest
+
 from src.engcore.sria.campaign.budget import BudgetLedger
 from src.engcore.sria.campaign.checkpoint import EffectLedger
 from src.engcore.sria.campaign.events import CampaignEventLog, CampaignEventType
@@ -110,3 +112,50 @@ def test_restore_latest_materializes_existing_runner_state_without_replay() -> N
     assert restored._budget.enforced_cap_source == "test executor"
     assert restored._effects.to_dict() == runner._effects.to_dict()
     assert restored._obligation_state == {"adequacy": True}
+
+
+def test_restore_latest_refreezes_adopted_event_history_before_next_checkpoint() -> None:
+    runner = _bare_runner()
+    runner._events.append(
+        CampaignEventType.CAMPAIGN_CREATED,
+        iteration=0,
+        payload={"nested": {"attempts": [1]}},
+    )
+    runner._events.append(
+        CampaignEventType.CAMPAIGN_PAUSED,
+        iteration=0,
+        payload={"reason": "first-save"},
+    )
+    runner._checkpoint()
+
+    restored = object.__new__(IncrementalCampaignRunner)
+    restored._checkpoints = runner._checkpoints
+    restored._recommendations = {}
+    restored._snapshots = {}
+    restored.restore_latest()
+    before = restored._checkpoints.to_dict()["events"]
+
+    with pytest.raises(TypeError, match="campaign event payloads are immutable"):
+        restored.events.events[0].payload["nested"]["attempts"].append(2)
+
+    restored._events.append(
+        CampaignEventType.CAMPAIGN_PAUSED,
+        iteration=0,
+        payload={"reason": "second-save"},
+    )
+    restored._run = CampaignRun(
+        run_id="runner-v03",
+        campaign_id="campaign-v03",
+        state=ExecutionState.READY,
+        iteration=1,
+        max_iterations=3,
+        event_log_digest=restored._events.head_digest,
+    )
+    restored._checkpoint()
+
+    latest = IncrementalCheckpointStore.from_dict(
+        restored._checkpoints.to_dict()
+    ).latest()
+    assert latest is not None
+    assert before[0]["payload"]["nested"]["attempts"] == [1]
+    assert latest.events.events[0].payload["nested"]["attempts"] == [1]
