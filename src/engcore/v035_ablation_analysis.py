@@ -1,8 +1,9 @@
-"""Duplicate-safe statistical analysis for V0.3.5 campaigns.
+"""Strict, campaign-bound statistical analysis for V0.3.5.
 
-V0.3.4 analysis is preserved for reproducibility. This wrapper validates the
-journal before delegating to the registered clustered analysis logic, using the
-V0.3.5 adaptive arm identifier.
+V0.3.4 analysis remains frozen for reproducibility.  This module validates
+V0.3.5 artifacts before delegating the registered function-clustered
+statistical analysis to the V0.3.4 implementation with the V0.3.5 adaptive
+scientific identifier substituted at runtime.
 """
 
 from __future__ import annotations
@@ -10,24 +11,115 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import re
+from collections import Counter
+from numbers import Integral, Real
 from pathlib import Path
 
 
-def validate_journal_uniqueness(path) -> None:
-    """Reject duplicate scientific run records instead of last-write-wins."""
+EXPECTED_ARMS = {
+    "stacked_v0301",
+    "stacked_fresh_weights_v034",
+    "adaptive_stacked_v035",
+}
 
-    seen: set[tuple[str, str]] = set()
-    completion_count = 0
+_PID_RE = re.compile(r"bbob_f(\d+)_i(\d+)_d(\d+)")
 
+
+def _reject_json_constant(token: str):
+    raise ValueError(f"non-standard JSON constant {token!r} is not allowed")
+
+
+def _strict_json_loads(text: str, *, context: str = "JSON"):
+    """Parse JSON while rejecting NaN / Infinity extensions."""
+
+    try:
+        return json.loads(text, parse_constant=_reject_json_constant)
+    except (TypeError, json.JSONDecodeError, ValueError) as exc:
+        raise ValueError(f"invalid strict JSON in {context}: {exc}") from exc
+
+
+def _strict_json_value(value):
+    """Recursively convert non-finite real numbers to JSON ``null``.
+
+    ``numbers.Real`` covers ordinary floats plus NumPy scalar real values
+    without importing NumPy into the artifact layer.  Integral values are kept
+    as integers and booleans retain their JSON boolean semantics.
+    """
+
+    if value is None or isinstance(value, (str, bool)):
+        return value
+    if isinstance(value, Integral):
+        return int(value)
+    if isinstance(value, Real):
+        number = float(value)
+        return number if math.isfinite(number) else None
+    if isinstance(value, dict):
+        return {str(k): _strict_json_value(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_strict_json_value(v) for v in value]
+    return value
+
+
+def strict_json_dumps(value, **kwargs) -> str:
+    """Serialize standards-compliant JSON only."""
+
+    clean = _strict_json_value(value)
+    kwargs.pop("allow_nan", None)
+    return json.dumps(clean, allow_nan=False, **kwargs)
+
+
+def _read_manifest(path: Path) -> dict:
+    if not path.exists():
+        raise ValueError(f"V0.3.5 manifest is missing: {path}")
+    manifest = _strict_json_loads(
+        path.read_text(encoding="utf-8"), context=str(path)
+    )
+    if not isinstance(manifest, dict):
+        raise ValueError("V0.3.5 manifest must be a JSON object")
+    return manifest
+
+
+def _parse_problem_id(problem_id: str) -> tuple[int, int, int]:
+    match = _PID_RE.search(str(problem_id))
+    if match is None:
+        raise ValueError(
+            f"cannot validate problem_id {problem_id!r}; expected BBOB "
+            "identifier containing bbob_f<fn>_i<instance>_d<dim>"
+        )
+    return tuple(int(v) for v in match.groups())
+
+
+def _iter_journal(path: Path):
+    last_line_no = 0
     for line_no, line in enumerate(
-        Path(path).read_text(encoding="utf-8").splitlines(),
-        start=1,
+        path.read_text(encoding="utf-8").splitlines(), start=1
     ):
         if not line.strip():
             continue
-        rec = json.loads(line)
-        kind = rec.get("kind")
+        last_line_no = line_no
+        rec = _strict_json_loads(line, context=f"{path}:{line_no}")
+        if not isinstance(rec, dict):
+            raise ValueError(f"journal line {line_no} is not a JSON object")
+        yield line_no, rec
+    if last_line_no == 0:
+        raise ValueError("journal is empty")
 
+
+def validate_journal_uniqueness(path) -> None:
+    """Reject duplicate run records and multiple completion records.
+
+    This low-level check intentionally does not require a manifest so it can be
+    used in focused unit tests.  Full scientific analysis uses
+    :func:`validate_campaign_integrity` below.
+    """
+
+    path = Path(path)
+    seen: set[tuple[str, str]] = set()
+    completion_count = 0
+
+    for line_no, rec in _iter_journal(path):
+        kind = rec.get("kind")
         if kind == "run":
             key = (str(rec.get("problem_id")), str(rec.get("algorithm")))
             if key in seen:
@@ -46,8 +138,215 @@ def validate_journal_uniqueness(path) -> None:
         )
 
 
+def validate_campaign_integrity(
+    journal_path,
+    manifest_path=None,
+) -> dict:
+    """Validate that one journal belongs to exactly one V0.3.5 campaign.
+
+    The validator binds every record to the manifest's campaign id and checks
+    the registered seed/budget/problem configuration, arm set, exact evaluation
+    accounting, completion placement, and per-arm completion accounting.  This
+    prevents two scientifically different campaigns from being concatenated
+    even when they do not share a direct ``(problem_id, algorithm)`` key.
+    """
+
+    journal_path = Path(journal_path)
+    manifest_path = (
+        Path(manifest_path)
+        if manifest_path is not None
+        else journal_path.parent / "manifest.json"
+    )
+    manifest = _read_manifest(manifest_path)
+
+    if manifest.get("kind") != "v035_ablation_manifest":
+        raise ValueError("manifest kind is not v035_ablation_manifest")
+    if manifest.get("schema") != "ablation-manifest/2":
+        raise ValueError("unsupported V0.3.5 manifest schema")
+
+    campaign_id = str(manifest.get("campaign_id") or "")
+    if not campaign_id:
+        raise ValueError("manifest campaign_id is missing")
+
+    config = manifest.get("config")
+    if not isinstance(config, dict):
+        raise ValueError("manifest config is missing")
+
+    arms = manifest.get("arms")
+    if not isinstance(arms, dict):
+        raise ValueError("manifest arms are missing")
+    manifest_arms = {str(v) for v in arms.values()}
+    if manifest_arms != EXPECTED_ARMS:
+        raise ValueError(
+            f"unexpected V0.3.5 arm set: {sorted(manifest_arms)}"
+        )
+
+    functions = {int(v) for v in config.get("functions", [])}
+    dimensions = {int(v) for v in config.get("dimensions", [])}
+    instances = {int(v) for v in config.get("instances", [])}
+    if not functions or not dimensions or not instances:
+        raise ValueError("manifest functions/dimensions/instances are incomplete")
+
+    budget_multiplier = int(config.get("budget_multiplier", 0))
+    base_seed = int(config.get("base_seed", 0))
+    if budget_multiplier <= 0:
+        raise ValueError("manifest budget_multiplier must be positive")
+
+    expected_cases = len(functions) * len(dimensions) * len(instances)
+    expected_runs = expected_cases * len(EXPECTED_ARMS)
+    if int(manifest.get("expected_cases", -1)) != expected_cases:
+        raise ValueError("manifest expected_cases is inconsistent with config")
+    if int(manifest.get("expected_runs", -1)) != expected_runs:
+        raise ValueError("manifest expected_runs is inconsistent with config")
+
+    seen: set[tuple[str, str]] = set()
+    run_counts: Counter[str] = Counter()
+    failure_counts: Counter[str] = Counter()
+    failure_problem_ids: set[str] = set()
+    completions: list[tuple[int, dict]] = []
+    last_record_line = 0
+    run_records = 0
+
+    def validate_problem_record(rec: dict, *, line_no: int) -> tuple[int, int, int]:
+        problem_id = str(rec.get("problem_id") or "")
+        fn, inst, dim_from_id = _parse_problem_id(problem_id)
+        if fn not in functions or inst not in instances or dim_from_id not in dimensions:
+            raise ValueError(
+                f"journal line {line_no} problem {problem_id!r} is outside "
+                "the manifest campaign configuration"
+            )
+        if "dimension" in rec and int(rec["dimension"]) != dim_from_id:
+            raise ValueError(
+                f"journal line {line_no} dimension disagrees with problem_id"
+            )
+        return fn, inst, dim_from_id
+
+    for line_no, rec in _iter_journal(journal_path):
+        last_record_line = line_no
+        kind = rec.get("kind")
+        if str(rec.get("campaign_id") or "") != campaign_id:
+            raise ValueError(
+                f"journal line {line_no} campaign_id does not match manifest"
+            )
+
+        if kind == "run":
+            run_records += 1
+            algorithm = str(rec.get("algorithm") or "")
+            if algorithm not in EXPECTED_ARMS:
+                raise ValueError(
+                    f"journal line {line_no} has unexpected algorithm {algorithm!r}"
+                )
+
+            problem_id = str(rec.get("problem_id") or "")
+            key = (problem_id, algorithm)
+            if key in seen:
+                raise ValueError(
+                    "duplicate scientific run record at line "
+                    f"{line_no}: problem_id={problem_id!r}, algorithm={algorithm!r}"
+                )
+            seen.add(key)
+
+            fn, inst, dim = validate_problem_record(rec, line_no=line_no)
+            required = ("dimension", "budget", "seed", "evaluations")
+            missing = [name for name in required if name not in rec]
+            if missing:
+                raise ValueError(
+                    f"journal line {line_no} missing run fields: {missing}"
+                )
+
+            budget = int(rec["budget"])
+            seed = int(rec["seed"])
+            evaluations = int(rec["evaluations"])
+            expected_budget = budget_multiplier * dim
+            expected_seed = base_seed + 10000 * inst + 100 * fn + dim
+
+            if budget != expected_budget:
+                raise ValueError(
+                    f"journal line {line_no} budget {budget} != expected "
+                    f"{expected_budget}"
+                )
+            if seed != expected_seed:
+                raise ValueError(
+                    f"journal line {line_no} seed {seed} != expected {expected_seed}"
+                )
+            if evaluations != budget:
+                raise ValueError(
+                    f"journal line {line_no} violates exact budget: "
+                    f"evaluations={evaluations}, budget={budget}"
+                )
+            run_counts[algorithm] += 1
+
+        elif kind == "failure":
+            validate_problem_record(rec, line_no=line_no)
+            arm = str(rec.get("arm") or "")
+            if arm != "_setup" and arm not in EXPECTED_ARMS:
+                raise ValueError(
+                    f"journal line {line_no} has unexpected failure arm {arm!r}"
+                )
+            failure_problem_ids.add(str(rec.get("problem_id")))
+            if arm in EXPECTED_ARMS:
+                failure_counts[arm] += 1
+
+        elif kind == "campaign_complete":
+            completions.append((line_no, rec))
+        else:
+            raise ValueError(
+                f"journal line {line_no} has unknown record kind {kind!r}"
+            )
+
+    if len(completions) != 1:
+        raise ValueError(
+            "V0.3.5 journal must contain exactly one campaign_complete record"
+        )
+    completion_line, completion = completions[0]
+    if completion_line != last_record_line:
+        raise ValueError("campaign_complete must be the final journal record")
+
+    if int(completion.get("completed_runs", -1)) != run_records:
+        raise ValueError("campaign_complete completed_runs does not match journal")
+
+    matched_runs = sum(
+        1 for problem_id, _algorithm in seen
+        if problem_id not in failure_problem_ids
+    )
+    if int(completion.get("matched_runs", -1)) != matched_runs:
+        raise ValueError("campaign_complete matched_runs does not match journal")
+
+    completion_failed = completion.get("failed_cases", {})
+    if not isinstance(completion_failed, dict):
+        raise ValueError("campaign_complete failed_cases must be an object")
+    if set(map(str, completion_failed.keys())) != failure_problem_ids:
+        raise ValueError("campaign_complete failed_cases does not match failures")
+
+    accounting = completion.get("per_arm_accounting")
+    if not isinstance(accounting, dict) or set(accounting) != EXPECTED_ARMS:
+        raise ValueError("campaign_complete per_arm_accounting arm set is invalid")
+
+    for arm in EXPECTED_ARMS:
+        row = accounting[arm]
+        if not isinstance(row, dict):
+            raise ValueError(f"per-arm accounting for {arm} is invalid")
+        completed = int(row.get("completed", -1))
+        failed = int(row.get("failed", -1))
+        attempted = int(row.get("attempted", -1))
+        if completed != run_counts[arm]:
+            raise ValueError(f"per-arm completed count mismatch for {arm}")
+        if failed != failure_counts[arm]:
+            raise ValueError(f"per-arm failed count mismatch for {arm}")
+        if attempted != completed + failed:
+            raise ValueError(f"per-arm attempted count mismatch for {arm}")
+
+    return {
+        "campaign_id": campaign_id,
+        "manifest": manifest,
+        "run_records": run_records,
+        "failure_problem_ids": sorted(failure_problem_ids),
+        "completion": completion,
+    }
+
+
 def analyze(journal_path):
-    validate_journal_uniqueness(journal_path)
+    integrity = validate_campaign_integrity(journal_path)
 
     from . import v034_ablation_analysis as legacy
 
@@ -66,27 +365,16 @@ def analyze(journal_path):
 
     report["kind"] = "v035_ablation_analysis"
     report["schema"] = "ablation-analysis/3"
+    report["campaign_id"] = integrity["campaign_id"]
     report["hardening"] = {
         "duplicate_run_records": "rejected",
-        "multiple_completion_records": "rejected",
+        "mixed_campaign_records": "rejected",
+        "campaign_manifest_binding": "required",
+        "completion_record": "exactly_one_and_final",
         "adaptive_arm": "adaptive_stacked_v035",
         "json_nonfinite_values": "serialized_as_null",
     }
     return report
-
-
-def _strict_json_value(value):
-    """Recursively replace non-finite floats with JSON ``null`` values."""
-
-    if isinstance(value, float):
-        return value if math.isfinite(value) else None
-    if isinstance(value, dict):
-        return {k: _strict_json_value(v) for k, v in value.items()}
-    if isinstance(value, list):
-        return [_strict_json_value(v) for v in value]
-    if isinstance(value, tuple):
-        return [_strict_json_value(v) for v in value]
-    return value
 
 
 def main() -> None:
@@ -100,7 +388,7 @@ def main() -> None:
         Path(args.journal).parent / "ablation_analysis_v035.json"
     )
     out.write_text(
-        json.dumps(report, indent=2, sort_keys=True, allow_nan=False),
+        strict_json_dumps(report, indent=2, sort_keys=True),
         encoding="utf-8",
     )
     print(f"V0.3.5 analysis written: {out}")
