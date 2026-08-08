@@ -451,7 +451,26 @@ comfortably and fails (2), so it earns nothing.
 - No hidden configuration: there are no notebooks, and every number in
   `k1_results.json` derives from the pinned `k1_config.py` plus the recorded
   library versions.
-- Clean-clone execution: see §18/A9 and the closing summary.
+
+**The study was re-executed from the clean clone and its artifacts diffed
+against the committed ones.** The result is the sharpest reproducibility
+statement K1 can make:
+
+| artifact | outcome |
+|---|---|
+| `k1_config_frozen.json` | **byte-identical** |
+| `k1_results.json` | 64 changed lines, **all 64 are `wall_seconds_telemetry`** |
+| `k1_report.md` | 16 changed lines — the wall-clock column of the 8 result rows |
+
+Every scientific number reproduced exactly: every metric, every reference
+residual, every evaluation count, every convergence state, every attained
+level, every acceptance verdict. The only quantity that moved is wall-clock
+time, which this domain declares as telemetry and never as a score — the
+reproducible cost measure is the right-hand-side evaluation count, which is
+deterministic for a fixed declaration and did not move.
+
+That is also a small vindication of the design decision: had wall-clock been
+used as the cost figure anywhere, K1 would not be reproducible.
 
 ## 16. Core changes required
 
@@ -712,6 +731,7 @@ until (1) is settled. But the sequencing above is the stronger recommendation.
 | final commit | the commit adding this section (`git log -1 --format=%H -- docs/kinetics-cstr-k1.md`) |
 | final suite (in-place) | **1066 passed** (957 + 109 K1) |
 | final suite (clean clone) | **1066 passed** |
+| artifacts re-run from the clone | every scientific number identical; only wall-clock telemetry moved (§15) |
 | preregistration hash | `73d09cc0004663409f27edf86fb2bb571bdb7bb78a39203e35ca9c0069d00cb0` |
 | experiment version | `1.0.1` (1.0.0 invalidated — §9) |
 | tracked files modified | **0** |
