@@ -82,12 +82,15 @@ def test_a_key_repeated_many_times_is_reported_once() -> None:
     assert message.count(repeated.key) == 1
 
 
-def test_two_dependencies_differing_only_in_version_are_the_same_key() -> None:
-    """Whatever `key` means is unchanged; this test pins that it is unchanged."""
+def test_two_dependencies_differing_only_in_version_collide() -> None:
+    """`key` is kind:dependency_id — version is not part of it.
+
+    So pinning the same dependency at two versions is a duplicate, not two
+    entries. Worth pinning explicitly: it is the case where "duplicate" is a
+    judgement about identity rather than about a repeated object.
+    """
     first = dependency("model", version="1")
     second = dependency("model", version="2")
-    if first.key == second.key:
-        with pytest.raises(ValueError):
-            snapshot((first, second))
-    else:
-        assert len(snapshot((first, second)).decision_basis) == 2
+    assert first.key == second.key
+    with pytest.raises(ValueError, match="duplicate dependency keys"):
+        snapshot((first, second))
