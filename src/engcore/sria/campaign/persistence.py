@@ -39,6 +39,7 @@ EFFECT_JOURNAL_SCHEMA = schema_string("sria_campaign_effect_journal_entry", 1)
 ITERATION_JOURNAL_SCHEMA = schema_string("sria_campaign_iteration_journal_entry", 1)
 RUN_STATE_SCHEMA = schema_string("sria_campaign_compact_run_state", 1)
 CHECKPOINT_V3_SCHEMA = schema_string("sria_campaign_checkpoint_v3", 2)
+CHECKPOINT_TUPLE_SCHEMA = schema_string("sria_campaign_checkpoint_tuple_payload", 1)
 
 
 class PersistenceIntegrityError(ResumeViolation):
@@ -124,6 +125,13 @@ class _ImmutableCheckpointList(list[Any]):
 
 
 def _freeze_checkpoint_payload(value: Any) -> Any:
+    if (
+        isinstance(value, Mapping)
+        and value.get("schema") == CHECKPOINT_TUPLE_SCHEMA
+    ):
+        if set(value) != {"schema", "items"} or not isinstance(value["items"], list):
+            raise PersistenceIntegrityError("invalid checkpoint tuple payload")
+        return tuple(_freeze_checkpoint_payload(item) for item in value["items"])
     if isinstance(value, Mapping):
         return _ImmutableCheckpointMapping(
             {
@@ -137,6 +145,22 @@ def _freeze_checkpoint_payload(value: Any) -> Any:
         )
     if isinstance(value, tuple):
         return tuple(_freeze_checkpoint_payload(item) for item in value)
+    return value
+
+
+def _encode_checkpoint_payload(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return {
+            str(key): _encode_checkpoint_payload(item)
+            for key, item in sorted(dict(value).items())
+        }
+    if isinstance(value, tuple):
+        return {
+            "schema": CHECKPOINT_TUPLE_SCHEMA,
+            "items": [_encode_checkpoint_payload(item) for item in value],
+        }
+    if isinstance(value, list):
+        return [_encode_checkpoint_payload(item) for item in value]
     return value
 
 
@@ -462,7 +486,9 @@ class CompactRunState:
             "pause_reason": self.pause_reason.value if self.pause_reason else None,
             "failure_reason": self.failure_reason,
             "event_log_digest": self.event_log_digest,
-            "metadata": _thaw_checkpoint_payload(self.metadata),
+            "metadata": _encode_checkpoint_payload(
+                _thaw_checkpoint_payload(self.metadata)
+            ),
         }
 
     @classmethod
@@ -565,7 +591,9 @@ class CampaignCheckpointV3:
             "spent_total": self.spent_total,
             "budget_overrun": self.budget_overrun,
             "plan": (
-                _thaw_checkpoint_payload(self.plan.to_dict()) if self.plan else None
+                _encode_checkpoint_payload(_thaw_checkpoint_payload(self.plan.to_dict()))
+                if self.plan
+                else None
             ),
             "obligation_state": dict(sorted(self.obligation_state.items())),
             "previous_checkpoint_digest": self.previous_checkpoint_digest,
@@ -1273,7 +1301,8 @@ class IncrementalCheckpointStore:
                 else None
             ),
             "events": [
-                _thaw_checkpoint_payload(event.to_dict()) for event in self._events
+                _encode_checkpoint_payload(_thaw_checkpoint_payload(event.to_dict()))
+                for event in self._events
             ],
             "budget_journal": [entry.to_dict() for entry in self._budget_entries],
             "effect_journal": [entry.to_dict() for entry in self._effect_entries],

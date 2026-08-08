@@ -920,7 +920,7 @@ def test_materialized_run_metadata_is_thawed_for_legacy_compatibility() -> None:
     }
 
 
-def test_checkpoint_payload_freezing_preserves_tuple_metadata_types() -> None:
+def test_checkpoint_payload_freezing_preserves_tuple_metadata_types(tmp_path) -> None:
     events = CampaignEventLog(RUN_ID)
     events.append(CampaignEventType.CAMPAIGN_CREATED, iteration=0)
     budget = BudgetLedger(total_budget=10.0, reserved_validation_budget=1.0)
@@ -958,8 +958,21 @@ def test_checkpoint_payload_freezing_preserves_tuple_metadata_types() -> None:
     assert materialized.run.metadata["nested"]["choices"] == ("alpha", "beta")
     assert isinstance(materialized.run.metadata["nested"]["choices"], tuple)
 
+    loaded = IncrementalCheckpointStore.load_from_path(
+        store.save_to_path(tmp_path / "tuple-metadata.json")
+    )
+    loaded_materialized = loaded.latest()
+    assert loaded_materialized is not None
+    assert loaded_materialized.run.metadata["bounds"] == (1, 2)
+    assert isinstance(loaded_materialized.run.metadata["bounds"], tuple)
+    assert loaded_materialized.run.metadata["nested"]["choices"] == (
+        "alpha",
+        "beta",
+    )
+    assert isinstance(loaded_materialized.run.metadata["nested"]["choices"], tuple)
 
-def test_checkpoint_payload_freezing_preserves_tuple_plan_fields() -> None:
+
+def test_checkpoint_payload_freezing_preserves_tuple_plan_fields(tmp_path) -> None:
     events = CampaignEventLog(RUN_ID)
     events.append(CampaignEventType.CAMPAIGN_CREATED, iteration=0)
     budget = BudgetLedger(total_budget=10.0, reserved_validation_budget=1.0)
@@ -994,6 +1007,21 @@ def test_checkpoint_payload_freezing_preserves_tuple_plan_fields() -> None:
     assert isinstance(record.plan.action.action.metadata["bounds"], tuple)
     assert record.plan.snapshot.metadata["choices"] == ("alpha", "beta")
     assert isinstance(record.plan.snapshot.metadata["choices"], tuple)
+
+    loaded = IncrementalCheckpointStore.load_from_path(
+        store.save_to_path(tmp_path / "tuple-plan.json")
+    )
+    loaded_record = loaded.latest_record
+    assert loaded_record is not None
+    assert loaded_record.plan is not None
+    assert loaded_record.plan.action.proposal.assumptions == ()
+    assert isinstance(loaded_record.plan.action.proposal.assumptions, tuple)
+    assert loaded_record.plan.snapshot.active_evidence == ()
+    assert isinstance(loaded_record.plan.snapshot.active_evidence, tuple)
+    assert loaded_record.plan.action.action.metadata["bounds"] == (1, 2)
+    assert isinstance(loaded_record.plan.action.action.metadata["bounds"], tuple)
+    assert loaded_record.plan.snapshot.metadata["choices"] == ("alpha", "beta")
+    assert isinstance(loaded_record.plan.snapshot.metadata["choices"], tuple)
 
 
 def test_materialized_events_are_defensive_copies(tmp_path) -> None:
