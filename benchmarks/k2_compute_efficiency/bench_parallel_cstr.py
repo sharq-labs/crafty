@@ -37,11 +37,19 @@ import argparse
 import json
 import os
 import platform
+import sys
 import time
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Iterable
+
+# Allow direct execution via
+#   py .\benchmarks\k2_compute_efficiency\bench_parallel_cstr.py
+# by adding the repository root to sys.path before importing project packages.
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
 # Must precede NumPy/SciPy imports in this module and in Windows spawn workers.
 for _name in (
@@ -91,17 +99,6 @@ class ScalingRow:
     solver_wall_s_sum: float
 
 
-_INVARIANT_FIELDS = (
-    "succeeded",
-    "usable",
-    "rhs_evaluations",
-    "scipy_nfev",
-    "scipy_njev",
-    "scipy_nlu",
-    "accepted_steps",
-)
-
-
 def _regime(regime_id: str):
     for spec in REGIMES:
         if spec.regime_id == regime_id:
@@ -118,7 +115,7 @@ def _solve_one(payload: tuple[str, int]) -> SolveTelemetry:
     result = solve_reactor(
         run,
         run_id=f"k2-perf-{regime_id.lower()}-{task_index:06d}",
-        software_version="k2-compute-efficiency-benchmark/0.1.0",
+        software_version="k2-compute-efficiency-benchmark/0.1.1",
         source_commit=None,
         core_baseline_commit=None,
         environment={
@@ -128,7 +125,7 @@ def _solve_one(payload: tuple[str, int]) -> SolveTelemetry:
     )
 
     numerics = dict(result.metadata.get("numerics", {}))
-    convergence = result.convergence.value
+    convergence = getattr(result.convergence, "value", str(result.convergence))
     return SolveTelemetry(
         regime_id=regime_id,
         task_index=task_index,
@@ -144,9 +141,7 @@ def _solve_one(payload: tuple[str, int]) -> SolveTelemetry:
     )
 
 
-def _run_batch(
-    regime_id: str, tasks: int, workers: int
-) -> tuple[float, list[SolveTelemetry]]:
+def _run_batch(regime_id: str, tasks: int, workers: int) -> tuple[float, list[SolveTelemetry]]:
     payloads = [(regime_id, i) for i in range(tasks)]
     started = time.perf_counter()
 
@@ -154,9 +149,9 @@ def _run_batch(
         rows = [_solve_one(payload) for payload in payloads]
     else:
         # map() preserves input order and has lower bookkeeping overhead than
-        # one future object per result. chunksize=1 is intentional for the first
-        # characterization: K2 needs the true per-solve granularity before any
-        # task batching policy is introduced.
+        # one future object per result. chunksize=1 is intentional for the
+        # first characterization: K2 needs the true per-solve granularity before
+        # any task batching policy is introduced.
         with ProcessPoolExecutor(max_workers=workers) as executor:
             rows = list(executor.map(_solve_one, payloads, chunksize=1))
 
@@ -167,14 +162,24 @@ def _sum(rows: Iterable[SolveTelemetry], field: str) -> int:
     return sum(int(getattr(row, field)) for row in rows)
 
 
-def _to_scaling_row(
-    regime_id: str,
-    tasks: int,
-    workers: int,
-    wall: float,
-    rows: list[SolveTelemetry],
-    baseline_wall: float,
-) -> ScalingRow:
+def _scientific_signature(rows: list[SolveTelemetry]) -> tuple:
+    return tuple(
+        (
+            row.task_index,
+            row.succeeded,
+            row.usable,
+            row.convergence,
+            row.rhs_evaluations,
+            row.scipy_nfev,
+            row.scipy_njev,
+            row.scipy_nlu,
+            row.accepted_steps,
+        )
+        for row in rows
+    )
+
+
+def _row(regime_id: str, tasks: int, workers: int, wall: float, rows: list[SolveTelemetry], baseline_wall: float) -> ScalingRow:
     speedup = baseline_wall / wall if wall > 0.0 else 0.0
     return ScalingRow(
         regime_id=regime_id,
@@ -193,21 +198,6 @@ def _to_scaling_row(
         accepted_steps=_sum(rows, "accepted_steps"),
         solver_wall_s_sum=sum(row.solver_wall_s for row in rows),
     )
-
-
-def _assert_same_work(baseline: ScalingRow, candidate: ScalingRow) -> None:
-    """Parallelism may change elapsed time, never the numerical work/result."""
-
-    differences = {
-        field: (getattr(baseline, field), getattr(candidate, field))
-        for field in _INVARIANT_FIELDS
-        if getattr(baseline, field) != getattr(candidate, field)
-    }
-    if differences:
-        raise RuntimeError(
-            f"worker={candidate.workers} changed deterministic work/scientific "
-            f"outcomes for {candidate.regime_id}: {differences}"
-        )
 
 
 def _parse_workers(raw: str) -> list[int]:
@@ -270,39 +260,25 @@ def main() -> None:
 
     for regime_id in regimes:
         _regime(regime_id)  # fail before measuring anything
-        baseline_wall, baseline_solves = _run_batch(regime_id, args.tasks, 1)
-        baseline = _to_scaling_row(
-            regime_id,
-            args.tasks,
-            1,
-            baseline_wall,
-            baseline_solves,
-            baseline_wall,
+        baseline_wall, baseline_rows = _run_batch(regime_id, args.tasks, 1)
+        baseline_signature = _scientific_signature(baseline_rows)
+        all_rows.append(
+            _row(regime_id, args.tasks, 1, baseline_wall, baseline_rows, baseline_wall)
         )
-        # Exact one-worker reference by definition.
-        baseline = ScalingRow(
-            **{
-                **asdict(baseline),
-                "speedup_vs_one": 1.0,
-                "parallel_efficiency": 1.0,
-            }
-        )
-        all_rows.append(baseline)
 
         for worker_count in workers:
             if worker_count == 1:
                 continue
-            wall, solves = _run_batch(regime_id, args.tasks, worker_count)
-            row = _to_scaling_row(
-                regime_id,
-                args.tasks,
-                worker_count,
-                wall,
-                solves,
-                baseline_wall,
+            wall, rows = _run_batch(regime_id, args.tasks, worker_count)
+            if _scientific_signature(rows) != baseline_signature:
+                raise RuntimeError(
+                    f"scientific/work-count mismatch for {regime_id} at "
+                    f"{worker_count} workers; parallel execution changed more "
+                    f"than wall time, so this speedup is invalid"
+                )
+            all_rows.append(
+                _row(regime_id, args.tasks, worker_count, wall, rows, baseline_wall)
             )
-            _assert_same_work(baseline, row)
-            all_rows.append(row)
 
     print(
         f"{'Regime':>7} {'Workers':>7} {'Wall(s)':>10} {'solve/s':>11} "
@@ -347,8 +323,8 @@ def main() -> None:
             ),
             "scientific_guard": (
                 "for one regime, deterministic work counts and usable/success "
-                "counts are asserted identical across worker settings; only wall "
-                "time and process execution order may differ"
+                "counts must remain identical across worker settings; only wall "
+                "time/order of process execution may differ"
             ),
         },
     }
