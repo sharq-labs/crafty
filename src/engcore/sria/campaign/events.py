@@ -35,6 +35,190 @@ EVENT_SCHEMA = schema_string("sria_campaign_event")
 EVENT_LOG_SCHEMA = schema_string("sria_campaign_event_log")
 
 
+def _event_payload_snapshot(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            str(key): _event_payload_snapshot(item)
+            for key, item in sorted(dict.items(value))
+        }
+    if isinstance(value, list):
+        return [_event_payload_snapshot(item) for item in list.__iter__(value)]
+    if isinstance(value, tuple):
+        return tuple(_event_payload_snapshot(item) for item in value)
+    return value
+
+
+def _event_payload_fingerprint(value: Any) -> str:
+    return canonical_digest(_event_payload_snapshot(value))
+
+
+class _ImmutableEventMapping(dict[str, Any]):
+    """Dict-compatible event payload mapping that rejects mutation."""
+
+    _MUTATION_MESSAGE = "campaign event payloads are immutable"
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        if getattr(self, "_initialized", False):
+            self._reject_mutation()
+        super().__init__(*args, **kwargs)
+        self._fingerprint = _event_payload_fingerprint(self)
+        self._initialized = True
+
+    def _reject_mutation(self, *args: Any, **kwargs: Any) -> None:
+        raise TypeError(self._MUTATION_MESSAGE)
+
+    def _validate_unchanged(self) -> None:
+        if self._fingerprint != _event_payload_fingerprint(self):
+            self._reject_mutation()
+
+    def __contains__(self, key: object) -> bool:
+        self._validate_unchanged()
+        return dict.__contains__(self, key)
+
+    def __getitem__(self, key: str) -> Any:
+        self._validate_unchanged()
+        return dict.__getitem__(self, key)
+
+    def __iter__(self):
+        self._validate_unchanged()
+        return dict.__iter__(self)
+
+    def __len__(self) -> int:
+        self._validate_unchanged()
+        return dict.__len__(self)
+
+    def __setitem__(self, key: str, value: Any) -> None:
+        self._reject_mutation()
+
+    def __delitem__(self, key: str) -> None:
+        self._reject_mutation()
+
+    def clear(self) -> None:
+        self._reject_mutation()
+
+    def pop(self, key: str, default: Any = None) -> Any:
+        self._reject_mutation()
+
+    def popitem(self) -> tuple[str, Any]:
+        self._reject_mutation()
+
+    def setdefault(self, key: str, default: Any = None) -> Any:
+        self._reject_mutation()
+
+    def update(self, *args: Any, **kwargs: Any) -> None:
+        self._reject_mutation()
+
+    def __ior__(self, other: Mapping[str, Any]) -> "_ImmutableEventMapping":
+        self._reject_mutation()
+
+    def get(self, key: str, default: Any = None) -> Any:
+        self._validate_unchanged()
+        return dict.get(self, key, default)
+
+    def items(self):
+        self._validate_unchanged()
+        return dict.items(self)
+
+    def keys(self):
+        self._validate_unchanged()
+        return dict.keys(self)
+
+    def values(self):
+        self._validate_unchanged()
+        return dict.values(self)
+
+
+class _ImmutableEventList(list[Any]):
+    """List-compatible event payload sequence that rejects mutation."""
+
+    _MUTATION_MESSAGE = "campaign event payloads are immutable"
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        if getattr(self, "_initialized", False):
+            self._reject_mutation()
+        super().__init__(*args, **kwargs)
+        self._fingerprint = _event_payload_fingerprint(self)
+        self._initialized = True
+
+    def _reject_mutation(self, *args: Any, **kwargs: Any) -> None:
+        raise TypeError(self._MUTATION_MESSAGE)
+
+    def _validate_unchanged(self) -> None:
+        if self._fingerprint != _event_payload_fingerprint(self):
+            self._reject_mutation()
+
+    def __getitem__(self, index: Any) -> Any:
+        self._validate_unchanged()
+        return list.__getitem__(self, index)
+
+    def __iter__(self):
+        self._validate_unchanged()
+        return list.__iter__(self)
+
+    def __len__(self) -> int:
+        self._validate_unchanged()
+        return list.__len__(self)
+
+    def __setitem__(self, index: Any, value: Any) -> None:
+        self._reject_mutation()
+
+    def __delitem__(self, index: Any) -> None:
+        self._reject_mutation()
+
+    def append(self, value: Any) -> None:
+        self._reject_mutation()
+
+    def clear(self) -> None:
+        self._reject_mutation()
+
+    def extend(self, values: Any) -> None:
+        self._reject_mutation()
+
+    def insert(self, index: int, value: Any) -> None:
+        self._reject_mutation()
+
+    def pop(self, index: int = -1) -> Any:
+        self._reject_mutation()
+
+    def remove(self, value: Any) -> None:
+        self._reject_mutation()
+
+    def reverse(self) -> None:
+        self._reject_mutation()
+
+    def sort(self, *args: Any, **kwargs: Any) -> None:
+        self._reject_mutation()
+
+    def __iadd__(self, values: Any) -> "_ImmutableEventList":
+        self._reject_mutation()
+
+    def __imul__(self, value: int) -> "_ImmutableEventList":
+        self._reject_mutation()
+
+
+def _freeze_event_payload(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return _ImmutableEventMapping(
+            {str(key): _freeze_event_payload(item) for key, item in dict(value).items()}
+        )
+    if isinstance(value, list | tuple):
+        return _ImmutableEventList([_freeze_event_payload(item) for item in value])
+    return value
+
+
+def _thaw_event_payload(value: Any) -> Any:
+    if isinstance(value, (_ImmutableEventMapping, _ImmutableEventList)):
+        value._validate_unchanged()
+    if isinstance(value, Mapping):
+        return {
+            str(key): _thaw_event_payload(item)
+            for key, item in sorted(dict(value).items())
+        }
+    if isinstance(value, list | tuple):
+        return [_thaw_event_payload(item) for item in value]
+    return value
+
+
 class CampaignEventType(str, Enum):
     """What happened. One member per auditable transition."""
 
@@ -81,7 +265,7 @@ class CampaignEvent:
             raise ValueError("event iteration must be non-negative")
         if not str(self.run_id).strip():
             raise ValueError("campaign event requires a run_id")
-        object.__setattr__(self, "payload", dict(self.payload))
+        object.__setattr__(self, "payload", _freeze_event_payload(self.payload))
 
     @property
     def digest(self) -> str:
@@ -100,7 +284,7 @@ class CampaignEvent:
         }
 
     def to_dict(self) -> dict[str, Any]:
-        return {"schema": EVENT_SCHEMA, **self._chain_payload()}
+        return _thaw_event_payload({"schema": EVENT_SCHEMA, **self._chain_payload()})
 
     @classmethod
     def from_dict(cls, payload: Mapping[str, Any]) -> "CampaignEvent":
@@ -138,6 +322,18 @@ class CampaignEventLog:
     @property
     def events(self) -> tuple[CampaignEvent, ...]:
         return tuple(self._events)
+
+    def event_at(self, sequence: int) -> CampaignEvent:
+        """Return one absolute sequence entry without copying whole history."""
+        if sequence < 0 or sequence >= len(self._events):
+            raise IndexError("event sequence outside the log")
+        return self._events[sequence]
+
+    def events_from(self, sequence: int) -> tuple[CampaignEvent, ...]:
+        """Return only the suffix beginning at ``sequence``."""
+        if sequence < 0 or sequence > len(self._events):
+            raise IndexError("event suffix starts outside the log")
+        return tuple(self._events[sequence:])
 
     def __len__(self) -> int:
         return len(self._events)

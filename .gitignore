@@ -13,6 +13,7 @@ env/
 exdata/
 validation_results/
 ppdata/
+build/
 
 # Local research scratch / one-off diagnostics
 _diag_tmp/

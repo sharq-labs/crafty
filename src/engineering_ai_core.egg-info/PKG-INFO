@@ -1,0 +1,11 @@
+Metadata-Version: 2.4
+Name: engineering-ai-core
+Version: 0.1.0
+Summary: Smart experiment engine proof of concept
+Requires-Python: >=3.11
+Requires-Dist: numpy>=1.26
+Requires-Dist: scipy>=1.11
+Requires-Dist: scikit-learn>=1.4
+Requires-Dist: pint>=0.23
+Provides-Extra: dev
+Requires-Dist: pytest>=8.0; extra == "dev"

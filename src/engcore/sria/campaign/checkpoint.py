@@ -1,31 +1,11 @@
 """M5L — checkpoint, resume and idempotency.
 
 A research campaign spends real compute and admits real scientific evidence, so
-an interrupted run must resume without doing either twice. "Re-run the loop and
-hope it works out" is not a resume strategy: re-executing a completed simulation
-burns budget that was already spent, and re-admitting a processed result would
-add a second belief contribution from one experiment.
-
-The mechanism is one idea applied uniformly. Every side effect that must happen
-at most once is performed through :meth:`EffectLedger.once`, keyed by a
-deterministic string derived from the run, iteration and subject. The ledger
-records the key **and the result reference** before the effect is considered
-done; a repeat call with the same key returns the recorded reference and does
-not invoke the effect.
-
-    execute   run:iter:execute:<action_id>
-    evidence  run:iter:evidence:<action_id>
-    admit     run:iter:admit:<evidence_id>
-    calibrate run:iter:calibrate:<record_id>
-    charge    run:iter:charge:<action_id>
-
-That covers the four duplications the brief names — execution, admission,
-calibration rows, budget — plus M3's single-use authorization, which is
-protected twice over: once by the ledger, and once by the frozen
-``consume_authorization`` in the admission authority itself.
-
-A checkpoint is the run state, the event log, the budget ledger and the effect
-ledger together. Resume rebuilds from the checkpoint and replays nothing.
+an interrupted run must resume without doing either twice. Every side effect
+that must happen at most once is recorded by :class:`EffectLedger` under a
+deterministic key. Legacy serialization remains unchanged; Core V0.3 adds only
+an in-memory append-order view so incremental persistence can read effect deltas
+without rescanning the entire applied mapping at every checkpoint.
 """
 
 from __future__ import annotations
@@ -50,18 +30,7 @@ T = TypeVar("T")
 
 @dataclass(frozen=True)
 class IterationPlan:
-    """The exact artifacts one iteration was decided on, stored before it runs.
-
-    M5 rebuilt these on resume and argued the rebuild was equivalent. M5.1 does
-    not rely on the argument. A decision is made against a specific snapshot, a
-    specific dependency manifest and a specific candidate; if a resume rebuilds
-    any of them it is making a *new* decision wearing the old one's iteration
-    number. Storing the artifacts before execution begins removes the question.
-
-    Nothing here is recomputed on load: the snapshot, manifest, recommendation
-    and selected action are deserialized as recorded, which is also what keeps
-    M4.4 coherence meaningful across a restart.
-    """
+    """The exact artifacts one iteration was decided on, stored before it runs."""
 
     iteration: int
     snapshot: Any
@@ -115,18 +84,12 @@ class IterationPlan:
         from ..decision.replay import ExecutionDependencyManifest
 
         raw_action = payload["action"]
-        action_type = (
-            CompositeAction
-            if "composite_id" in raw_action
-            else AtomicAction
-        )
+        action_type = CompositeAction if "composite_id" in raw_action else AtomicAction
         return cls(
             iteration=int(payload["iteration"]),
             snapshot=BeliefSnapshot.from_dict(payload["snapshot"]),
             manifest=ExecutionDependencyManifest.from_dict(payload["manifest"]),
-            recommendation=DecisionRecommendation.from_dict(
-                payload["recommendation"]
-            ),
+            recommendation=DecisionRecommendation.from_dict(payload["recommendation"]),
             action=action_type.from_dict(raw_action),
             charter_version=payload.get("charter_version", ""),
             campaign_id=payload.get("campaign_id", ""),
@@ -139,16 +102,214 @@ class ResumeViolation(Exception):
     """A resume attempted something the recorded history forbids."""
 
 
+def _effect_payload_snapshot(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            str(key): _effect_payload_snapshot(item)
+            for key, item in sorted(dict.items(value))
+        }
+    if isinstance(value, list):
+        return [_effect_payload_snapshot(item) for item in list.__iter__(value)]
+    if isinstance(value, tuple):
+        return tuple(_effect_payload_snapshot(item) for item in value)
+    return value
+
+
+def _effect_payload_fingerprint(value: Any) -> str:
+    return canonical_digest(_effect_payload_snapshot(value))
+
+
+class _EffectAppliedMapping(dict[str, str]):
+    """Dict-compatible read surface for effect references.
+
+    The V0.2 wire format exposes ``applied`` as a mapping, while V0.3 relies on
+    the private append journal for delta persistence. Public mutation would let
+    those two representations diverge, so only ``EffectLedger`` may append.
+    """
+
+    _MUTATION_MESSAGE = (
+        "effect mapping must be changed through EffectLedger.mark/once"
+    )
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        if getattr(self, "_initialized", False):
+            self._reject_mutation()
+        super().__init__(*args, **kwargs)
+        self._fingerprint = _effect_payload_fingerprint(self)
+        self._initialized = True
+
+    def _reject_mutation(self, *args: Any, **kwargs: Any) -> None:
+        raise ResumeViolation(self._MUTATION_MESSAGE)
+
+    def _validate_unchanged(self) -> None:
+        if self._fingerprint != _effect_payload_fingerprint(self):
+            self._reject_mutation()
+
+    def __contains__(self, key: object) -> bool:
+        self._validate_unchanged()
+        return dict.__contains__(self, key)
+
+    def __getitem__(self, key: str) -> str:
+        self._validate_unchanged()
+        return dict.__getitem__(self, key)
+
+    def __iter__(self):
+        self._validate_unchanged()
+        return dict.__iter__(self)
+
+    def __len__(self) -> int:
+        self._validate_unchanged()
+        return dict.__len__(self)
+
+    def __setitem__(self, key: str, value: str) -> None:
+        self._reject_mutation()
+
+    def __delitem__(self, key: str) -> None:
+        self._reject_mutation()
+
+    def clear(self) -> None:
+        self._reject_mutation()
+
+    def pop(self, key: str, default: Any = None) -> Any:
+        self._reject_mutation()
+
+    def popitem(self) -> tuple[str, str]:
+        self._reject_mutation()
+
+    def setdefault(self, key: str, default: str = "") -> str:
+        self._reject_mutation()
+
+    def update(self, *args: Any, **kwargs: Any) -> None:
+        self._reject_mutation()
+
+    def __ior__(self, other: Mapping[str, str]) -> "_EffectAppliedMapping":
+        self._reject_mutation()
+
+    def get(self, key: str, default: Any = None) -> Any:
+        self._validate_unchanged()
+        return dict.get(self, key, default)
+
+    def items(self):
+        self._validate_unchanged()
+        return dict.items(self)
+
+    def keys(self):
+        self._validate_unchanged()
+        return dict.keys(self)
+
+    def values(self):
+        self._validate_unchanged()
+        return dict.values(self)
+
+    def _record(self, key: str, reference: str) -> None:
+        dict.__setitem__(self, key, reference)
+        self._fingerprint = _effect_payload_fingerprint(self)
+
+
+class _EffectJournal(list[tuple[str, str]]):
+    """Append-order journal that only ``EffectLedger`` may extend."""
+
+    _MUTATION_MESSAGE = "effect journal must be changed through EffectLedger.mark/once"
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        if getattr(self, "_initialized", False):
+            self._reject_mutation()
+        super().__init__(*args, **kwargs)
+        self._fingerprint = _effect_payload_fingerprint(self)
+        self._initialized = True
+
+    def _reject_mutation(self, *args: Any, **kwargs: Any) -> None:
+        raise ResumeViolation(self._MUTATION_MESSAGE)
+
+    def _validate_unchanged(self) -> None:
+        if self._fingerprint != _effect_payload_fingerprint(self):
+            self._reject_mutation()
+
+    def __getitem__(self, index: Any) -> Any:
+        self._validate_unchanged()
+        return list.__getitem__(self, index)
+
+    def __iter__(self):
+        self._validate_unchanged()
+        return list.__iter__(self)
+
+    def __len__(self) -> int:
+        self._validate_unchanged()
+        return list.__len__(self)
+
+    def __setitem__(self, index: Any, value: Any) -> None:
+        self._reject_mutation()
+
+    def __delitem__(self, index: Any) -> None:
+        self._reject_mutation()
+
+    def append(self, value: tuple[str, str]) -> None:
+        self._reject_mutation()
+
+    def clear(self) -> None:
+        self._reject_mutation()
+
+    def extend(self, values: Any) -> None:
+        self._reject_mutation()
+
+    def insert(self, index: int, value: tuple[str, str]) -> None:
+        self._reject_mutation()
+
+    def pop(self, index: int = -1) -> tuple[str, str]:
+        self._reject_mutation()
+
+    def remove(self, value: tuple[str, str]) -> None:
+        self._reject_mutation()
+
+    def reverse(self) -> None:
+        self._reject_mutation()
+
+    def sort(self, *args: Any, **kwargs: Any) -> None:
+        self._reject_mutation()
+
+    def __iadd__(self, values: Any) -> "_EffectJournal":
+        self._reject_mutation()
+
+    def __imul__(self, value: int) -> "_EffectJournal":
+        self._reject_mutation()
+
+    def _record(self, key: str, reference: str) -> None:
+        list.append(self, (key, reference))
+        self._fingerprint = _effect_payload_fingerprint(self)
+
+
 @dataclass
 class EffectLedger:
     """Records which at-most-once effects have already happened.
 
-    Not a cache. A cache may forget; this may not. The distinction matters
-    because forgetting here means executing a simulation twice or admitting one
-    result as two independent pieces of evidence.
+    ``_journal`` is an in-memory V0.3 acceleration only. It is deliberately not
+    serialized, so the frozen V0.2 wire shape and digest semantics are unchanged.
+    Reconstructing it once on load is O(N), which the V0.3 preregistration
+    explicitly permits; persistence can then consume only newly appended effects.
     """
 
     applied: dict[str, str] = field(default_factory=dict)
+    _journal: _EffectJournal = field(
+        default_factory=_EffectJournal, init=False, repr=False, compare=False
+    )
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        if name == "applied" and name in self.__dict__:
+            raise ResumeViolation(_EffectAppliedMapping._MUTATION_MESSAGE)
+        if name == "_journal" and name in self.__dict__:
+            raise ResumeViolation(_EffectJournal._MUTATION_MESSAGE)
+        super().__setattr__(name, value)
+
+    def __post_init__(self) -> None:
+        # Preserve the frozen ledger's declared mapping semantics exactly. The
+        # private journal is only an append-order acceleration and is not part of
+        # serialization/equality.
+        object.__setattr__(
+            self,
+            "applied",
+            _EffectAppliedMapping(dict(self.applied)),
+        )
+        object.__setattr__(self, "_journal", _EffectJournal(self.applied.items()))
 
     def key(self, run_id: str, iteration: int, kind: str, subject: str) -> str:
         return f"{run_id}:{iteration}:{kind}:{subject}"
@@ -159,6 +320,31 @@ class EffectLedger:
     def reference(self, key: str) -> str:
         return self.applied.get(key, "")
 
+    @property
+    def journal_length(self) -> int:
+        return len(self._journal)
+
+    def entry_at(self, index: int) -> tuple[str, str]:
+        """Return one absolute journal entry; negative indexes are not cursors."""
+        if index < 0 or index >= len(self._journal):
+            raise ResumeViolation(
+                f"effect journal index {index} outside 0..{len(self._journal) - 1}"
+            )
+        return self._journal[index]
+
+    def entries_from(self, index: int) -> tuple[tuple[str, str], ...]:
+        """Return effect deltas without rescanning the committed prefix."""
+        if index < 0 or index > len(self._journal):
+            raise ResumeViolation(
+                f"effect journal cursor {index} outside 0..{len(self._journal)}"
+            )
+        if len(self.applied) != len(self._journal):
+            raise ResumeViolation(
+                "effect mapping changed outside EffectLedger.mark/once; "
+                "append history can no longer be trusted"
+            )
+        return tuple(self._journal[index:])
+
     def once(
         self,
         key: str,
@@ -166,17 +352,11 @@ class EffectLedger:
         *,
         reference: Callable[[T], str] = lambda value: "",
     ) -> tuple[T | None, bool]:
-        """Run ``effect`` only if ``key`` has not been applied.
-
-        Returns ``(value, performed)``. On a repeat the value is ``None`` and
-        ``performed`` is ``False`` — the caller is expected to consult
-        :meth:`reference` rather than re-deriving the result, because
-        re-deriving it is exactly what must not happen.
-        """
+        """Run ``effect`` only if ``key`` has not already been applied."""
         if key in self.applied:
             return None, False
         value = effect()
-        self.applied[key] = str(reference(value))
+        self.mark(key, str(reference(value)))
         return value, True
 
     def mark(self, key: str, reference: str = "") -> None:
@@ -186,7 +366,9 @@ class EffectLedger:
                 f"effect {key!r} is already recorded as applied; recording it "
                 f"again would license a duplicate side effect"
             )
-        self.applied[key] = str(reference)
+        ref = str(reference)
+        self.applied._record(key, ref)
+        self._journal._record(key, ref)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -208,15 +390,7 @@ class CampaignCheckpoint:
     events: CampaignEventLog
     budget: BudgetLedger
     effects: EffectLedger
-    #: The in-flight iteration's exact decision artifacts, if one is in flight.
     plan: IterationPlan | None = None
-    #: Which declared validation obligations have been assessed, and how.
-    #:
-    #: Durable because it is *scientific* state, not bookkeeping: it feeds the
-    #: next snapshot's ``obligation_state`` (and therefore its digest), the
-    #: validation-liveness reachability check, and the Arbiter's stopping
-    #: review. Losing it on restart silently rewinds the campaign's assurance
-    #: record to "nothing has ever been assessed".
     obligation_state: Mapping[str, bool] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -265,12 +439,7 @@ class CampaignCheckpoint:
 
 
 class CheckpointStore:
-    """Append-only checkpoint history for one run.
-
-    Keeps every checkpoint rather than overwriting, so a resume can be audited
-    against the state it actually resumed from. ``latest()`` is what a resume
-    reads; the earlier entries are what an auditor reads.
-    """
+    """Append-only legacy checkpoint history for one run."""
 
     def __init__(self) -> None:
         self._checkpoints: list[CampaignCheckpoint] = []
