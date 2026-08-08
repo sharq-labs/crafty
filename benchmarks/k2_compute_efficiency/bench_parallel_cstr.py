@@ -6,8 +6,8 @@ Purpose
 -------
 Measure whether independent, scientifically identical CSTR forward evaluations
 scale usefully across CPU processes before K2 builds inference abstractions on
-top of them.  The benchmark deliberately uses the existing K1 frozen regimes
-and the existing public ``solve_reactor`` lifecycle; it changes no equations,
+top of them. The benchmark deliberately uses the existing K1 frozen regimes and
+the existing public ``solve_reactor`` lifecycle; it changes no equations,
 tolerances, validation rules, solver identities, or scientific semantics.
 
 The primary signals are deterministic work counts plus throughput:
@@ -19,15 +19,16 @@ The primary signals are deterministic work counts plus throughput:
 - wall-clock throughput
 - parallel efficiency relative to the 1-worker measurement
 
-Wall-clock is machine-specific engineering telemetry.  The work counters are
-recorded so a faster run cannot hide extra numerical work.
+Wall-clock is machine-specific engineering telemetry. The work counters are
+recorded and asserted invariant across worker settings so a faster run cannot
+hide extra numerical work or a changed scientific outcome.
 
 Important threading rule
 ------------------------
-Each worker performs tiny 2-state stiff solves.  Process-level parallelism is
-the intended axis; nested BLAS/OpenMP fan-out would oversubscribe a laptop CPU.
-The thread limits below are therefore installed before NumPy/SciPy are imported
-in this process (and again when spawned workers import this module).
+Each worker performs tiny 2-state stiff solves. Process-level parallelism is the
+intended axis; nested BLAS/OpenMP fan-out would oversubscribe a laptop CPU. The
+thread limits below are therefore installed before NumPy/SciPy are imported in
+this process (and again when spawned workers import this module).
 """
 
 from __future__ import annotations
@@ -53,6 +54,7 @@ for _name in (
 
 from experiments.kinetics_k1.k1_config import REGIMES  # noqa: E402
 from src.engcore.domains.kinetics.cstr import solve_reactor  # noqa: E402
+from src.engcore.scientific.solvers.protocol import ConvergenceState  # noqa: E402
 
 
 @dataclass(frozen=True)
@@ -89,6 +91,17 @@ class ScalingRow:
     solver_wall_s_sum: float
 
 
+_INVARIANT_FIELDS = (
+    "succeeded",
+    "usable",
+    "rhs_evaluations",
+    "scipy_nfev",
+    "scipy_njev",
+    "scipy_nlu",
+    "accepted_steps",
+)
+
+
 def _regime(regime_id: str):
     for spec in REGIMES:
         if spec.regime_id == regime_id:
@@ -115,11 +128,11 @@ def _solve_one(payload: tuple[str, int]) -> SolveTelemetry:
     )
 
     numerics = dict(result.metadata.get("numerics", {}))
-    convergence = getattr(result.convergence, "value", str(result.convergence))
+    convergence = result.convergence.value
     return SolveTelemetry(
         regime_id=regime_id,
         task_index=task_index,
-        succeeded=bool(getattr(result, "succeeded", False)),
+        succeeded=(result.convergence is ConvergenceState.CONVERGED),
         usable=bool(result.is_usable),
         convergence=str(convergence),
         rhs_evaluations=int(numerics.get("rhs_evaluations", 0)),
@@ -131,7 +144,9 @@ def _solve_one(payload: tuple[str, int]) -> SolveTelemetry:
     )
 
 
-def _run_batch(regime_id: str, tasks: int, workers: int) -> tuple[float, list[SolveTelemetry]]:
+def _run_batch(
+    regime_id: str, tasks: int, workers: int
+) -> tuple[float, list[SolveTelemetry]]:
     payloads = [(regime_id, i) for i in range(tasks)]
     started = time.perf_counter()
 
@@ -139,9 +154,9 @@ def _run_batch(regime_id: str, tasks: int, workers: int) -> tuple[float, list[So
         rows = [_solve_one(payload) for payload in payloads]
     else:
         # map() preserves input order and has lower bookkeeping overhead than
-        # one future object per result.  chunksize=1 is intentional for the
-        # first characterization: K2 needs the true per-solve granularity before
-        # any task batching policy is introduced.
+        # one future object per result. chunksize=1 is intentional for the first
+        # characterization: K2 needs the true per-solve granularity before any
+        # task batching policy is introduced.
         with ProcessPoolExecutor(max_workers=workers) as executor:
             rows = list(executor.map(_solve_one, payloads, chunksize=1))
 
@@ -152,8 +167,14 @@ def _sum(rows: Iterable[SolveTelemetry], field: str) -> int:
     return sum(int(getattr(row, field)) for row in rows)
 
 
-def _measure(regime_id: str, tasks: int, workers: int, baseline_wall: float) -> ScalingRow:
-    wall, rows = _run_batch(regime_id, tasks, workers)
+def _to_scaling_row(
+    regime_id: str,
+    tasks: int,
+    workers: int,
+    wall: float,
+    rows: list[SolveTelemetry],
+    baseline_wall: float,
+) -> ScalingRow:
     speedup = baseline_wall / wall if wall > 0.0 else 0.0
     return ScalingRow(
         regime_id=regime_id,
@@ -172,6 +193,21 @@ def _measure(regime_id: str, tasks: int, workers: int, baseline_wall: float) -> 
         accepted_steps=_sum(rows, "accepted_steps"),
         solver_wall_s_sum=sum(row.solver_wall_s for row in rows),
     )
+
+
+def _assert_same_work(baseline: ScalingRow, candidate: ScalingRow) -> None:
+    """Parallelism may change elapsed time, never the numerical work/result."""
+
+    differences = {
+        field: (getattr(baseline, field), getattr(candidate, field))
+        for field in _INVARIANT_FIELDS
+        if getattr(baseline, field) != getattr(candidate, field)
+    }
+    if differences:
+        raise RuntimeError(
+            f"worker={candidate.workers} changed deterministic work/scientific "
+            f"outcomes for {candidate.regime_id}: {differences}"
+        )
 
 
 def _parse_workers(raw: str) -> list[int]:
@@ -234,32 +270,39 @@ def main() -> None:
 
     for regime_id in regimes:
         _regime(regime_id)  # fail before measuring anything
-        baseline_wall, baseline_rows = _run_batch(regime_id, args.tasks, 1)
+        baseline_wall, baseline_solves = _run_batch(regime_id, args.tasks, 1)
+        baseline = _to_scaling_row(
+            regime_id,
+            args.tasks,
+            1,
+            baseline_wall,
+            baseline_solves,
+            baseline_wall,
+        )
+        # Exact one-worker reference by definition.
         baseline = ScalingRow(
-            regime_id=regime_id,
-            tasks=args.tasks,
-            workers=1,
-            wall_s=baseline_wall,
-            solves_per_s=(args.tasks / baseline_wall if baseline_wall else 0.0),
-            speedup_vs_one=1.0,
-            parallel_efficiency=1.0,
-            succeeded=sum(row.succeeded for row in baseline_rows),
-            usable=sum(row.usable for row in baseline_rows),
-            rhs_evaluations=_sum(baseline_rows, "rhs_evaluations"),
-            scipy_nfev=_sum(baseline_rows, "scipy_nfev"),
-            scipy_njev=_sum(baseline_rows, "scipy_njev"),
-            scipy_nlu=_sum(baseline_rows, "scipy_nlu"),
-            accepted_steps=_sum(baseline_rows, "accepted_steps"),
-            solver_wall_s_sum=sum(row.solver_wall_s for row in baseline_rows),
+            **{
+                **asdict(baseline),
+                "speedup_vs_one": 1.0,
+                "parallel_efficiency": 1.0,
+            }
         )
         all_rows.append(baseline)
 
         for worker_count in workers:
             if worker_count == 1:
                 continue
-            all_rows.append(
-                _measure(regime_id, args.tasks, worker_count, baseline_wall)
+            wall, solves = _run_batch(regime_id, args.tasks, worker_count)
+            row = _to_scaling_row(
+                regime_id,
+                args.tasks,
+                worker_count,
+                wall,
+                solves,
+                baseline_wall,
             )
+            _assert_same_work(baseline, row)
+            all_rows.append(row)
 
     print(
         f"{'Regime':>7} {'Workers':>7} {'Wall(s)':>10} {'solve/s':>11} "
@@ -304,8 +347,8 @@ def main() -> None:
             ),
             "scientific_guard": (
                 "for one regime, deterministic work counts and usable/success "
-                "counts must remain identical across worker settings; only wall "
-                "time/order of process execution may differ"
+                "counts are asserted identical across worker settings; only wall "
+                "time and process execution order may differ"
             ),
         },
     }
