@@ -193,6 +193,14 @@ class _EffectAppliedMapping(dict[str, str]):
         self._validate_unchanged()
         return dict.items(self)
 
+    def keys(self):
+        self._validate_unchanged()
+        return dict.keys(self)
+
+    def values(self):
+        self._validate_unchanged()
+        return dict.values(self)
+
     def _record(self, key: str, reference: str) -> None:
         dict.__setitem__(self, key, reference)
         self._fingerprint = _effect_payload_fingerprint(self)
