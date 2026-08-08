@@ -32,7 +32,15 @@ class IncrementalCampaignRunner(CampaignRunner):
             raise TypeError(
                 "IncrementalCampaignRunner requires IncrementalCheckpointStore"
             )
+        # The frozen M5 constructor historically selected its default store via
+        # ``checkpoints or CheckpointStore()``. An empty incremental store has
+        # length zero and is therefore falsey, so that legacy expression would
+        # replace the explicitly supplied V0.3 store during construction. No
+        # checkpoint is written by the base constructor; restoring the exact
+        # caller-supplied store immediately afterwards is therefore a narrow
+        # compatibility shim rather than a semantic change to initialization.
         super().__init__(*args, checkpoints=store, **kwargs)
+        self._checkpoints = store
 
     def _checkpoint(self):
         return self._checkpoints.save_state(
