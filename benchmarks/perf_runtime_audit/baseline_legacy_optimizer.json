@@ -1,0 +1,77 @@
+{
+  "dim": 6,
+  "full_loop": {
+    "gp_fits": 22,
+    "seconds": 2.9868927999632433,
+    "traced_peak_bytes": 28869800,
+    "trials_run": 54,
+    "warnings": {
+      "ConvergenceWarning": 29
+    }
+  },
+  "pool": 4096,
+  "steps": [
+    {
+      "distance_tensor_elements": 786432,
+      "distance_tensor_theoretical_bytes": 6291456,
+      "distance_tensor_traced_peak_bytes": 14680448,
+      "duplicate_distance_median_s": 0.006557199987582862,
+      "gp_fit_median_s": 0.052564899960998446,
+      "gp_fit_min_s": 0.04939549998380244,
+      "gp_fit_share": 0.7958626871621582,
+      "history": 32,
+      "predict_and_ei_median_s": 0.006925599998794496,
+      "repeats": 3,
+      "total_step_median_s": 0.0660476999473758,
+      "warnings": {}
+    },
+    {
+      "distance_tensor_elements": 1228800,
+      "distance_tensor_theoretical_bytes": 9830400,
+      "distance_tensor_traced_peak_bytes": 22937984,
+      "duplicate_distance_median_s": 0.010186499974224716,
+      "gp_fit_median_s": 0.09921529999701306,
+      "gp_fit_min_s": 0.09903420001501217,
+      "gp_fit_share": 0.8354803777517226,
+      "history": 50,
+      "predict_and_ei_median_s": 0.009350600012112409,
+      "repeats": 3,
+      "total_step_median_s": 0.11875239998335019,
+      "warnings": {
+        "ConvergenceWarning": 6
+      }
+    },
+    {
+      "distance_tensor_elements": 1843200,
+      "distance_tensor_theoretical_bytes": 14745600,
+      "distance_tensor_traced_peak_bytes": 34406784,
+      "duplicate_distance_median_s": 0.01669309998396784,
+      "gp_fit_median_s": 0.11935490003088489,
+      "gp_fit_min_s": 0.10764190001646057,
+      "gp_fit_share": 0.7957141868603101,
+      "history": 75,
+      "predict_and_ei_median_s": 0.01394919998710975,
+      "repeats": 3,
+      "total_step_median_s": 0.14999720000196248,
+      "warnings": {
+        "ConvergenceWarning": 6
+      }
+    },
+    {
+      "distance_tensor_elements": 2457600,
+      "distance_tensor_theoretical_bytes": 19660800,
+      "distance_tensor_traced_peak_bytes": 45875584,
+      "duplicate_distance_median_s": 0.019580500025767833,
+      "gp_fit_median_s": 0.1548472000285983,
+      "gp_fit_min_s": 0.14195110002765432,
+      "gp_fit_share": 0.8134482742001109,
+      "history": 100,
+      "predict_and_ei_median_s": 0.015931299945805222,
+      "repeats": 3,
+      "total_step_median_s": 0.19035900000017136,
+      "warnings": {
+        "ConvergenceWarning": 6
+      }
+    }
+  ]
+}
