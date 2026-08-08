@@ -6,11 +6,14 @@ import copy
 
 import pytest
 
+from src.engcore.scientific.ir.values import IntegerValue
+from src.engcore.sria.actions import ExecutorType, ResearchAction
 from src.engcore.sria.campaign.budget import BudgetCharge, BudgetLedger
 from src.engcore.sria.campaign.checkpoint import (
     CampaignCheckpoint,
     CheckpointStore,
     EffectLedger,
+    IterationPlan,
     ResumeViolation,
 )
 from src.engcore.sria.campaign.events import (
@@ -28,7 +31,13 @@ from src.engcore.sria.campaign.state import (
     ExecutionState,
     IterationRecord,
 )
-from src.engcore.sria.decision.actions import ActionFamily
+from src.engcore.sria.decision.actions import ActionFamily, ActionProposal, AtomicAction
+from src.engcore.sria.decision.belief_snapshot import BeliefSnapshot
+from src.engcore.sria.decision.recommendation import (
+    DecisionRecommendation,
+    RecommendationOutcome,
+)
+from src.engcore.sria.decision.replay import ExecutionDependencyManifest
 
 RUN_ID = "v03-review-regression"
 
@@ -69,6 +78,55 @@ def _store(n: int = 3) -> IncrementalCheckpointStore:
             effects=effects,
         )
     return store
+
+
+def _review_plan() -> IterationPlan:
+    snapshot = BeliefSnapshot(
+        snapshot_id="review-snapshot",
+        campaign_id="v03-review-campaign",
+        charter_version="1",
+        metadata={"nested": {"attempts": [1]}},
+    )
+    manifest = ExecutionDependencyManifest(
+        snapshot_digest=snapshot.digest,
+        charter_version="1",
+        candidate_set_digest="candidate-set",
+    )
+    action = AtomicAction(
+        action=ResearchAction(
+            action_id="review-action",
+            executor_type=ExecutorType.SIMULATION,
+            target_ref="target",
+            parameters={"replicas": IntegerValue(2)},
+            metadata={"nested": {"attempts": [1]}},
+        ),
+        proposal=ActionProposal(
+            family=ActionFamily.EXPLORE,
+            target_ref="target",
+            rationale="review fixture",
+        ),
+    )
+    recommendation = DecisionRecommendation(
+        recommendation_id="review-recommendation",
+        outcome=RecommendationOutcome.RECOMMEND_ACTION,
+        snapshot_digest=snapshot.digest,
+        campaign_id="v03-review-campaign",
+        charter_version="1",
+        chosen_action_id=action.action_id,
+        chosen_family=action.family,
+        dependency_manifest=manifest,
+        reason="review fixture",
+    )
+    return IterationPlan(
+        iteration=1,
+        snapshot=snapshot,
+        manifest=manifest,
+        recommendation=recommendation,
+        action=action,
+        charter_version="1",
+        campaign_id="v03-review-campaign",
+        predicted_cost=1.0,
+    )
 
 
 def _rechain_checkpoints(payload: dict) -> None:
@@ -781,4 +839,78 @@ def test_checkpoint_record_run_metadata_mutation_fails_closed() -> None:
     assert store.to_dict()["checkpoints"][-1]["run_state"]["metadata"] == {
         "nested": {"attempts": [1, 2], "flags": {"accepted": True}},
         "phase": "ready",
+    }
+
+
+def test_checkpoint_record_plan_mutation_fails_closed() -> None:
+    events = CampaignEventLog(RUN_ID)
+    events.append(CampaignEventType.CAMPAIGN_CREATED, iteration=0)
+    budget = BudgetLedger(total_budget=10.0, reserved_validation_budget=1.0)
+    run = CampaignRun(
+        run_id=RUN_ID,
+        campaign_id="v03-review-campaign",
+        state=ExecutionState.ACTION_SELECTED,
+        iteration=1,
+        max_iterations=1,
+        event_log_digest=events.head_digest,
+    )
+    plan = _review_plan()
+    store = IncrementalCheckpointStore()
+    store.save_state(
+        run=run,
+        events=events,
+        budget=budget,
+        effects=EffectLedger(),
+        plan=plan,
+    )
+
+    plan.action.action.metadata["nested"]["attempts"].append(99)
+    record = store.latest_record
+    assert record is not None
+    assert record.plan is not None
+    before = record.digest
+
+    with pytest.raises(PersistenceIntegrityError, match="immutable"):
+        record.plan.action.action.parameters["replicas"] = IntegerValue(3)
+    with pytest.raises(PersistenceIntegrityError, match="immutable"):
+        record.plan.action.action.metadata["nested"]["attempts"].append(2)
+    with pytest.raises(PersistenceIntegrityError, match="immutable"):
+        record.plan.snapshot.metadata["nested"]["attempts"].append(2)
+
+    assert record.plan.action.action.metadata["nested"]["attempts"] == [1]
+    assert record.plan.snapshot.metadata["nested"]["attempts"] == [1]
+    assert record.digest == before
+    assert store.to_dict()["checkpoints"][-1]["plan"]["action"]["action"][
+        "metadata"
+    ] == {"nested": {"attempts": [1]}}
+
+
+def test_materialized_run_metadata_is_thawed_for_legacy_compatibility() -> None:
+    events = CampaignEventLog(RUN_ID)
+    events.append(CampaignEventType.CAMPAIGN_CREATED, iteration=0)
+    budget = BudgetLedger(total_budget=10.0, reserved_validation_budget=1.0)
+    run = CampaignRun(
+        run_id=RUN_ID,
+        campaign_id="v03-review-campaign",
+        state=ExecutionState.READY,
+        iteration=1,
+        max_iterations=1,
+        event_log_digest=events.head_digest,
+        metadata={"nested": {"attempts": [1]}},
+    )
+    store = IncrementalCheckpointStore()
+    store.save_state(
+        run=run,
+        events=events,
+        budget=budget,
+        effects=EffectLedger(),
+    )
+
+    materialized = store.latest()
+    assert materialized is not None
+    materialized.run.metadata["nested"]["attempts"].append(2)
+
+    assert materialized.run.metadata == {"nested": {"attempts": [1, 2]}}
+    assert store.to_dict()["checkpoints"][-1]["run_state"]["metadata"] == {
+        "nested": {"attempts": [1]}
     }

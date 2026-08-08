@@ -15,7 +15,7 @@ from __future__ import annotations
 import json
 import math
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields, is_dataclass
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -136,6 +136,24 @@ def _freeze_checkpoint_payload(value: Any) -> Any:
             [_freeze_checkpoint_payload(item) for item in value]
         )
     return value
+
+
+def _freeze_checkpoint_object(value: Any) -> Any:
+    if isinstance(value, Mapping) or isinstance(value, list | tuple):
+        return _freeze_checkpoint_payload(value)
+    if is_dataclass(value) and not isinstance(value, type):
+        for item in fields(value):
+            object.__setattr__(
+                value,
+                item.name,
+                _freeze_checkpoint_object(getattr(value, item.name)),
+            )
+    return value
+
+
+def _freeze_checkpoint_plan(plan: IterationPlan) -> IterationPlan:
+    cloned = IterationPlan.from_dict(plan.to_dict())
+    return _freeze_checkpoint_object(cloned)
 
 
 def _thaw_checkpoint_payload(value: Any) -> Any:
@@ -405,7 +423,7 @@ class CompactRunState:
             pause_reason=self.pause_reason,
             failure_reason=self.failure_reason,
             event_log_digest=self.event_log_digest,
-            metadata=self.metadata,
+            metadata=_thaw_checkpoint_payload(self.metadata),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -499,6 +517,8 @@ class CampaignCheckpointV3:
             number = float(getattr(self, label))
             if not math.isfinite(number) or number < 0.0:
                 raise ValueError(f"{label} must be finite and non-negative")
+        if self.plan is not None:
+            object.__setattr__(self, "plan", _freeze_checkpoint_plan(self.plan))
         object.__setattr__(
             self,
             "obligation_state",
@@ -524,7 +544,9 @@ class CampaignCheckpointV3:
             "spent_validation": self.spent_validation,
             "spent_total": self.spent_total,
             "budget_overrun": self.budget_overrun,
-            "plan": self.plan.to_dict() if self.plan else None,
+            "plan": (
+                _thaw_checkpoint_payload(self.plan.to_dict()) if self.plan else None
+            ),
             "obligation_state": dict(sorted(self.obligation_state.items())),
             "previous_checkpoint_digest": self.previous_checkpoint_digest,
         }
