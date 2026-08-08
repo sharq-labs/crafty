@@ -131,10 +131,12 @@ def _freeze_checkpoint_payload(value: Any) -> Any:
                 for key, item in dict(value).items()
             }
         )
-    if isinstance(value, list | tuple):
+    if isinstance(value, list):
         return _ImmutableCheckpointList(
             [_freeze_checkpoint_payload(item) for item in value]
         )
+    if isinstance(value, tuple):
+        return tuple(_freeze_checkpoint_payload(item) for item in value)
     return value
 
 
@@ -172,7 +174,9 @@ def _thaw_checkpoint_payload(value: Any) -> Any:
             str(key): _thaw_checkpoint_payload(item)
             for key, item in sorted(dict(value).items())
         }
-    if isinstance(value, list | tuple):
+    if isinstance(value, tuple):
+        return tuple(_thaw_checkpoint_payload(item) for item in value)
+    if isinstance(value, list):
         return [_thaw_checkpoint_payload(item) for item in value]
     return value
 

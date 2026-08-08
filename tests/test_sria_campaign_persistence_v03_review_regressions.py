@@ -920,6 +920,82 @@ def test_materialized_run_metadata_is_thawed_for_legacy_compatibility() -> None:
     }
 
 
+def test_checkpoint_payload_freezing_preserves_tuple_metadata_types() -> None:
+    events = CampaignEventLog(RUN_ID)
+    events.append(CampaignEventType.CAMPAIGN_CREATED, iteration=0)
+    budget = BudgetLedger(total_budget=10.0, reserved_validation_budget=1.0)
+    run = CampaignRun(
+        run_id=RUN_ID,
+        campaign_id="v03-review-campaign",
+        state=ExecutionState.READY,
+        iteration=1,
+        max_iterations=1,
+        event_log_digest=events.head_digest,
+        metadata={
+            "bounds": (1, 2),
+            "nested": {"choices": ("alpha", "beta")},
+        },
+    )
+    store = IncrementalCheckpointStore()
+    store.save_state(
+        run=run,
+        events=events,
+        budget=budget,
+        effects=EffectLedger(),
+    )
+
+    record = store.latest_record
+    assert record is not None
+    assert record.run_state.metadata["bounds"] == (1, 2)
+    assert isinstance(record.run_state.metadata["bounds"], tuple)
+    assert record.run_state.metadata["nested"]["choices"] == ("alpha", "beta")
+    assert isinstance(record.run_state.metadata["nested"]["choices"], tuple)
+
+    materialized = store.latest()
+    assert materialized is not None
+    assert materialized.run.metadata["bounds"] == (1, 2)
+    assert isinstance(materialized.run.metadata["bounds"], tuple)
+    assert materialized.run.metadata["nested"]["choices"] == ("alpha", "beta")
+    assert isinstance(materialized.run.metadata["nested"]["choices"], tuple)
+
+
+def test_checkpoint_payload_freezing_preserves_tuple_plan_fields() -> None:
+    events = CampaignEventLog(RUN_ID)
+    events.append(CampaignEventType.CAMPAIGN_CREATED, iteration=0)
+    budget = BudgetLedger(total_budget=10.0, reserved_validation_budget=1.0)
+    run = CampaignRun(
+        run_id=RUN_ID,
+        campaign_id="v03-review-campaign",
+        state=ExecutionState.ACTION_SELECTED,
+        iteration=1,
+        max_iterations=1,
+        event_log_digest=events.head_digest,
+    )
+    plan = _review_plan()
+    plan.action.action.metadata["bounds"] = (1, 2)
+    plan.snapshot.metadata["choices"] = ("alpha", "beta")
+    store = IncrementalCheckpointStore()
+    store.save_state(
+        run=run,
+        events=events,
+        budget=budget,
+        effects=EffectLedger(),
+        plan=plan,
+    )
+
+    record = store.latest_record
+    assert record is not None
+    assert record.plan is not None
+    assert record.plan.action.proposal.assumptions == ()
+    assert isinstance(record.plan.action.proposal.assumptions, tuple)
+    assert record.plan.snapshot.active_evidence == ()
+    assert isinstance(record.plan.snapshot.active_evidence, tuple)
+    assert record.plan.action.action.metadata["bounds"] == (1, 2)
+    assert isinstance(record.plan.action.action.metadata["bounds"], tuple)
+    assert record.plan.snapshot.metadata["choices"] == ("alpha", "beta")
+    assert isinstance(record.plan.snapshot.metadata["choices"], tuple)
+
+
 def test_materialized_events_are_defensive_copies(tmp_path) -> None:
     events = CampaignEventLog(RUN_ID)
     events.append(
