@@ -652,13 +652,18 @@ def run_verification_gate(
     numerical by construction.
     """
     from .problem import build_cstr_problem
-    from .solver import CSTRSolver, solve_reactor
+    from .solver import CSTRSolver, TransientTrajectorySample, solve_reactor_bundle
 
     if len(ladder) < 2:
         raise ValueError("a tolerance gate needs at least two rungs to compare")
 
     rows: list[ToleranceRungResult] = []
     finest_result = None
+    #: The finest rung's own trajectory sample, kept from the solve that
+    #: produced it. This is the sample the invariant and stationarity checks
+    #: read; it used to be recovered by integrating the finest rung a second
+    #: time, which is the same arithmetic for the same answer.
+    finest_rung_trajectory = TransientTrajectorySample.empty()
 
     for index, rung in enumerate(ladder):
         refined = run.with_integration(
@@ -669,12 +674,19 @@ def run_verification_gate(
             )
         )
         problem = build_cstr_problem(refined, problem_id=f"{run_id_prefix}-{index}")
-        result = solve_reactor(
+        bundle = solve_reactor_bundle(
             refined,
             run_id=f"{run_id_prefix}-{index}",
             solver=CSTRSolver(),
             problem=problem,
         )
+        result = bundle.result
+        # Keyed on the LAST rung of the ladder, not on the last *usable* one.
+        # The re-solve this replaces was always performed at ladder[-1]'s
+        # tolerances regardless of which rung became the reference, and changing
+        # which trajectory the checks read would change what they report.
+        if index == len(ladder) - 1:
+            finest_rung_trajectory = bundle.trajectory
         converged = bool(result.values)
         # A completed solve is not automatically evidence about accuracy. If
         # the domain refused to call the result usable — an inadmissible state,
@@ -782,15 +794,16 @@ def run_verification_gate(
     else:
         tolerance_detail = "; ".join(reasons)
 
-    # The trajectory sample is re-derived once here and shared by the invariant
-    # and stationarity checks. The result deliberately drops the bulky arrays,
-    # so the gate re-solves rather than widening the result contract to carry
-    # thousands of points into every record — and re-solving once is cheaper
-    # than the three separate re-solves the checks would otherwise each need.
+    # The trajectory sample is the one the finest rung already produced, kept
+    # from that solve and shared by the invariant and stationarity checks. It is
+    # NOT re-derived: the gate used to integrate the finest rung a second time
+    # purely to recover arrays the result had discarded, which was the same
+    # arithmetic reaching the same answer. The result contract is unchanged —
+    # the sample rides beside it in a domain-local bundle, not inside it.
     if finest_result is not None:
-        sample_times, sample_concentration, sample_temperature = _resample_finest(
-            run, ladder[-1], run_id_prefix
-        )
+        sample_times = finest_rung_trajectory.time_s
+        sample_concentration = finest_rung_trajectory.concentration_mol_per_m3
+        sample_temperature = finest_rung_trajectory.temperature_k
     else:
         sample_times = sample_concentration = sample_temperature = np.array([])
 
@@ -1004,42 +1017,6 @@ def run_verification_gate(
         tolerance_rel_tol=tolerance_rel_tol,
         invariant_rel_tol=invariant_rel_tol,
         steady_state_rel_tol=steady_state_rel_tol,
-    )
-
-
-def _resample_finest(
-    run: "ReactorRun", rung: ToleranceRung, run_id_prefix: str
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Re-solve at the finest rung and return its uniform trajectory sample.
-
-    The bulky arrays are deliberately stripped from ``ScientificResult``, so the
-    gate re-derives them here rather than widening the result contract to carry
-    thousands of points into every record.
-    """
-    from .problem import build_cstr_problem
-    from .solver import CSTRSolver
-
-    refined = run.with_integration(
-        run.integration.with_tolerances(
-            rtol=rung.rtol,
-            atol_concentration=rung.atol_concentration,
-            atol_temperature=rung.atol_temperature,
-        )
-    )
-    solver = CSTRSolver()
-    problem = build_cstr_problem(refined, problem_id=f"{run_id_prefix}-resample")
-    solver.bind_run(refined, problem.problem_id)
-    prepared = solver.prepare(problem)
-    raw = solver.solve(prepared)
-    return (
-        np.asarray(raw.diagnostics.get("grid_time_s", ()), dtype=np.float64),
-        np.asarray(
-            raw.diagnostics.get("grid_concentration_mol_per_m3", ()),
-            dtype=np.float64,
-        ),
-        np.asarray(
-            raw.diagnostics.get("grid_temperature_k", ()), dtype=np.float64
-        ),
     )
 
 
