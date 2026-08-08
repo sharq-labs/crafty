@@ -914,3 +914,75 @@ def test_materialized_run_metadata_is_thawed_for_legacy_compatibility() -> None:
     assert store.to_dict()["checkpoints"][-1]["run_state"]["metadata"] == {
         "nested": {"attempts": [1]}
     }
+
+
+def test_materialized_events_are_defensive_copies(tmp_path) -> None:
+    events = CampaignEventLog(RUN_ID)
+    events.append(
+        CampaignEventType.CAMPAIGN_CREATED,
+        iteration=0,
+        payload={"nested": {"attempts": [1]}},
+    )
+    budget = BudgetLedger(total_budget=10.0, reserved_validation_budget=1.0)
+    run = CampaignRun(
+        run_id=RUN_ID,
+        campaign_id="v03-review-campaign",
+        state=ExecutionState.READY,
+        iteration=1,
+        max_iterations=1,
+        event_log_digest=events.head_digest,
+    )
+    store = IncrementalCheckpointStore()
+    store.save_state(
+        run=run,
+        events=events,
+        budget=budget,
+        effects=EffectLedger(),
+    )
+    before = copy.deepcopy(store.to_dict()["events"])
+
+    materialized = store.latest()
+    assert materialized is not None
+    materialized.events.events[0].payload["nested"]["attempts"].append(2)
+
+    with pytest.raises(PersistenceIntegrityError, match="immutable"):
+        store._events[0].payload["nested"]["attempts"].append(3)
+
+    assert materialized.events.events[0].payload["nested"]["attempts"] == [1, 2]
+    assert store.to_dict()["events"] == before
+    assert store.verify_committed()
+    path = store.save_to_path(tmp_path / "checkpoint.json")
+    assert IncrementalCheckpointStore.load_from_path(path).verify_committed()
+
+
+def test_saved_events_do_not_share_caller_payload() -> None:
+    payload = {"nested": {"attempts": [1]}}
+    events = CampaignEventLog(RUN_ID)
+    events.append(
+        CampaignEventType.CAMPAIGN_CREATED,
+        iteration=0,
+        payload=payload,
+    )
+    budget = BudgetLedger(total_budget=10.0, reserved_validation_budget=1.0)
+    run = CampaignRun(
+        run_id=RUN_ID,
+        campaign_id="v03-review-campaign",
+        state=ExecutionState.READY,
+        iteration=1,
+        max_iterations=1,
+        event_log_digest=events.head_digest,
+    )
+    store = IncrementalCheckpointStore()
+    store.save_state(
+        run=run,
+        events=events,
+        budget=budget,
+        effects=EffectLedger(),
+    )
+    before = copy.deepcopy(store.to_dict()["events"])
+
+    payload["nested"]["attempts"].append(2)
+    events.events[0].payload["nested"]["attempts"].append(3)
+
+    assert store.to_dict()["events"] == before
+    assert store.verify_committed()

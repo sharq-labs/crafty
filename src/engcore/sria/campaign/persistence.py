@@ -156,6 +156,16 @@ def _freeze_checkpoint_plan(plan: IterationPlan) -> IterationPlan:
     return _freeze_checkpoint_object(cloned)
 
 
+def _freeze_checkpoint_event(event: CampaignEvent) -> CampaignEvent:
+    cloned = CampaignEvent.from_dict(_thaw_checkpoint_payload(event.to_dict()))
+    object.__setattr__(
+        cloned,
+        "payload",
+        _freeze_checkpoint_payload(cloned.payload),
+    )
+    return cloned
+
+
 def _thaw_checkpoint_payload(value: Any) -> Any:
     if isinstance(value, Mapping):
         return {
@@ -165,6 +175,10 @@ def _thaw_checkpoint_payload(value: Any) -> Any:
     if isinstance(value, list | tuple):
         return [_thaw_checkpoint_payload(item) for item in value]
     return value
+
+
+def _thaw_checkpoint_event(event: CampaignEvent) -> CampaignEvent:
+    return CampaignEvent.from_dict(_thaw_checkpoint_payload(event.to_dict()))
 
 
 @dataclass(frozen=True)
@@ -722,7 +736,8 @@ class IncrementalCheckpointStore:
                 raise PersistenceIntegrityError("event belongs to a different run")
             if event.prev_digest != previous:
                 raise PersistenceIntegrityError("new event does not follow persisted head")
-            self._events.append(event)
+            stored = _freeze_checkpoint_event(event)
+            self._events.append(stored)
             previous = event.digest
 
     def _sync_budget(
@@ -1209,7 +1224,10 @@ class IncrementalCheckpointStore:
 
         events = CampaignEventLog(
             self._run_id,
-            tuple(self._events[: checkpoint.event_count]),
+            tuple(
+                _thaw_checkpoint_event(event)
+                for event in self._events[: checkpoint.event_count]
+            ),
         )
         if self._budget_declaration is None:
             raise PersistenceIntegrityError("store has no budget declaration")
@@ -1248,7 +1266,9 @@ class IncrementalCheckpointStore:
                 if self._budget_declaration is not None
                 else None
             ),
-            "events": [event.to_dict() for event in self._events],
+            "events": [
+                _thaw_checkpoint_payload(event.to_dict()) for event in self._events
+            ],
             "budget_journal": [entry.to_dict() for entry in self._budget_entries],
             "effect_journal": [entry.to_dict() for entry in self._effect_entries],
             "iteration_journal": [entry.to_dict() for entry in self._iteration_entries],
@@ -1268,7 +1288,8 @@ class IncrementalCheckpointStore:
         )
         store = cls(run_id=payload.get("run_id", ""), budget_declaration=declaration)
         store._events = [
-            CampaignEvent.from_dict(item) for item in payload.get("events", ())
+            _freeze_checkpoint_event(CampaignEvent.from_dict(item))
+            for item in payload.get("events", ())
         ]
         store._budget_entries = [
             BudgetJournalEntry.from_dict(item)
