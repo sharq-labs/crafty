@@ -548,3 +548,148 @@ def test_absolute_effect_cursor_rejects_negative_index() -> None:
     effects.mark("one", "ref")
     with pytest.raises(ResumeViolation, match="outside"):
         effects.entry_at(-1)
+
+
+def test_effect_applied_direct_overwrite_fails_closed() -> None:
+    effects = EffectLedger(applied={"k": "A"})
+
+    with pytest.raises(ResumeViolation, match="EffectLedger.mark/once"):
+        effects.applied["k"] = "B"
+
+    assert effects.reference("k") == "A"
+    assert effects.is_applied("k") is True
+    assert effects.entries_from(0) == (("k", "A"),)
+
+
+def test_effect_applied_direct_delete_fails_closed() -> None:
+    effects = EffectLedger(applied={"k": "A"})
+
+    with pytest.raises(ResumeViolation, match="EffectLedger.mark/once"):
+        del effects.applied["k"]
+
+    assert effects.reference("k") == "A"
+    assert effects.entries_from(0) == (("k", "A"),)
+
+
+def test_effect_applied_direct_addition_fails_closed() -> None:
+    effects = EffectLedger(applied={"k": "A"})
+
+    with pytest.raises(ResumeViolation, match="EffectLedger.mark/once"):
+        effects.applied["new"] = "B"
+
+    assert effects.reference("new") == ""
+    assert effects.entries_from(0) == (("k", "A"),)
+
+
+def test_effect_applied_bulk_update_fails_closed() -> None:
+    effects = EffectLedger(applied={"k": "A"})
+
+    with pytest.raises(ResumeViolation, match="EffectLedger.mark/once"):
+        effects.applied.update({"new": "B"})
+
+    assert effects.reference("new") == ""
+    assert effects.entries_from(0) == (("k", "A"),)
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda applied: applied.clear(),
+        lambda applied: applied.pop("k"),
+        lambda applied: applied.popitem(),
+        lambda applied: applied.setdefault("new", "B"),
+        lambda applied: applied.__ior__({"new": "B"}),
+    ],
+)
+def test_effect_applied_other_mutators_fail_closed(mutate) -> None:
+    effects = EffectLedger(applied={"k": "A"})
+
+    with pytest.raises(ResumeViolation, match="EffectLedger.mark/once"):
+        mutate(effects.applied)
+
+    assert effects.reference("k") == "A"
+    assert effects.entries_from(0) == (("k", "A"),)
+
+
+def test_effect_mark_still_updates_mapping_and_journal_once() -> None:
+    effects = EffectLedger(applied={"k": "A"})
+
+    effects.mark("new", "B")
+
+    assert effects.reference("new") == "B"
+    assert effects.applied == {"k": "A", "new": "B"}
+    assert effects.entries_from(0) == (("k", "A"), ("new", "B"))
+    assert effects.entries_from(1) == (("new", "B"),)
+
+
+def test_effect_once_still_uses_mark_and_preserves_duplicate_semantics() -> None:
+    effects = EffectLedger(applied={"k": "A"})
+
+    value, performed = effects.once("new", lambda: "payload", reference=lambda v: v)
+    duplicate, duplicated = effects.once("k", lambda: "must-not-run")
+
+    assert (value, performed) == ("payload", True)
+    assert (duplicate, duplicated) == (None, False)
+    assert effects.reference("new") == "payload"
+    assert effects.entries_from(1) == (("new", "payload"),)
+
+
+def test_effect_ledger_v03_checkpoint_round_trip_preserves_references() -> None:
+    events = CampaignEventLog(RUN_ID)
+    events.append(CampaignEventType.CAMPAIGN_CREATED, iteration=0)
+    budget = BudgetLedger(total_budget=10.0, reserved_validation_budget=1.0)
+    effects = EffectLedger()
+    effects.mark("effect:execute", "execution-ref")
+    effects.mark("effect:admit", "evidence-ref")
+    run = CampaignRun(
+        run_id=RUN_ID,
+        campaign_id="v03-review-campaign",
+        state=ExecutionState.READY,
+        iteration=1,
+        max_iterations=1,
+        event_log_digest=events.head_digest,
+    )
+    store = IncrementalCheckpointStore()
+
+    store.save_state(run=run, events=events, budget=budget, effects=effects)
+    restored = IncrementalCheckpointStore.from_dict(copy.deepcopy(store.to_dict()))
+    latest = restored.latest()
+
+    assert latest is not None
+    assert latest.effects.reference("effect:execute") == "execution-ref"
+    assert latest.effects.reference("effect:admit") == "evidence-ref"
+    assert latest.effects.to_dict() == {
+        "schema": effects.to_dict()["schema"],
+        "applied": {
+            "effect:admit": "evidence-ref",
+            "effect:execute": "execution-ref",
+        },
+    }
+
+
+def test_effect_applied_direct_mutation_cannot_persist_stale_reference() -> None:
+    events = CampaignEventLog(RUN_ID)
+    events.append(CampaignEventType.CAMPAIGN_CREATED, iteration=0)
+    budget = BudgetLedger(total_budget=10.0, reserved_validation_budget=1.0)
+    effects = EffectLedger()
+    effects.mark("k", "reference-A")
+
+    with pytest.raises(ResumeViolation, match="EffectLedger.mark/once"):
+        effects.applied["k"] = "reference-B"
+
+    run = CampaignRun(
+        run_id=RUN_ID,
+        campaign_id="v03-review-campaign",
+        state=ExecutionState.READY,
+        iteration=1,
+        max_iterations=1,
+        event_log_digest=events.head_digest,
+    )
+    store = IncrementalCheckpointStore()
+    store.save_state(run=run, events=events, budget=budget, effects=effects)
+    restored = IncrementalCheckpointStore.from_dict(copy.deepcopy(store.to_dict()))
+    latest = restored.latest()
+
+    assert effects.reference("k") == "reference-A"
+    assert latest is not None
+    assert latest.effects.reference("k") == effects.reference("k")

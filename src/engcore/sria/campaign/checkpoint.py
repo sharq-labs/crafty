@@ -102,6 +102,49 @@ class ResumeViolation(Exception):
     """A resume attempted something the recorded history forbids."""
 
 
+class _EffectAppliedMapping(dict[str, str]):
+    """Dict-compatible read surface for effect references.
+
+    The V0.2 wire format exposes ``applied`` as a mapping, while V0.3 relies on
+    the private append journal for delta persistence. Public mutation would let
+    those two representations diverge, so only ``EffectLedger`` may append.
+    """
+
+    _MUTATION_MESSAGE = (
+        "effect mapping must be changed through EffectLedger.mark/once"
+    )
+
+    def _reject_mutation(self, *args: Any, **kwargs: Any) -> None:
+        raise ResumeViolation(self._MUTATION_MESSAGE)
+
+    def __setitem__(self, key: str, value: str) -> None:
+        self._reject_mutation()
+
+    def __delitem__(self, key: str) -> None:
+        self._reject_mutation()
+
+    def clear(self) -> None:
+        self._reject_mutation()
+
+    def pop(self, key: str, default: Any = None) -> Any:
+        self._reject_mutation()
+
+    def popitem(self) -> tuple[str, str]:
+        self._reject_mutation()
+
+    def setdefault(self, key: str, default: str = "") -> str:
+        self._reject_mutation()
+
+    def update(self, *args: Any, **kwargs: Any) -> None:
+        self._reject_mutation()
+
+    def __ior__(self, other: Mapping[str, str]) -> "_EffectAppliedMapping":
+        self._reject_mutation()
+
+    def _record(self, key: str, reference: str) -> None:
+        dict.__setitem__(self, key, reference)
+
+
 @dataclass
 class EffectLedger:
     """Records which at-most-once effects have already happened.
@@ -121,7 +164,7 @@ class EffectLedger:
         # Preserve the frozen ledger's declared mapping semantics exactly. The
         # private journal is only an append-order acceleration and is not part of
         # serialization/equality.
-        self.applied = dict(self.applied)
+        self.applied = _EffectAppliedMapping(dict(self.applied))
         self._journal = list(self.applied.items())
 
     def key(self, run_id: str, iteration: int, kind: str, subject: str) -> str:
@@ -180,7 +223,7 @@ class EffectLedger:
                 f"again would license a duplicate side effect"
             )
         ref = str(reference)
-        self.applied[key] = ref
+        self.applied._record(key, ref)
         self._journal.append((key, ref))
 
     def to_dict(self) -> dict[str, Any]:
