@@ -12,7 +12,7 @@ import argparse
 import json
 import math
 import re
-from collections import Counter
+from collections import Counter, defaultdict
 from numbers import Integral, Real
 from pathlib import Path
 
@@ -43,7 +43,7 @@ def _strict_json_value(value):
     """Recursively convert non-finite real numbers to JSON ``null``.
 
     ``numbers.Real`` covers ordinary floats plus NumPy scalar real values
-    without importing NumPy into the artifact layer.  Integral values are kept
+    without importing NumPy into the artifact layer. Integral values are kept
     as integers and booleans retain their JSON boolean semantics.
     """
 
@@ -110,7 +110,7 @@ def validate_journal_uniqueness(path) -> None:
     """Reject duplicate run records and multiple completion records.
 
     This low-level check intentionally does not require a manifest so it can be
-    used in focused unit tests.  Full scientific analysis uses
+    used in focused unit tests. Full scientific analysis uses
     :func:`validate_campaign_integrity` below.
     """
 
@@ -144,11 +144,11 @@ def validate_campaign_integrity(
 ) -> dict:
     """Validate that one journal belongs to exactly one V0.3.5 campaign.
 
-    The validator binds every record to the manifest's campaign id and checks
-    the registered seed/budget/problem configuration, arm set, exact evaluation
-    accounting, completion placement, and per-arm completion accounting.  This
-    prevents two scientifically different campaigns from being concatenated
-    even when they do not share a direct ``(problem_id, algorithm)`` key.
+    Every record is bound to the manifest's campaign id. The validator checks
+    configured problem membership, seed and budget formulas, exact evaluation
+    counts, a complete rectangular arm matrix (or explicit failures), one final
+    completion record, and per-arm accounting. This rejects concatenated,
+    cropped, or scientifically mixed campaign journals before inference.
     """
 
     journal_path = Path(journal_path)
@@ -203,6 +203,9 @@ def validate_campaign_integrity(
     run_counts: Counter[str] = Counter()
     failure_counts: Counter[str] = Counter()
     failure_problem_ids: set[str] = set()
+    run_arms_by_problem: dict[str, set[str]] = defaultdict(set)
+    failure_arms_by_problem: dict[str, set[str]] = defaultdict(set)
+    observed_case_ids: dict[tuple[int, int, int], str] = {}
     completions: list[tuple[int, dict]] = []
     last_record_line = 0
     run_records = 0
@@ -210,16 +213,24 @@ def validate_campaign_integrity(
     def validate_problem_record(rec: dict, *, line_no: int) -> tuple[int, int, int]:
         problem_id = str(rec.get("problem_id") or "")
         fn, inst, dim_from_id = _parse_problem_id(problem_id)
+        case_key = (fn, inst, dim_from_id)
         if fn not in functions or inst not in instances or dim_from_id not in dimensions:
             raise ValueError(
                 f"journal line {line_no} problem {problem_id!r} is outside "
                 "the manifest campaign configuration"
             )
+        previous_id = observed_case_ids.get(case_key)
+        if previous_id is not None and previous_id != problem_id:
+            raise ValueError(
+                f"journal line {line_no} aliases campaign case {case_key} "
+                f"with two problem ids: {previous_id!r}, {problem_id!r}"
+            )
+        observed_case_ids[case_key] = problem_id
         if "dimension" in rec and int(rec["dimension"]) != dim_from_id:
             raise ValueError(
                 f"journal line {line_no} dimension disagrees with problem_id"
             )
-        return fn, inst, dim_from_id
+        return case_key
 
     for line_no, rec in _iter_journal(journal_path):
         last_record_line = line_no
@@ -245,6 +256,7 @@ def validate_campaign_integrity(
                     f"{line_no}: problem_id={problem_id!r}, algorithm={algorithm!r}"
                 )
             seen.add(key)
+            run_arms_by_problem[problem_id].add(algorithm)
 
             fn, inst, dim = validate_problem_record(rec, line_no=line_no)
             required = ("dimension", "budget", "seed", "evaluations")
@@ -278,12 +290,14 @@ def validate_campaign_integrity(
 
         elif kind == "failure":
             validate_problem_record(rec, line_no=line_no)
+            problem_id = str(rec.get("problem_id"))
             arm = str(rec.get("arm") or "")
             if arm != "_setup" and arm not in EXPECTED_ARMS:
                 raise ValueError(
                     f"journal line {line_no} has unexpected failure arm {arm!r}"
                 )
-            failure_problem_ids.add(str(rec.get("problem_id")))
+            failure_problem_ids.add(problem_id)
+            failure_arms_by_problem[problem_id].add(arm)
             if arm in EXPECTED_ARMS:
                 failure_counts[arm] += 1
 
@@ -292,6 +306,36 @@ def validate_campaign_integrity(
         else:
             raise ValueError(
                 f"journal line {line_no} has unknown record kind {kind!r}"
+            )
+
+    if len(observed_case_ids) != expected_cases:
+        raise ValueError(
+            f"journal covers {len(observed_case_ids)} campaign cases, "
+            f"expected {expected_cases}"
+        )
+
+    for problem_id in observed_case_ids.values():
+        run_arms = run_arms_by_problem.get(problem_id, set())
+        failure_arms = failure_arms_by_problem.get(problem_id, set())
+        if "_setup" in failure_arms:
+            if run_arms or (failure_arms - {"_setup"}):
+                raise ValueError(
+                    f"setup-failed problem {problem_id} also contains arm records"
+                )
+            continue
+
+        attempted_arms = run_arms | failure_arms
+        if attempted_arms != EXPECTED_ARMS:
+            missing = sorted(EXPECTED_ARMS - attempted_arms)
+            extra = sorted(attempted_arms - EXPECTED_ARMS)
+            raise ValueError(
+                f"problem {problem_id} has incomplete arm accounting: "
+                f"missing={missing}, extra={extra}"
+            )
+        if run_arms & failure_arms:
+            overlap = sorted(run_arms & failure_arms)
+            raise ValueError(
+                f"problem {problem_id} records both run and failure for {overlap}"
             )
 
     if len(completions) != 1:
@@ -370,6 +414,7 @@ def analyze(journal_path):
         "duplicate_run_records": "rejected",
         "mixed_campaign_records": "rejected",
         "campaign_manifest_binding": "required",
+        "complete_arm_matrix_or_explicit_failure": "required",
         "completion_record": "exactly_one_and_final",
         "adaptive_arm": "adaptive_stacked_v035",
         "json_nonfinite_values": "serialized_as_null",
