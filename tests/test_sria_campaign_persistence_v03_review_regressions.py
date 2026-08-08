@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import json
 
 import pytest
 
@@ -27,6 +28,8 @@ from src.engcore.sria.campaign.events import (
 )
 from src.engcore.sria.campaign.persistence import (
     CampaignCheckpointV3,
+    CHECKPOINT_MAPPING_SCHEMA,
+    CHECKPOINT_TUPLE_SCHEMA,
     IncrementalCheckpointStore,
     PersistenceIntegrityError,
 )
@@ -1022,6 +1025,64 @@ def test_checkpoint_payload_freezing_preserves_tuple_plan_fields(tmp_path) -> No
     assert isinstance(loaded_record.plan.action.action.metadata["bounds"], tuple)
     assert loaded_record.plan.snapshot.metadata["choices"] == ("alpha", "beta")
     assert isinstance(loaded_record.plan.snapshot.metadata["choices"], tuple)
+
+
+def test_checkpoint_payload_encoding_preserves_literal_wrapper_mappings(tmp_path) -> None:
+    events = CampaignEventLog(RUN_ID)
+    events.append(CampaignEventType.CAMPAIGN_CREATED, iteration=0)
+    budget = BudgetLedger(total_budget=10.0, reserved_validation_budget=1.0)
+    run = CampaignRun(
+        run_id=RUN_ID,
+        campaign_id="v03-review-campaign",
+        state=ExecutionState.READY,
+        iteration=1,
+        max_iterations=1,
+        event_log_digest=events.head_digest,
+        metadata={
+            "literal_tuple_wrapper": {
+                "schema": CHECKPOINT_TUPLE_SCHEMA,
+                "items": [1, 2],
+            },
+            "literal_mapping_wrapper": {
+                "schema": CHECKPOINT_MAPPING_SCHEMA,
+                "entries": [["alpha", 1]],
+            },
+        },
+    )
+    store = IncrementalCheckpointStore()
+    store.save_state(
+        run=run,
+        events=events,
+        budget=budget,
+        effects=EffectLedger(),
+    )
+
+    expected = {
+        "literal_tuple_wrapper": {
+            "schema": CHECKPOINT_TUPLE_SCHEMA,
+            "items": [1, 2],
+        },
+        "literal_mapping_wrapper": {
+            "schema": CHECKPOINT_MAPPING_SCHEMA,
+            "entries": [["alpha", 1]],
+        },
+    }
+
+    materialized = store.latest()
+    assert materialized is not None
+    assert materialized.run.metadata == expected
+
+    restored = IncrementalCheckpointStore.from_dict(json.loads(json.dumps(store.to_dict())))
+    restored_materialized = restored.latest()
+    assert restored_materialized is not None
+    assert restored_materialized.run.metadata == expected
+
+    loaded = IncrementalCheckpointStore.load_from_path(
+        store.save_to_path(tmp_path / "literal-wrapper-metadata.json")
+    )
+    loaded_materialized = loaded.latest()
+    assert loaded_materialized is not None
+    assert loaded_materialized.run.metadata == expected
 
 
 def test_materialized_events_are_defensive_copies(tmp_path) -> None:
