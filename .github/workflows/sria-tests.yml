@@ -52,5 +52,17 @@ jobs:
 
       # No -x, no -k, no deselection: the full suite or nothing. Warnings are
       # shown rather than suppressed so a new one is visible in the log.
+      #
+      # `--durations=30` is REPORTING ONLY and deliberately not a gate. A
+      # shared runner's wall clock is not reproducible enough to fail a merge
+      # on, and turning it into one would buy a flaky gate rather than a fast
+      # suite. Its job is to make a newly slow test visible in the log instead
+      # of leaving a regression to be noticed as "CI feels slower lately".
+      #
+      # A future performance gate should assert deterministic operation counts
+      # -- solve_ivp invocations, right-hand-side evaluations, GP fits,
+      # serialized checkpoint size -- not seconds. The first of those already
+      # exists in tests/domains/kinetics/test_cstr_solver_work.py and runs as
+      # part of this suite.
       - name: Run the authoritative test suite
-        run: python -m pytest tests/ -q -rsxX
+        run: python -m pytest tests/ -q -rsxX --durations=30
