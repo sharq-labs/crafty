@@ -27,6 +27,7 @@ from src.engcore.sria.campaign.events import (
 )
 from src.engcore.sria.campaign.persistence import (
     CampaignCheckpointV3,
+    CHECKPOINT_TUPLE_SCHEMA,
     IncrementalCheckpointStore,
     PersistenceIntegrityError,
 )
@@ -1022,6 +1023,77 @@ def test_checkpoint_payload_freezing_preserves_tuple_plan_fields(tmp_path) -> No
     assert isinstance(loaded_record.plan.action.action.metadata["bounds"], tuple)
     assert loaded_record.plan.snapshot.metadata["choices"] == ("alpha", "beta")
     assert isinstance(loaded_record.plan.snapshot.metadata["choices"], tuple)
+
+
+def test_checkpoint_payload_encoding_escapes_reserved_user_mappings(tmp_path) -> None:
+    collision = {
+        "schema": CHECKPOINT_TUPLE_SCHEMA,
+        "items": ["literal", "user", "mapping"],
+    }
+    near_collision = {
+        "schema": CHECKPOINT_TUPLE_SCHEMA,
+        "items": "not-an-internal-tuple",
+    }
+    events = CampaignEventLog(RUN_ID)
+    events.append(
+        CampaignEventType.CAMPAIGN_CREATED,
+        iteration=0,
+        payload={
+            "collision": collision,
+            "near_collision": near_collision,
+        },
+    )
+    budget = BudgetLedger(total_budget=10.0, reserved_validation_budget=1.0)
+    run = CampaignRun(
+        run_id=RUN_ID,
+        campaign_id="v03-review-campaign",
+        state=ExecutionState.ACTION_SELECTED,
+        iteration=1,
+        max_iterations=1,
+        event_log_digest=events.head_digest,
+        metadata={
+            "collision": collision,
+            "near_collision": near_collision,
+            "nested": {"collision": collision},
+        },
+    )
+    plan = _review_plan()
+    plan.action.action.metadata["collision"] = collision
+    store = IncrementalCheckpointStore()
+    store.save_state(
+        run=run,
+        events=events,
+        budget=budget,
+        effects=EffectLedger(),
+        plan=plan,
+    )
+
+    record = store.latest_record
+    assert record is not None
+    assert record.plan is not None
+    assert record.run_state.metadata["collision"] == collision
+    assert isinstance(record.run_state.metadata["collision"], dict)
+    assert record.run_state.metadata["near_collision"] == near_collision
+    assert record.plan.action.action.metadata["collision"] == collision
+
+    loaded = IncrementalCheckpointStore.load_from_path(
+        store.save_to_path(tmp_path / "reserved-mapping.json")
+    )
+    loaded_record = loaded.latest_record
+    assert loaded_record is not None
+    assert loaded_record.plan is not None
+    assert loaded_record.run_state.metadata["collision"] == collision
+    assert isinstance(loaded_record.run_state.metadata["collision"], dict)
+    assert loaded_record.run_state.metadata["near_collision"] == near_collision
+    assert loaded_record.run_state.metadata["nested"]["collision"] == collision
+    assert loaded_record.plan.action.action.metadata["collision"] == collision
+
+    loaded_materialized = loaded.latest()
+    assert loaded_materialized is not None
+    assert loaded_materialized.run.metadata["collision"] == collision
+    assert isinstance(loaded_materialized.run.metadata["collision"], dict)
+    assert loaded_materialized.events.events[0].payload["collision"] == collision
+    assert isinstance(loaded_materialized.events.events[0].payload["collision"], dict)
 
 
 def test_materialized_events_are_defensive_copies(tmp_path) -> None:

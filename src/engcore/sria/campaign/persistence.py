@@ -40,6 +40,11 @@ ITERATION_JOURNAL_SCHEMA = schema_string("sria_campaign_iteration_journal_entry"
 RUN_STATE_SCHEMA = schema_string("sria_campaign_compact_run_state", 1)
 CHECKPOINT_V3_SCHEMA = schema_string("sria_campaign_checkpoint_v3", 2)
 CHECKPOINT_TUPLE_SCHEMA = schema_string("sria_campaign_checkpoint_tuple_payload", 1)
+CHECKPOINT_MAPPING_SCHEMA = schema_string("sria_campaign_checkpoint_mapping_payload", 1)
+_CHECKPOINT_PAYLOAD_SCHEMAS = {
+    CHECKPOINT_TUPLE_SCHEMA,
+    CHECKPOINT_MAPPING_SCHEMA,
+}
 
 
 class PersistenceIntegrityError(ResumeViolation):
@@ -125,13 +130,6 @@ class _ImmutableCheckpointList(list[Any]):
 
 
 def _freeze_checkpoint_payload(value: Any) -> Any:
-    if (
-        isinstance(value, Mapping)
-        and value.get("schema") == CHECKPOINT_TUPLE_SCHEMA
-    ):
-        if set(value) != {"schema", "items"} or not isinstance(value["items"], list):
-            raise PersistenceIntegrityError("invalid checkpoint tuple payload")
-        return tuple(_freeze_checkpoint_payload(item) for item in value["items"])
     if isinstance(value, Mapping):
         return _ImmutableCheckpointMapping(
             {
@@ -148,12 +146,40 @@ def _freeze_checkpoint_payload(value: Any) -> Any:
     return value
 
 
-def _encode_checkpoint_payload(value: Any) -> Any:
+def _decode_checkpoint_payload(value: Any) -> Any:
+    if isinstance(value, Mapping) and value.get("schema") == CHECKPOINT_TUPLE_SCHEMA:
+        if set(value) == {"schema", "items"} and isinstance(value["items"], list):
+            return tuple(_decode_checkpoint_payload(item) for item in value["items"])
+    if isinstance(value, Mapping) and value.get("schema") == CHECKPOINT_MAPPING_SCHEMA:
+        if set(value) == {"schema", "items"} and isinstance(value["items"], list):
+            pairs = value["items"]
+            if all(isinstance(pair, list) and len(pair) == 2 for pair in pairs):
+                return {
+                    str(key): _decode_checkpoint_payload(item)
+                    for key, item in pairs
+                }
     if isinstance(value, Mapping):
         return {
+            str(key): _decode_checkpoint_payload(item)
+            for key, item in dict(value).items()
+        }
+    if isinstance(value, list):
+        return [_decode_checkpoint_payload(item) for item in value]
+    return value
+
+
+def _encode_checkpoint_payload(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        encoded = {
             str(key): _encode_checkpoint_payload(item)
             for key, item in sorted(dict(value).items())
         }
+        if encoded.get("schema") in _CHECKPOINT_PAYLOAD_SCHEMAS:
+            return {
+                "schema": CHECKPOINT_MAPPING_SCHEMA,
+                "items": [[key, encoded[key]] for key in sorted(encoded)],
+            }
+        return encoded
     if isinstance(value, tuple):
         return {
             "schema": CHECKPOINT_TUPLE_SCHEMA,
@@ -514,7 +540,7 @@ class CompactRunState:
             ),
             failure_reason=payload.get("failure_reason", ""),
             event_log_digest=payload.get("event_log_digest", ""),
-            metadata=payload.get("metadata", {}),
+            metadata=_decode_checkpoint_payload(payload.get("metadata", {})),
         )
 
 
@@ -630,7 +656,7 @@ class CampaignCheckpointV3:
             spent_total=float(payload.get("spent_total", 0.0)),
             budget_overrun=float(payload.get("budget_overrun", 0.0)),
             plan=(
-                IterationPlan.from_dict(payload["plan"])
+                IterationPlan.from_dict(_decode_checkpoint_payload(payload["plan"]))
                 if payload.get("plan")
                 else None
             ),
@@ -1323,7 +1349,9 @@ class IncrementalCheckpointStore:
         )
         store = cls(run_id=payload.get("run_id", ""), budget_declaration=declaration)
         store._events = [
-            _freeze_checkpoint_event(CampaignEvent.from_dict(item))
+            _freeze_checkpoint_event(
+                CampaignEvent.from_dict(_decode_checkpoint_payload(item))
+            )
             for item in payload.get("events", ())
         ]
         store._budget_entries = [
