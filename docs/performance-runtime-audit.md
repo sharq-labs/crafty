@@ -513,20 +513,26 @@ applied here.
 | | baseline | after |
 |---|---|---|
 | tests collected | 1117 | **1161** (+44 regression tests) |
-| result | 1117 passed | **1161 passed** |
-| suite wall time | 147.96 s | 151.88 s |
+| result | **1117 passed** | **1161 passed** |
 | the 44 new tests alone | — | 4.94 s |
-| pre-existing 1117 tests, implied | 147.96 s | ~146.9 s |
 
-**Read the suite wall time honestly: it went up, and that is not a regression.**
-The suite gained 44 regression tests costing 4.94 s, which is more than the
-optimizations save inside it. Netting those out leaves the pre-existing tests
-about 1 s faster — a difference far smaller than this machine's run-to-run noise
-(the thermal T1 and T2 tests alone moved 0.6–1.0 s between the two runs in both
-directions).
+Every suite wall time measured this session, in order, with the machine's state:
 
-**Suite wall time cannot resolve an improvement of this size, which is exactly
-why the evidence for these changes is operation counts.** Those are exact:
+| run | tests | wall | machine |
+|---|---|---|---|
+| baseline, before any change | 1117 | 147.96 s | idle |
+| after changes, first run | 1161 | 151.88 s | idle |
+| clean clone | 1161 | 161.37 s | **contended** (gate benchmark running) |
+| after changes, final run | 1161 | **138.85 s** | idle |
+
+**Read these honestly.** Identical code produced 151.88 s and 138.85 s on the same
+machine — a 9% spread. The final idle run is 9.1 s faster than baseline while
+carrying 44 extra tests worth 4.94 s, which implies roughly 14 s of real
+improvement; but the run before it implied roughly none. Both are the same code.
+
+**Suite wall time on this machine cannot reliably resolve an improvement of this
+size, which is exactly why the evidence for these changes is operation counts.**
+Those are exact and do not vary:
 
 | deterministic count | before | after |
 |---|---|---|
