@@ -9,6 +9,9 @@ from __future__ import annotations
 
 from typing import Any
 
+from .budget import BudgetLedger
+from .checkpoint import EffectLedger
+from .events import CampaignEventLog
 from .persistence import IncrementalCheckpointStore
 from .runner import CampaignRunner
 
@@ -41,9 +44,37 @@ class IncrementalCampaignRunner(CampaignRunner):
             obligation_state=dict(self._obligation_state),
         )
 
+    def restore(self, checkpoint):
+        """Adopt materialized V0.3 state without replay or re-derivation.
+
+        This mirrors the frozen runner restore seam, while also preserving the
+        executor-enforced budget-cap declaration that V0.3 persists explicitly.
+        """
+        self._run = checkpoint.run
+        self._events = CampaignEventLog(
+            checkpoint.run.run_id, checkpoint.events.events
+        )
+        self._budget = BudgetLedger(
+            total_budget=checkpoint.budget.total_budget,
+            reserved_validation_budget=checkpoint.budget.reserved_validation_budget,
+            charges=checkpoint.budget.charges,
+            cost_unit=checkpoint.budget.cost_unit,
+            enforced_cap=checkpoint.budget.enforced_cap,
+            enforced_cap_source=checkpoint.budget.enforced_cap_source,
+        )
+        self._effects = EffectLedger(applied=dict(checkpoint.effects.applied))
+        self._plan = checkpoint.plan
+        self._obligation_state = dict(checkpoint.obligation_state)
+        if self._plan is not None:
+            self._recommendations[self._plan.recommendation.recommendation_id] = (
+                self._plan.recommendation
+            )
+            self._snapshots[self._plan.iteration] = self._plan.snapshot
+        return self._run
+
     def restore_latest(self):
         """Adopt the latest committed checkpoint and replay nothing."""
         checkpoint = self._checkpoints.latest()
         if checkpoint is None:
             raise ValueError("incremental checkpoint store is empty")
-        return super().restore(checkpoint)
+        return self.restore(checkpoint)
