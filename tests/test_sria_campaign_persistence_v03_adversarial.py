@@ -1,7 +1,7 @@
 """Adversarial integrity tests required by the frozen Core V0.3 preregistration.
 
 Each mutation models stored bytes that no longer describe the state that was
-committed.  The loader/auditor must fail closed; none of these cases may be
+committed. The loader/auditor must fail closed; none of these cases may be
 silently repaired or reinterpreted during resume.
 """
 
@@ -13,7 +13,11 @@ import pytest
 
 from src.engcore.sria.campaign.budget import BudgetLedger
 from src.engcore.sria.campaign.checkpoint import EffectLedger
-from src.engcore.sria.campaign.events import CampaignEventLog, CampaignEventType
+from src.engcore.sria.campaign.events import (
+    CampaignEvent,
+    CampaignEventLog,
+    CampaignEventType,
+)
 from src.engcore.sria.campaign.persistence import (
     CampaignCheckpointV3,
     EffectJournalEntry,
@@ -171,12 +175,23 @@ def test_tampered_budget_summary_fails_even_with_a_valid_checkpoint_digest() -> 
         IncrementalCheckpointStore.from_dict(payload)
 
 
-def test_run_state_event_digest_must_match_the_committed_event_head() -> None:
+def test_legacy_run_event_digest_may_lag_but_is_preserved_exactly() -> None:
+    """The checkpoint head, not CampaignRun metadata, commits event history.
+
+    Frozen M5 can append an event after its latest state transition and checkpoint
+    immediately. In that valid state ``CampaignRun.event_log_digest`` names an
+    earlier committed event. V0.3 must preserve that field rather than rewriting
+    legacy run state or mistaking it for the checkpoint's event-head commitment.
+    """
     payload = _payload()
-    payload["checkpoints"][-1]["run_state"]["event_log_digest"] = "wrong-run-head"
+    earlier = CampaignEvent.from_dict(payload["events"][0]).digest
+    payload["checkpoints"][-1]["run_state"]["event_log_digest"] = earlier
     _refresh_top_checkpoint_head(payload)
-    with pytest.raises(PersistenceIntegrityError, match="event_log_digest"):
-        IncrementalCheckpointStore.from_dict(payload)
+
+    restored = IncrementalCheckpointStore.from_dict(payload).latest()
+    assert restored is not None
+    assert restored.run.event_log_digest == earlier
+    assert restored.events.head_digest != earlier
 
 
 def test_duplicate_effect_key_in_a_committed_prefix_fails_closed() -> None:
