@@ -44,7 +44,10 @@ from src.engcore.sria.decision.recommendation import (
     DecisionRecommendation,
     RecommendationOutcome,
 )
-from src.engcore.sria.decision.replay import ExecutionDependencyManifest
+from src.engcore.sria.decision.replay import (
+    ExecutionDependencyManifest,
+    canonical_digest,
+)
 
 RUN_ID = "v03-review-regression"
 
@@ -1129,6 +1132,57 @@ def test_checkpoint_payload_encoding_preserves_literal_reserved_mappings(
         assert isinstance(
             materialized.events.events[0].payload["literal_tuple_wrapper"], dict
         )
+
+
+@pytest.mark.parametrize(
+    ("corrupt_payload", "message"),
+    [
+        (
+            {"schema": CHECKPOINT_TUPLE_SCHEMA, "items": "not-a-list"},
+            "invalid checkpoint tuple payload",
+        ),
+        (
+            {"schema": CHECKPOINT_MAPPING_SCHEMA, "entries": [["alpha"]]},
+            "invalid checkpoint mapping payload",
+        ),
+    ],
+)
+def test_checkpoint_payload_decoding_rejects_malformed_reserved_wrappers(
+    corrupt_payload,
+    message,
+) -> None:
+    events = CampaignEventLog(RUN_ID)
+    events.append(CampaignEventType.CAMPAIGN_CREATED, iteration=0)
+    budget = BudgetLedger(total_budget=10.0, reserved_validation_budget=1.0)
+    run = CampaignRun(
+        run_id=RUN_ID,
+        campaign_id="v03-review-campaign",
+        state=ExecutionState.READY,
+        iteration=1,
+        max_iterations=1,
+        event_log_digest=events.head_digest,
+        metadata={"bounds": (1, 2)},
+    )
+    store = IncrementalCheckpointStore()
+    store.save_state(
+        run=run,
+        events=events,
+        budget=budget,
+        effects=EffectLedger(),
+    )
+
+    payload = copy.deepcopy(store.to_dict())
+    payload["checkpoints"][0]["run_state"]["metadata"] = corrupt_payload
+    payload["checkpoint_head_digest"] = canonical_digest(
+        {
+            key: value
+            for key, value in payload["checkpoints"][0].items()
+            if key != "schema"
+        }
+    )
+
+    with pytest.raises(PersistenceIntegrityError, match=message):
+        IncrementalCheckpointStore.from_dict(payload)
 
 
 def test_materialized_events_are_defensive_copies(tmp_path) -> None:

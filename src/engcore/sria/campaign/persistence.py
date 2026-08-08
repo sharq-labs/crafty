@@ -169,9 +169,13 @@ def _freeze_checkpoint_payload(value: Any) -> Any:
 
 
 def _decode_checkpoint_payload(value: Any) -> Any:
-    if isinstance(value, Mapping) and _is_encoded_checkpoint_tuple(value):
+    if isinstance(value, Mapping) and value.get("schema") == CHECKPOINT_TUPLE_SCHEMA:
+        if not _is_encoded_checkpoint_tuple(value):
+            raise PersistenceIntegrityError("invalid checkpoint tuple payload")
         return tuple(_decode_checkpoint_payload(item) for item in value["items"])
-    if isinstance(value, Mapping) and _is_encoded_checkpoint_mapping(value):
+    if isinstance(value, Mapping) and value.get("schema") == CHECKPOINT_MAPPING_SCHEMA:
+        if not _is_encoded_checkpoint_mapping(value):
+            raise PersistenceIntegrityError("invalid checkpoint mapping payload")
         decoded: dict[str, Any] = {}
         for entry in value["entries"]:
             key, item = entry
