@@ -1,36 +1,8 @@
-"""SRIA V0.1 M5 — the bounded sequential campaign loop.
+"""SRIA campaign loop and versioned persistence surfaces.
 
-Connects the frozen M1–M4 components into a research campaign that can take a
-step, learn from it, and take a different next step *through the formal
-pipeline* rather than around it.
-
-    snapshot -> generate -> feasibility -> M4 score -> recommend ONE action
-             -> execute (simulation only) -> ScientificResult
-             -> candidate Evidence -> Critics -> Arbiter -> AdmissionAuthority
-             -> Gateway -> belief
-             -> calibration memory (computational telemetry only)
-             -> NEW snapshot -> repeat
-
-What this is not, stated plainly because the words are easy to over-claim:
-
-* **Not an autonomous agent.** Bounded iterations, deterministic, no background
-  execution, no self-modification, no automated hypothesis generation.
-* **Not a research-mode state machine.** :class:`ExecutionState` describes what
-  the runner is doing — ``EXECUTING``, ``ASSESSING`` — never what the campaign
-  is scientifically about. The six M4 action families remain peer generators;
-  there is no ``current_mode`` and no family that follows another.
-* **Not an owner of scientific truth.** The runner orchestrates the path from
-  result to belief; it never writes belief. Only the Arbiter ->
-  AdmissionAuthority -> Gateway chain does, exactly as M1/M3 froze it.
-* **Not a certifier.** ``STOP_PROPOSAL`` remains an economic statement — "no
-  scored candidate looks worth its cost". Whether a campaign is scientifically
-  finished is the Arbiter's to say, and :class:`StopReviewOutcome` returns
-  ``STOP_NOT_ASSESSED`` rather than inventing an answer.
-
-Module layout is deliberately several small pieces rather than one
-``CampaignBrain``: :mod:`state`, :mod:`events`, :mod:`budget`,
-:mod:`checkpoint`, :mod:`executor`, :mod:`liveness`, :mod:`stopping`,
-:mod:`runner`.
+The M5 campaign loop remains the bounded sequential orchestration path. Core
+V0.3 adds an incremental persistence successor without changing the scientific,
+decision, assurance, stopping, or certification semantics of that loop.
 """
 
 from __future__ import annotations
@@ -65,6 +37,17 @@ from .liveness import (
     ValidationTarget,
     validation_targets,
 )
+from .persistence import (
+    BudgetDeclaration,
+    BudgetJournalEntry,
+    CampaignCheckpointV3,
+    CompactRunState,
+    EffectJournalEntry,
+    IncrementalCheckpointStore,
+    IterationJournalEntry,
+    PersistenceIntegrityError,
+)
+from .persistence_runner import IncrementalCampaignRunner
 from .runner import (
     AssessmentBundle,
     CampaignHarness,
@@ -89,10 +72,14 @@ from .stopping import (
     StoppingCriterionEvaluator,
 )
 
+#: Frozen M5 campaign-loop identity. Kept for compatibility.
 SRIA_CAMPAIGN_VERSION = "0.1.0-m5-campaign-loop"
+#: Versioned persistence successor introduced by Core V0.3.
+SRIA_CAMPAIGN_PERSISTENCE_VERSION = "0.3.0"
 
 __all__ = [
     "SRIA_CAMPAIGN_VERSION",
+    "SRIA_CAMPAIGN_PERSISTENCE_VERSION",
     # state
     "CampaignRun",
     "ExecutionState",
@@ -111,12 +98,21 @@ __all__ = [
     "RequirementStatus",
     "BudgetCharge",
     "BudgetExhausted",
-    # checkpoint
+    # legacy checkpoint compatibility
     "CampaignCheckpoint",
     "CheckpointStore",
     "EffectLedger",
     "IterationPlan",
     "ResumeViolation",
+    # Core V0.3 persistence
+    "IncrementalCheckpointStore",
+    "CampaignCheckpointV3",
+    "CompactRunState",
+    "BudgetDeclaration",
+    "BudgetJournalEntry",
+    "EffectJournalEntry",
+    "IterationJournalEntry",
+    "PersistenceIntegrityError",
     # executor
     "SimulationExecutor",
     "ExecutionRecord",
@@ -138,8 +134,9 @@ __all__ = [
     "StoppingCriterion",
     "StoppingCriterionEvaluator",
     "STOPPING_REVIEW_VERSION",
-    # runner
+    # runners
     "CampaignRunner",
+    "IncrementalCampaignRunner",
     "CampaignHarness",
     "AssessmentBundle",
     "deterministic_clock",
