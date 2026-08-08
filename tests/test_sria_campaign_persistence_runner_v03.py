@@ -1,12 +1,13 @@
 """The V0.3 runner changes only the persistence seam.
 
-No campaign harness is needed here: the overridden private seam is exercised on
-manually declared runner state so the test can prove that durable transitions
-write journal deltas directly rather than constructing a legacy full-history
-checkpoint first.
+The overridden checkpoint seam is exercised directly, and the real constructor
+is also pinned so an explicitly supplied empty incremental store cannot be lost
+to the frozen M5 constructor's truthiness-based defaulting.
 """
 
 from __future__ import annotations
+
+from unittest.mock import MagicMock
 
 from src.engcore.sria.campaign.budget import BudgetLedger
 from src.engcore.sria.campaign.checkpoint import EffectLedger
@@ -26,13 +27,41 @@ def _bare_runner() -> IncrementalCampaignRunner:
         max_iterations=3,
     )
     runner._events = CampaignEventLog("runner-v03")
-    runner._budget = BudgetLedger(total_budget=100.0)
+    runner._budget = BudgetLedger(
+        total_budget=100.0,
+        enforced_cap=90.0,
+        enforced_cap_source="test executor",
+    )
     runner._effects = EffectLedger()
     runner._plan = None
     runner._obligation_state = {}
     runner._recommendations = {}
     runner._snapshots = {}
     return runner
+
+
+def test_real_constructor_retains_an_explicit_empty_incremental_store() -> None:
+    external = IncrementalCheckpointStore()
+    charter = MagicMock()
+    charter.campaign_id = "constructor-campaign"
+
+    runner = IncrementalCampaignRunner(
+        run_id="constructor-run",
+        charter=charter,
+        harness=MagicMock(),
+        gateway=MagicMock(),
+        arbiter=MagicMock(),
+        obligations=MagicMock(),
+        budget=BudgetLedger(total_budget=10.0),
+        max_iterations=2,
+        checkpoints=external,
+        liveness=MagicMock(),
+        stopping=MagicMock(),
+        clock=lambda: "constructor-clock",
+    )
+
+    assert runner.checkpoints is external
+    assert isinstance(runner.checkpoints, IncrementalCheckpointStore)
 
 
 def test_incremental_runner_checkpoint_writes_only_new_event_history() -> None:
@@ -77,5 +106,7 @@ def test_restore_latest_materializes_existing_runner_state_without_replay() -> N
     assert run.to_dict() == runner._run.to_dict()
     assert restored._events.to_dict() == runner._events.to_dict()
     assert restored._budget.to_dict() == runner._budget.to_dict()
+    assert restored._budget.enforced_cap == 90.0
+    assert restored._budget.enforced_cap_source == "test executor"
     assert restored._effects.to_dict() == runner._effects.to_dict()
     assert restored._obligation_state == {"adequacy": True}
