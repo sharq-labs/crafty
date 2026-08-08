@@ -901,6 +901,56 @@ class IncrementalCheckpointStore:
                     f"checkpoint {label} {declared} disagrees with journal {actual}"
                 )
 
+    def _verify_budget_history(self) -> None:
+        """Validate every checkpoint's budget summary in one monotone O(N) pass.
+
+        Checkpoint digests prove that summaries were not changed *without*
+        changing the checkpoint chain. They do not prove the summaries agree
+        with the budget-journal prefixes. Walking charges once while checkpoint
+        cursors advance closes that gap without re-materializing a full ledger
+        for every checkpoint.
+        """
+        if not self._checkpoints:
+            return
+        if self._budget_declaration is None:
+            raise PersistenceIntegrityError("checkpoint exists without budget declaration")
+
+        cursor = 0
+        spent_general = 0.0
+        spent_validation = 0.0
+        spent_total = 0.0
+        for checkpoint in self._checkpoints:
+            target = checkpoint.budget_charge_count
+            if target < cursor or target > len(self._budget_entries):
+                raise PersistenceIntegrityError(
+                    "checkpoint budget cursor is not a valid monotone prefix"
+                )
+            while cursor < target:
+                charge = self._budget_entries[cursor].charge
+                spent_general += float(charge.from_general_pool)
+                spent_validation += float(charge.from_validation_reservation)
+                spent_total += float(charge.realized)
+                cursor += 1
+            overrun = max(
+                0.0, spent_total - self._budget_declaration.total_budget
+            )
+            checks = (
+                ("spent_general", spent_general, checkpoint.spent_general),
+                (
+                    "spent_validation",
+                    spent_validation,
+                    checkpoint.spent_validation,
+                ),
+                ("spent_total", spent_total, checkpoint.spent_total),
+                ("budget_overrun", overrun, checkpoint.budget_overrun),
+            )
+            for label, actual, declared in checks:
+                if not self._same_number(actual, declared):
+                    raise PersistenceIntegrityError(
+                        f"checkpoint {checkpoint.checkpoint_sequence} {label} "
+                        f"{declared} disagrees with journal prefix {actual}"
+                    )
+
     def _verify_effect_uniqueness(self, count: int) -> None:
         seen: set[str] = set()
         for entry in self._effect_entries[:count]:
@@ -926,7 +976,7 @@ class IncrementalCheckpointStore:
             self._iteration_entries, head.iteration_record_count, "iteration"
         )
         self._verify_effect_uniqueness(head.effect_count)
-        self._verify_budget_summary(head)
+        self._verify_budget_history()
         return True
 
     def verify_all(self) -> bool:
@@ -1044,6 +1094,25 @@ class IncrementalCheckpointStore:
             CampaignCheckpointV3.from_dict(item)
             for item in payload.get("checkpoints", ())
         ]
+
+        has_history = any(
+            (
+                store._events,
+                store._budget_entries,
+                store._effect_entries,
+                store._iteration_entries,
+                store._checkpoints,
+            )
+        )
+        if has_history and not store._run_id.strip():
+            raise PersistenceIntegrityError(
+                "non-empty persistence history requires a non-empty run_id"
+            )
+        if store._budget_entries and store._budget_declaration is None:
+            raise PersistenceIntegrityError(
+                "budget journal entries exist without a budget declaration"
+            )
+
         store._effect_index = {
             entry.key: entry.reference for entry in store._effect_entries
         }
@@ -1063,7 +1132,10 @@ class IncrementalCheckpointStore:
             raise PersistenceIntegrityError(
                 "stored checkpoint head digest does not match checkpoint chain"
             )
-        store.verify_committed()
+        # Valid uncommitted suffixes are allowed and remain outside the latest
+        # resume cursor, but all bytes that were actually stored must still form
+        # internally valid append-only chains. Corrupt suffix bytes fail closed.
+        store.verify_all()
         return store
 
     @classmethod
