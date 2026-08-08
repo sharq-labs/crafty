@@ -45,7 +45,7 @@ class PersistenceIntegrityError(ResumeViolation):
     """Stored persistence state cannot be trusted for deterministic resume."""
 
 
-class _ImmutableCheckpointMapping(dict[str, bool]):
+class _ImmutableCheckpointMapping(dict[str, Any]):
     """Dict-compatible checkpoint payload mapping that rejects mutation."""
 
     _MUTATION_MESSAGE = "checkpoint record mappings are immutable"
@@ -53,7 +53,7 @@ class _ImmutableCheckpointMapping(dict[str, bool]):
     def _reject_mutation(self, *args: Any, **kwargs: Any) -> None:
         raise PersistenceIntegrityError(self._MUTATION_MESSAGE)
 
-    def __setitem__(self, key: str, value: bool) -> None:
+    def __setitem__(self, key: str, value: Any) -> None:
         self._reject_mutation()
 
     def __delitem__(self, key: str) -> None:
@@ -65,17 +65,88 @@ class _ImmutableCheckpointMapping(dict[str, bool]):
     def pop(self, key: str, default: Any = None) -> Any:
         self._reject_mutation()
 
-    def popitem(self) -> tuple[str, bool]:
+    def popitem(self) -> tuple[str, Any]:
         self._reject_mutation()
 
-    def setdefault(self, key: str, default: bool = False) -> bool:
+    def setdefault(self, key: str, default: Any = None) -> Any:
         self._reject_mutation()
 
     def update(self, *args: Any, **kwargs: Any) -> None:
         self._reject_mutation()
 
-    def __ior__(self, other: Mapping[str, bool]) -> "_ImmutableCheckpointMapping":
+    def __ior__(self, other: Mapping[str, Any]) -> "_ImmutableCheckpointMapping":
         self._reject_mutation()
+
+
+class _ImmutableCheckpointList(list[Any]):
+    """List-compatible checkpoint payload sequence that rejects mutation."""
+
+    _MUTATION_MESSAGE = "checkpoint record sequences are immutable"
+
+    def _reject_mutation(self, *args: Any, **kwargs: Any) -> None:
+        raise PersistenceIntegrityError(self._MUTATION_MESSAGE)
+
+    def __setitem__(self, index: Any, value: Any) -> None:
+        self._reject_mutation()
+
+    def __delitem__(self, index: Any) -> None:
+        self._reject_mutation()
+
+    def append(self, value: Any) -> None:
+        self._reject_mutation()
+
+    def clear(self) -> None:
+        self._reject_mutation()
+
+    def extend(self, values: Any) -> None:
+        self._reject_mutation()
+
+    def insert(self, index: int, value: Any) -> None:
+        self._reject_mutation()
+
+    def pop(self, index: int = -1) -> Any:
+        self._reject_mutation()
+
+    def remove(self, value: Any) -> None:
+        self._reject_mutation()
+
+    def reverse(self) -> None:
+        self._reject_mutation()
+
+    def sort(self, *args: Any, **kwargs: Any) -> None:
+        self._reject_mutation()
+
+    def __iadd__(self, values: Any) -> "_ImmutableCheckpointList":
+        self._reject_mutation()
+
+    def __imul__(self, value: int) -> "_ImmutableCheckpointList":
+        self._reject_mutation()
+
+
+def _freeze_checkpoint_payload(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return _ImmutableCheckpointMapping(
+            {
+                str(key): _freeze_checkpoint_payload(item)
+                for key, item in dict(value).items()
+            }
+        )
+    if isinstance(value, list | tuple):
+        return _ImmutableCheckpointList(
+            [_freeze_checkpoint_payload(item) for item in value]
+        )
+    return value
+
+
+def _thaw_checkpoint_payload(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return {
+            str(key): _thaw_checkpoint_payload(item)
+            for key, item in sorted(dict(value).items())
+        }
+    if isinstance(value, list | tuple):
+        return [_thaw_checkpoint_payload(item) for item in value]
+    return value
 
 
 @dataclass(frozen=True)
@@ -295,7 +366,9 @@ class CompactRunState:
             raise ValueError("a paused compact run state must record why")
         if self.state is ExecutionState.FAILED and not self.failure_reason.strip():
             raise ValueError("a failed compact run state must record why")
-        object.__setattr__(self, "metadata", dict(self.metadata))
+        object.__setattr__(
+            self, "metadata", _freeze_checkpoint_payload(dict(self.metadata))
+        )
 
     @classmethod
     def from_run(cls, run: CampaignRun) -> "CompactRunState":
@@ -351,7 +424,7 @@ class CompactRunState:
             "pause_reason": self.pause_reason.value if self.pause_reason else None,
             "failure_reason": self.failure_reason,
             "event_log_digest": self.event_log_digest,
-            "metadata": dict(sorted(self.metadata.items())),
+            "metadata": _thaw_checkpoint_payload(self.metadata),
         }
 
     @classmethod

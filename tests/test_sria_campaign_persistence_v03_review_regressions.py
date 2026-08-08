@@ -738,3 +738,47 @@ def test_checkpoint_record_obligation_state_mutation_fails_closed() -> None:
     assert store.to_dict()["checkpoints"][-1]["obligation_state"] == {
         "pending-obligation": True
     }
+
+
+def test_checkpoint_record_run_metadata_mutation_fails_closed() -> None:
+    events = CampaignEventLog(RUN_ID)
+    events.append(CampaignEventType.CAMPAIGN_CREATED, iteration=0)
+    budget = BudgetLedger(total_budget=10.0, reserved_validation_budget=1.0)
+    run = CampaignRun(
+        run_id=RUN_ID,
+        campaign_id="v03-review-campaign",
+        state=ExecutionState.READY,
+        iteration=1,
+        max_iterations=1,
+        event_log_digest=events.head_digest,
+        metadata={
+            "phase": "ready",
+            "nested": {"flags": {"accepted": True}, "attempts": [1, 2]},
+        },
+    )
+    store = IncrementalCheckpointStore()
+    store.save_state(
+        run=run,
+        events=events,
+        budget=budget,
+        effects=EffectLedger(),
+    )
+    record = store.latest_record
+    assert record is not None
+    before = record.digest
+
+    with pytest.raises(PersistenceIntegrityError, match="immutable"):
+        record.run_state.metadata["phase"] = "rewritten"
+    with pytest.raises(PersistenceIntegrityError, match="immutable"):
+        record.run_state.metadata["nested"]["flags"]["accepted"] = False
+    with pytest.raises(PersistenceIntegrityError, match="immutable"):
+        record.run_state.metadata["nested"]["attempts"].append(3)
+
+    assert record.run_state.metadata["phase"] == "ready"
+    assert record.run_state.metadata["nested"]["flags"] == {"accepted": True}
+    assert record.run_state.metadata["nested"]["attempts"] == [1, 2]
+    assert record.digest == before
+    assert store.to_dict()["checkpoints"][-1]["run_state"]["metadata"] == {
+        "nested": {"attempts": [1, 2], "flags": {"accepted": True}},
+        "phase": "ready",
+    }
