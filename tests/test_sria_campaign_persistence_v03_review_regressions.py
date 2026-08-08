@@ -31,6 +31,7 @@ from src.engcore.sria.campaign.persistence import (
     CampaignCheckpointV3,
     CHECKPOINT_MAPPING_SCHEMA,
     CHECKPOINT_TUPLE_SCHEMA,
+    CompactRunState,
     IncrementalCheckpointStore,
     PersistenceIntegrityError,
     _copy_iteration_continuation,
@@ -965,6 +966,85 @@ def test_checkpoint_record_run_metadata_init_reproducer_fails_closed() -> None:
     assert store.to_dict()["checkpoints"][-1]["run_state"]["metadata"] == {
         "status": "legitimate"
     }
+
+
+def test_exposed_compact_run_state_reinitialization_fails_closed(tmp_path) -> None:
+    legitimate = CompactRunState(
+        run_id=RUN_ID,
+        campaign_id="v03-review-campaign",
+        state=ExecutionState.READY,
+        iteration=1,
+        max_iterations=2,
+        event_log_digest="event-head",
+        metadata={"status": "legitimate"},
+    )
+    assert CompactRunState.from_dict(legitimate.to_dict()).to_dict() == (
+        legitimate.to_dict()
+    )
+
+    events = CampaignEventLog(RUN_ID)
+    events.append(CampaignEventType.CAMPAIGN_CREATED, iteration=0)
+    budget = BudgetLedger(total_budget=10.0, reserved_validation_budget=1.0)
+    run = CampaignRun(
+        run_id=RUN_ID,
+        campaign_id="v03-review-campaign",
+        state=ExecutionState.READY,
+        iteration=1,
+        max_iterations=2,
+        event_log_digest=events.head_digest,
+        metadata={"status": "legitimate"},
+    )
+    store = IncrementalCheckpointStore()
+    store.save_state(
+        run=run,
+        events=events,
+        budget=budget,
+        effects=EffectLedger(),
+    )
+    record = store.latest_record
+    assert record is not None
+    before_digest = record.digest
+    before_run_state = record.run_state
+    before_run_state_payload = record.run_state.to_dict()
+    before_store_payload = store.to_dict()
+
+    for exposed_record in (store.latest_record, store.records[-1]):
+        assert exposed_record is not None
+        assert exposed_record.run_state is before_run_state
+        with pytest.raises(PersistenceIntegrityError, match="immutable"):
+            exposed_record.run_state.__init__(
+                run_id=RUN_ID,
+                campaign_id="rewritten-campaign",
+                state=ExecutionState.FAILED,
+                iteration=99,
+                max_iterations=99,
+                failure_reason="forged",
+                event_log_digest="rewritten-head",
+                metadata={"status": "rewritten"},
+            )
+
+    assert store.latest_record is record
+    assert store.records[-1] is record
+    assert record.run_state is before_run_state
+    assert record.run_state.to_dict() == before_run_state_payload
+    assert record.digest == before_digest
+    assert store.to_dict() == before_store_payload
+
+    restored = IncrementalCheckpointStore.from_dict(
+        json.loads(json.dumps(before_store_payload))
+    )
+    loaded = IncrementalCheckpointStore.load_from_path(
+        store.save_to_path(tmp_path / "run-state-reinit.json")
+    )
+    for candidate in (restored, loaded):
+        candidate_record = candidate.latest_record
+        assert candidate_record is not None
+        assert candidate_record.run_state.to_dict() == before_run_state_payload
+        assert candidate_record.digest == before_digest
+        materialized = candidate.latest()
+        assert materialized is not None
+        assert materialized.run.metadata == {"status": "legitimate"}
+        assert candidate.to_dict() == before_store_payload
 
 
 def test_checkpoint_record_run_metadata_base_mutator_bypass_fails_closed() -> None:

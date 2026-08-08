@@ -50,6 +50,7 @@ _RESERVED_CHECKPOINT_PAYLOAD_SCHEMAS = frozenset(
 _BUDGET_CONTINUATION_ATTR = "_sria_v03_budget_continuation"
 _EFFECT_CONTINUATION_ATTR = "_sria_v03_effect_continuation"
 _ITERATION_CONTINUATION_ATTR = "_sria_v03_iteration_continuation"
+_COMPACT_RUN_STATE_INITIALIZED_ATTR = "_sria_v03_compact_run_state_initialized"
 
 
 def _continuation_token(count: int, head_digest: str) -> tuple[int, str]:
@@ -627,6 +628,46 @@ class CompactRunState:
     failure_reason: str = ""
     event_log_digest: str = ""
     metadata: Mapping[str, Any] = field(default_factory=dict)
+
+    def __init__(
+        self,
+        run_id: str,
+        campaign_id: str,
+        charter_version: str = "",
+        state: ExecutionState = ExecutionState.CREATED,
+        iteration: int = 0,
+        max_iterations: int = 1,
+        active_snapshot_digest: str = "",
+        active_basis_digest: str = "",
+        stop_proposal_recommendation_id: str = "",
+        stop_review_outcome: str = "",
+        pause_reason: PauseReason | None = None,
+        failure_reason: str = "",
+        event_log_digest: str = "",
+        metadata: Mapping[str, Any] | None = None,
+    ) -> None:
+        if getattr(self, _COMPACT_RUN_STATE_INITIALIZED_ATTR, False):
+            raise PersistenceIntegrityError("compact run state is immutable")
+        object.__setattr__(self, "run_id", run_id)
+        object.__setattr__(self, "campaign_id", campaign_id)
+        object.__setattr__(self, "charter_version", charter_version)
+        object.__setattr__(self, "state", state)
+        object.__setattr__(self, "iteration", iteration)
+        object.__setattr__(self, "max_iterations", max_iterations)
+        object.__setattr__(self, "active_snapshot_digest", active_snapshot_digest)
+        object.__setattr__(self, "active_basis_digest", active_basis_digest)
+        object.__setattr__(
+            self,
+            "stop_proposal_recommendation_id",
+            stop_proposal_recommendation_id,
+        )
+        object.__setattr__(self, "stop_review_outcome", stop_review_outcome)
+        object.__setattr__(self, "pause_reason", pause_reason)
+        object.__setattr__(self, "failure_reason", failure_reason)
+        object.__setattr__(self, "event_log_digest", event_log_digest)
+        object.__setattr__(self, "metadata", {} if metadata is None else metadata)
+        self.__post_init__()
+        object.__setattr__(self, _COMPACT_RUN_STATE_INITIALIZED_ATTR, True)
 
     def __post_init__(self) -> None:
         if not str(self.run_id).strip() or not str(self.campaign_id).strip():
