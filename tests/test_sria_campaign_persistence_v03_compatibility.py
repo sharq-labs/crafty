@@ -85,7 +85,9 @@ def _legacy_checkpoint_with_plan() -> CampaignCheckpoint:
         payload={"action_id": "action-1"},
     )
 
-    budget = BudgetLedger(total_budget=20.0, reserved_validation_budget=5.0)
+    # Total realized spend is 10 against a declared budget of 8.  Migration
+    # therefore has to preserve both the reservation split and a real overrun.
+    budget = BudgetLedger(total_budget=8.0, reserved_validation_budget=5.0)
     budget.settle(
         charge_id="validation-charge",
         action_id="validation-action",
@@ -143,10 +145,9 @@ def test_legacy_migration_preserves_plan_obligations_budget_and_effects_exactly(
     assert restored.budget.to_dict() == source.budget.to_dict()
     assert restored.effects.to_dict() == source.effects.to_dict()
 
-    # Pin the reservation split and overrun semantics rather than just total spend.
     assert restored.budget.spent_validation == source.budget.spent_validation
     assert restored.budget.spent_general == source.budget.spent_general
-    assert restored.budget.overrun == source.budget.overrun
+    assert restored.budget.overrun == source.budget.overrun == 2.0
 
 
 def test_repeated_charge_id_remains_idempotent_after_migration() -> None:
