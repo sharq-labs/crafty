@@ -328,19 +328,6 @@ def test_the_report_states_its_non_goals_and_claims_no_physical_validation(
 # F5 — historical frozen experiments are untouched
 # =====================================================================
 
-#: Digests of every frozen experiment artifact K1 must not disturb, taken at
-#: BASE_COMMIT. K1 reads none of them and writes none of them; this pins that.
-FROZEN_HISTORY_DIGESTS = {}
-
-
-def _git_blob_digests(paths: list[Path]) -> dict[str, str]:
-    return {
-        str(path.relative_to(REPO_ROOT)).replace("\\", "/"):
-            hashlib.sha256(path.read_bytes()).hexdigest()
-        for path in paths
-    }
-
-
 def test_k1_does_not_import_or_write_any_frozen_experiment() -> None:
     """F5: no historical artifact may be read, written or re-run by K1."""
     import ast

@@ -700,6 +700,30 @@ until (1) is settled. But the sequencing above is the stronger recommendation.
 
 ---
 
+## Closing summary — the numbers A8/A9 refer to
+
+| item | value |
+|---|---|
+| worktree | `.claude/worktrees/scientific-computation-platform-47741c` |
+| branch | `kinetics/cstr-k1` |
+| starting commit | `0d0f1990b92a1ec68b86f315ef8c1a9a40d54085` |
+| starting suite | **957 passed** |
+| K1 commit | `91dac69` — the domain, the experiment, the tests, this report |
+| final commit | the commit adding this section (`git log -1 --format=%H -- docs/kinetics-cstr-k1.md`) |
+| final suite (in-place) | **1066 passed** (957 + 109 K1) |
+| final suite (clean clone) | **1066 passed** |
+| preregistration hash | `73d09cc0004663409f27edf86fb2bb571bdb7bb78a39203e35ca9c0069d00cb0` |
+| experiment version | `1.0.1` (1.0.0 invalidated — §9) |
+| tracked files modified | **0** |
+| Core files touched | **0** |
+
+The clean clone was taken with `git clone --branch kinetics/cstr-k1 --single-branch`
+into a fresh directory, checked for a clean working tree, and run with no
+`__pycache__` and no local state. The repository's `.gitattributes` pins the
+working tree to LF repository-wide, which is what lets the byte-digest freezes
+of T1/T2/T3 and the Electrical experiments survive a checkout — those pins were
+re-verified from the clone and all matched.
+
 ## Final verdict
 
 # K1 PASS
