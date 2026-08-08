@@ -32,13 +32,13 @@ from .checkpoint import (
 from .events import CampaignEvent, CampaignEventLog
 from .state import CampaignRun, ExecutionState, IterationRecord, PauseReason
 
-PERSISTENCE_SCHEMA = schema_string("sria_campaign_persistence_store", 1)
+PERSISTENCE_SCHEMA = schema_string("sria_campaign_persistence_store", 2)
 BUDGET_DECLARATION_SCHEMA = schema_string("sria_campaign_budget_declaration_v3", 1)
 BUDGET_JOURNAL_SCHEMA = schema_string("sria_campaign_budget_journal_entry", 1)
 EFFECT_JOURNAL_SCHEMA = schema_string("sria_campaign_effect_journal_entry", 1)
 ITERATION_JOURNAL_SCHEMA = schema_string("sria_campaign_iteration_journal_entry", 1)
 RUN_STATE_SCHEMA = schema_string("sria_campaign_compact_run_state", 1)
-CHECKPOINT_V3_SCHEMA = schema_string("sria_campaign_checkpoint_v3", 1)
+CHECKPOINT_V3_SCHEMA = schema_string("sria_campaign_checkpoint_v3", 2)
 
 
 class PersistenceIntegrityError(ResumeViolation):
@@ -103,6 +103,10 @@ class BudgetDeclaration:
             "enforced_cap": self.enforced_cap,
             "enforced_cap_source": self.enforced_cap_source,
         }
+
+    @property
+    def digest(self) -> str:
+        return canonical_digest(self.to_dict())
 
     @classmethod
     def from_dict(cls, payload: Mapping[str, Any]) -> "BudgetDeclaration":
@@ -354,6 +358,7 @@ class CampaignCheckpointV3:
     event_head_digest: str
     budget_charge_count: int
     budget_head_digest: str
+    budget_declaration_digest: str
     effect_count: int
     effect_head_digest: str
     iteration_record_count: int
@@ -377,6 +382,8 @@ class CampaignCheckpointV3:
         ):
             if int(getattr(self, label)) < 0:
                 raise ValueError(f"{label} must be non-negative")
+        if not str(self.budget_declaration_digest).strip():
+            raise ValueError("checkpoint requires a budget declaration digest")
         for label in (
             "spent_general",
             "spent_validation",
@@ -400,6 +407,7 @@ class CampaignCheckpointV3:
             "event_head_digest": self.event_head_digest,
             "budget_charge_count": self.budget_charge_count,
             "budget_head_digest": self.budget_head_digest,
+            "budget_declaration_digest": self.budget_declaration_digest,
             "effect_count": self.effect_count,
             "effect_head_digest": self.effect_head_digest,
             "iteration_record_count": self.iteration_record_count,
@@ -423,6 +431,10 @@ class CampaignCheckpointV3:
     @classmethod
     def from_dict(cls, payload: Mapping[str, Any]) -> "CampaignCheckpointV3":
         require_schema(payload, CHECKPOINT_V3_SCHEMA)
+        if not payload.get("budget_declaration_digest"):
+            raise PersistenceIntegrityError(
+                "checkpoint is missing budget declaration commitment"
+            )
         return cls(
             checkpoint_sequence=int(payload["checkpoint_sequence"]),
             run_state=CompactRunState.from_dict(payload["run_state"]),
@@ -430,6 +442,7 @@ class CampaignCheckpointV3:
             event_head_digest=payload.get("event_head_digest", ""),
             budget_charge_count=int(payload.get("budget_charge_count", 0)),
             budget_head_digest=payload.get("budget_head_digest", ""),
+            budget_declaration_digest=payload["budget_declaration_digest"],
             effect_count=int(payload.get("effect_count", 0)),
             effect_head_digest=payload.get("effect_head_digest", ""),
             iteration_record_count=int(payload.get("iteration_record_count", 0)),
@@ -548,6 +561,11 @@ class IncrementalCheckpointStore:
     def _same_number(left: float, right: float) -> bool:
         return math.isclose(float(left), float(right), rel_tol=0.0, abs_tol=1e-12)
 
+    def _budget_declaration_digest(self) -> str:
+        if self._budget_declaration is None:
+            raise PersistenceIntegrityError("checkpoint exists without budget declaration")
+        return self._budget_declaration.digest
+
     def _current_budget_overrun(self) -> float:
         if self._budget_declaration is None:
             return 0.0
@@ -577,7 +595,9 @@ class IncrementalCheckpointStore:
             self._events.append(event)
             previous = event.digest
 
-    def _sync_budget(self, ledger: BudgetLedger) -> None:
+    def _sync_budget(
+        self, ledger: BudgetLedger, *, legacy_prefix_validation: bool = False
+    ) -> None:
         declaration = BudgetDeclaration.from_ledger(ledger)
         if self._budget_declaration is None:
             self._budget_declaration = declaration
@@ -587,7 +607,16 @@ class IncrementalCheckpointStore:
         persisted = len(self._budget_entries)
         if len(ledger.charges) < persisted:
             raise PersistenceIntegrityError("budget charge history shrank")
-        if persisted and (
+        if legacy_prefix_validation:
+            for index, (incoming, existing) in enumerate(
+                zip(ledger.charges[:persisted], self._budget_entries)
+            ):
+                if incoming.to_dict() != existing.charge.to_dict():
+                    raise PersistenceIntegrityError(
+                        f"legacy budget history changed before persisted head at "
+                        f"charge {index}"
+                    )
+        elif persisted and (
             ledger.charges[persisted - 1].to_dict()
             != self._budget_entries[-1].charge.to_dict()
         ):
@@ -689,12 +718,16 @@ class IncrementalCheckpointStore:
         plan: IterationPlan | None = None,
         obligation_state: Mapping[str, bool] | None = None,
         _legacy_effect_scan: bool = False,
+        _legacy_budget_prefix_validation: bool = False,
     ) -> CampaignCheckpointV3:
         """Persist only deltas plus one compact current-state checkpoint."""
         self._adopt_run_identity(run.run_id)
         self._require_committed_tail()
         self._sync_events(events)
-        self._sync_budget(budget)
+        self._sync_budget(
+            budget,
+            legacy_prefix_validation=_legacy_budget_prefix_validation,
+        )
         self._sync_effects(effects, legacy_scan=_legacy_effect_scan)
         self._sync_iterations(run)
 
@@ -708,6 +741,7 @@ class IncrementalCheckpointStore:
             budget_head_digest=(
                 self._budget_entries[-1].digest if self._budget_entries else ""
             ),
+            budget_declaration_digest=self._budget_declaration_digest(),
             effect_count=len(self._effect_entries),
             effect_head_digest=(
                 self._effect_entries[-1].digest if self._effect_entries else ""
@@ -744,6 +778,10 @@ class IncrementalCheckpointStore:
             raise PersistenceIntegrityError("new checkpoint does not follow persisted head")
         if checkpoint.run_state.run_id != self._run_id:
             raise PersistenceIntegrityError("checkpoint belongs to another run")
+        if checkpoint.budget_declaration_digest != self._budget_declaration_digest():
+            raise PersistenceIntegrityError(
+                "new checkpoint budget declaration commitment disagrees with store"
+            )
         if previous is not None:
             old_counts = (
                 previous.event_count,
@@ -770,6 +808,7 @@ class IncrementalCheckpointStore:
             plan=checkpoint.plan,
             obligation_state=checkpoint.obligation_state,
             _legacy_effect_scan=True,
+            _legacy_budget_prefix_validation=True,
         )
 
     @staticmethod
@@ -850,6 +889,10 @@ class IncrementalCheckpointStore:
     def _verify_checkpoint_commitment(
         self, checkpoint: CampaignCheckpointV3, *, verify_budget: bool = True
     ) -> None:
+        if checkpoint.budget_declaration_digest != self._budget_declaration_digest():
+            raise PersistenceIntegrityError(
+                "checkpoint budget declaration commitment does not match store"
+            )
         self._verify_journal_prefix(
             self._events,
             checkpoint.event_count,
@@ -912,14 +955,17 @@ class IncrementalCheckpointStore:
         """
         if not self._checkpoints:
             return
-        if self._budget_declaration is None:
-            raise PersistenceIntegrityError("checkpoint exists without budget declaration")
+        declaration_digest = self._budget_declaration_digest()
 
         cursor = 0
         spent_general = 0.0
         spent_validation = 0.0
         spent_total = 0.0
         for checkpoint in self._checkpoints:
+            if checkpoint.budget_declaration_digest != declaration_digest:
+                raise PersistenceIntegrityError(
+                    "checkpoint budget declaration commitment does not match store"
+                )
             target = checkpoint.budget_charge_count
             if target < cursor or target > len(self._budget_entries):
                 raise PersistenceIntegrityError(
@@ -1108,9 +1154,11 @@ class IncrementalCheckpointStore:
             raise PersistenceIntegrityError(
                 "non-empty persistence history requires a non-empty run_id"
             )
-        if store._budget_entries and store._budget_declaration is None:
+        if (store._budget_entries or store._checkpoints) and (
+            store._budget_declaration is None
+        ):
             raise PersistenceIntegrityError(
-                "budget journal entries exist without a budget declaration"
+                "budget history or checkpoints exist without a budget declaration"
             )
 
         store._effect_index = {

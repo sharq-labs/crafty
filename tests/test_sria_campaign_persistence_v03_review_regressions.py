@@ -6,8 +6,13 @@ import copy
 
 import pytest
 
-from src.engcore.sria.campaign.budget import BudgetLedger
-from src.engcore.sria.campaign.checkpoint import EffectLedger, ResumeViolation
+from src.engcore.sria.campaign.budget import BudgetCharge, BudgetLedger
+from src.engcore.sria.campaign.checkpoint import (
+    CampaignCheckpoint,
+    CheckpointStore,
+    EffectLedger,
+    ResumeViolation,
+)
 from src.engcore.sria.campaign.events import (
     CampaignEvent,
     CampaignEventLog,
@@ -71,6 +76,93 @@ def _rechain_checkpoints(payload: dict) -> None:
     payload["checkpoint_head_digest"] = previous
 
 
+def _charge(
+    charge_id: str,
+    *,
+    realized: float,
+    predicted: float | None = None,
+    general: float | None = None,
+    validation: float = 0.0,
+    family: ActionFamily = ActionFamily.EXPLORE,
+) -> BudgetCharge:
+    if general is None:
+        general = realized - validation
+    return BudgetCharge(
+        charge_id=charge_id,
+        action_id=f"action-{charge_id}",
+        iteration=int(charge_id.split("-")[-1]),
+        family=family,
+        realized=realized,
+        predicted=predicted,
+        from_general_pool=general,
+        from_validation_reservation=validation,
+        detail=f"detail-{charge_id}",
+    )
+
+
+def _legacy_checkpoint(
+    *,
+    iteration: int,
+    charges: tuple[BudgetCharge, ...],
+    total_budget: float = 100.0,
+    reserved_validation_budget: float = 20.0,
+    cost_unit: str = "hour",
+    enforced_cap: float | None = 90.0,
+    enforced_cap_source: str = "test executor",
+) -> CampaignCheckpoint:
+    events = CampaignEventLog(RUN_ID)
+    for index in range(iteration):
+        events.append(
+            CampaignEventType.BUDGET_UPDATED,
+            iteration=index + 1,
+            payload={"iteration": index + 1},
+        )
+    run = CampaignRun(
+        run_id=RUN_ID,
+        campaign_id="v03-review-campaign",
+        state=ExecutionState.READY,
+        iteration=iteration,
+        max_iterations=5,
+        event_log_digest=events.head_digest,
+    )
+    return CampaignCheckpoint(
+        run=run,
+        events=events,
+        budget=BudgetLedger(
+            total_budget=total_budget,
+            reserved_validation_budget=reserved_validation_budget,
+            charges=charges,
+            cost_unit=cost_unit,
+            enforced_cap=enforced_cap,
+            enforced_cap_source=enforced_cap_source,
+        ),
+        effects=EffectLedger(),
+    )
+
+
+def _legacy_store(*checkpoints: CampaignCheckpoint) -> CheckpointStore:
+    legacy = CheckpointStore()
+    for checkpoint in checkpoints:
+        legacy.save(checkpoint)
+    return legacy
+
+
+def _budget_fields(ledger: BudgetLedger) -> dict:
+    return {
+        "to_dict": ledger.to_dict(),
+        "charges": [charge.to_dict() for charge in ledger.charges],
+        "total_budget": ledger.total_budget,
+        "reserved_validation_budget": ledger.reserved_validation_budget,
+        "spent_general": ledger.spent_general,
+        "spent_validation": ledger.spent_validation,
+        "spent_total": ledger.spent_total,
+        "overrun": ledger.overrun,
+        "cost_unit": ledger.cost_unit,
+        "enforced_cap": ledger.enforced_cap,
+        "enforced_cap_source": ledger.enforced_cap_source,
+    }
+
+
 def test_earlier_budget_summary_tamper_is_detected_even_after_rechaining() -> None:
     payload = copy.deepcopy(_store().to_dict())
 
@@ -82,6 +174,196 @@ def test_earlier_budget_summary_tamper_is_detected_even_after_rechaining() -> No
 
     with pytest.raises(PersistenceIntegrityError, match="checkpoint 0 spent_total"):
         IncrementalCheckpointStore.from_dict(payload)
+
+
+def test_budget_declaration_total_budget_tamper_fails_closed() -> None:
+    payload = copy.deepcopy(_store(1).to_dict())
+    payload["budget_declaration"]["total_budget"] += 10.0
+
+    with pytest.raises(
+        PersistenceIntegrityError,
+        match="budget declaration commitment",
+    ):
+        IncrementalCheckpointStore.from_dict(payload)
+
+
+def test_budget_declaration_reserved_validation_tamper_fails_closed() -> None:
+    payload = copy.deepcopy(_store(1).to_dict())
+    payload["budget_declaration"]["reserved_validation_budget"] += 5.0
+
+    with pytest.raises(
+        PersistenceIntegrityError,
+        match="budget declaration commitment",
+    ):
+        IncrementalCheckpointStore.from_dict(payload)
+
+
+def test_budget_declaration_enforced_cap_tamper_fails_closed() -> None:
+    source = _legacy_checkpoint(
+        iteration=1,
+        charges=(_charge("charge-1", realized=1.0, predicted=1.0),),
+        enforced_cap=90.0,
+        enforced_cap_source="test executor",
+    )
+    payload = IncrementalCheckpointStore.from_legacy_store(
+        _legacy_store(source)
+    ).to_dict()
+    payload["budget_declaration"]["enforced_cap"] = 99.0
+
+    with pytest.raises(
+        PersistenceIntegrityError,
+        match="budget declaration commitment",
+    ):
+        IncrementalCheckpointStore.from_dict(payload)
+
+
+def test_budget_declaration_enforced_cap_source_tamper_fails_closed() -> None:
+    source = _legacy_checkpoint(
+        iteration=1,
+        charges=(_charge("charge-1", realized=1.0, predicted=1.0),),
+        enforced_cap=90.0,
+        enforced_cap_source="test executor",
+    )
+    payload = IncrementalCheckpointStore.from_legacy_store(
+        _legacy_store(source)
+    ).to_dict()
+    payload["budget_declaration"]["enforced_cap_source"] = "different executor"
+
+    with pytest.raises(
+        PersistenceIntegrityError,
+        match="budget declaration commitment",
+    ):
+        IncrementalCheckpointStore.from_dict(payload)
+
+
+def test_budget_declaration_round_trip_preserves_exact_budget_semantics() -> None:
+    source = _legacy_checkpoint(
+        iteration=1,
+        charges=(
+            _charge(
+                "charge-1",
+                realized=6.0,
+                predicted=5.0,
+                general=2.0,
+                validation=4.0,
+                family=ActionFamily.VALIDATE,
+            ),
+        ),
+        total_budget=10.0,
+        reserved_validation_budget=5.0,
+        cost_unit="gpu-hour",
+        enforced_cap=8.0,
+        enforced_cap_source="gpu quota",
+    )
+    store = IncrementalCheckpointStore.from_legacy_store(_legacy_store(source))
+
+    assert store.records[0].budget_declaration_digest
+
+    reloaded = IncrementalCheckpointStore.from_dict(copy.deepcopy(store.to_dict()))
+    restored = reloaded.latest()
+    assert restored is not None
+    assert _budget_fields(restored.budget) == _budget_fields(source.budget)
+
+
+def test_legacy_migration_rejects_mutated_early_charge_with_same_tail() -> None:
+    charge_a = _charge("charge-1", realized=1.0, predicted=1.0)
+    charge_b = _charge("charge-2", realized=2.0, predicted=2.0)
+    charge_c = _charge("charge-3", realized=3.0, predicted=3.0)
+    mutated_a = _charge("charge-1", realized=4.0, predicted=1.0)
+    legacy = _legacy_store(
+        _legacy_checkpoint(iteration=1, charges=(charge_a, charge_b)),
+        _legacy_checkpoint(iteration=2, charges=(mutated_a, charge_b, charge_c)),
+    )
+
+    with pytest.raises(PersistenceIntegrityError, match="charge 0"):
+        IncrementalCheckpointStore.from_legacy_store(legacy)
+
+
+def test_legacy_migration_rejects_pool_split_mutation() -> None:
+    charge_a = _charge(
+        "charge-1",
+        realized=6.0,
+        predicted=6.0,
+        general=2.0,
+        validation=4.0,
+        family=ActionFamily.VALIDATE,
+    )
+    mutated_a = _charge(
+        "charge-1",
+        realized=6.0,
+        predicted=6.0,
+        general=3.0,
+        validation=3.0,
+        family=ActionFamily.VALIDATE,
+    )
+    charge_b = _charge("charge-2", realized=2.0, predicted=2.0)
+    legacy = _legacy_store(
+        _legacy_checkpoint(iteration=1, charges=(charge_a,)),
+        _legacy_checkpoint(iteration=2, charges=(mutated_a, charge_b)),
+    )
+
+    with pytest.raises(PersistenceIntegrityError, match="charge 0"):
+        IncrementalCheckpointStore.from_legacy_store(legacy)
+
+
+def test_legacy_migration_rejects_realized_cost_mutation() -> None:
+    charge_a = _charge("charge-1", realized=1.0, predicted=1.0)
+    mutated_a = _charge("charge-1", realized=2.0, predicted=1.0)
+    charge_b = _charge("charge-2", realized=2.0, predicted=2.0)
+    legacy = _legacy_store(
+        _legacy_checkpoint(iteration=1, charges=(charge_a,)),
+        _legacy_checkpoint(iteration=2, charges=(mutated_a, charge_b)),
+    )
+
+    with pytest.raises(PersistenceIntegrityError, match="charge 0"):
+        IncrementalCheckpointStore.from_legacy_store(legacy)
+
+
+def test_legacy_migration_accepts_valid_growing_budget_prefixes() -> None:
+    charges = (
+        _charge("charge-1", realized=1.0, predicted=1.0),
+        _charge(
+            "charge-2",
+            realized=6.0,
+            predicted=5.0,
+            general=2.0,
+            validation=4.0,
+            family=ActionFamily.VALIDATE,
+        ),
+        _charge("charge-3", realized=3.0, predicted=3.0),
+        _charge("charge-4", realized=4.0, predicted=4.0),
+    )
+    checkpoints = tuple(
+        _legacy_checkpoint(iteration=index, charges=charges[:index])
+        for index in range(1, 5)
+    )
+    migrated = IncrementalCheckpointStore.from_legacy_store(
+        _legacy_store(*checkpoints)
+    )
+
+    assert len(migrated.records) == len(checkpoints)
+    for source, restored in zip(checkpoints, migrated.history):
+        assert _budget_fields(restored.budget) == _budget_fields(source.budget)
+
+
+def test_repeated_charge_id_semantics_survive_valid_legacy_migration() -> None:
+    charge_a = _charge("charge-1", realized=1.0, predicted=1.0)
+    restored = IncrementalCheckpointStore.from_legacy_store(
+        _legacy_store(_legacy_checkpoint(iteration=1, charges=(charge_a,)))
+    ).latest()
+    assert restored is not None
+
+    before = restored.budget.to_dict()
+    existing = restored.budget.settle(
+        charge_id="charge-1",
+        action_id="different-action",
+        iteration=99,
+        family=ActionFamily.EXPLORE,
+        realized=99.0,
+        predicted=99.0,
+    )
+    assert existing.to_dict() == charge_a.to_dict()
+    assert restored.budget.to_dict() == before
 
 
 def test_corrupt_uncommitted_event_suffix_fails_closed_on_load() -> None:
