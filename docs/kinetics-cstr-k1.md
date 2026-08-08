@@ -152,12 +152,26 @@ never attempts a solve — asserted by calling it on an unbound problem where an
 solve attempt would raise.
 
 **Method justification.** BDF is the production method: variable-order (1–5)
-backward differentiation with an **analytic Jacobian**, L-stable at every order
-used, the standard choice for stiff chemical kinetics. Radau (5th-order Radau
-IIA, fully implicit Runge–Kutta) is the cross-method arm — a different family
-(one-step rather than multistep), also L-stable, which matters because the fast
-chemical mode must be *damped* rather than oscillated; that requirement is what
-rules out the trapezoidal family. RK45 is admitted only as a measuring
+backward differentiation with an **analytic Jacobian**, the standard choice for
+stiff chemical kinetics because it is *stiffly stable* in Gear's sense — its
+stability region contains the whole negative real axis and a wedge around it, so
+a strongly damped mode does not dictate the step size. BDF is A-stable only at
+orders 1–2 and A(α)-stable above that, with α shrinking as the order rises; it
+is **not** L-stable at every order it runs at. Radau (5th-order Radau IIA, fully
+implicit Runge–Kutta) is the cross-method arm — a different family (one-step
+rather than multistep) — and it *is* both A-stable and L-stable. Damping rather
+than oscillating on the fast chemical mode is what this problem requires, and it
+is what rules out the trapezoidal family, which is A-stable but not L-stable.
+
+> **Erratum against the frozen preregistration.** The hashed
+> `method_justification` string in `k1_config_frozen.json` says BDF is
+> "L-stable". That is wrong for the reason above. The string is inside the
+> hashed preregistration payload, so editing it would change `config_hash` and
+> break the freeze that makes "these results came from that configuration"
+> checkable. The frozen text therefore stays as recorded and the correction is
+> carried in `k1_config.PREREGISTRATION_ERRATA`, which is deliberately excluded
+> from the hashed payload. No number, threshold, regime or result is affected —
+> the error is entirely in the wording of a justification. RK45 is admitted only as a measuring
 instrument for stiffness. **LSODA is refused by the domain** because its
 internal stiff/non-stiff switching makes its work count unattributable to one
 method and would corrupt the only stiffness measurement K1 has.
@@ -743,6 +757,54 @@ into a fresh directory, checked for a clean working tree, and run with no
 working tree to LF repository-wide, which is what lets the byte-digest freezes
 of T1/T2/T3 and the Electrical experiments survive a checkout — those pins were
 re-verified from the clone and all matched.
+
+---
+
+# Appendix — merge-readiness corrections (`fix/k1-merge-readiness`)
+
+Six defects were found in review of the frozen K1 branch and corrected on
+`fix/k1-merge-readiness`, based on `bc7b1a3`. **No K1 scientific result, regime,
+threshold or frozen artifact was changed**, and neither Core was touched —
+verified by diffing `src/engcore/scientific/` and `src/engcore/sria/` against
+`0d0f199` directly rather than against `HEAD`.
+
+Two corrections change *semantics* that the frozen v1.0.1 artifact recorded
+under the old rules. In both cases the artifact is left exactly as frozen and
+the correction applies prospectively, with the discrepancy pinned by a test so
+it can never be mistaken for drift.
+
+| | defect | disposition |
+|---|---|---|
+| **P1.1** | `git_commit` carried the frozen Core baseline (`0d0f199`) — a commit that *predates the solver*, so provenance pointed at a tree with no kinetics domain in it | `solve_reactor` now takes `source_commit` (the executing revision, → `ProvenanceRecord.git_commit`) and `core_baseline_commit` (context, → provenance metadata). Resolution happens in the experiment layer; the Core still harvests nothing. **Frozen artifact keeps the old value**, pinned by `test_a10_provenance_is_complete_for_every_regime` |
+| **P1.2** | the gate treated `bool(result.values)` as rung success, so a CONVERGED-but-unusable rung (R8) could carry a sequence to a validation level | a rung must be converged **and** `is_usable`. Unusable rungs are *withheld with a recorded reason*, not relabelled as failures, and can no longer become the reference for the invariant or steady-state comparison |
+| **P2.1** | the physical envelope was assessed from accepted solver nodes only, which cannot see an excursion between nodes | extrema now taken over accepted nodes **∪** the dense output already computed for the invariant check. Node-only values retained alongside so the contribution is visible. Explicitly labelled a *sampled bound*, not an exact continuous extremum |
+| **P2.2** | the steady-state search claimed "every stationary point"; a tangential root at a fold has no sign change and cannot be bracketed | claim narrowed to **transversal roots only**, with `SEARCH_SEMANTICS` carried into every serialized verification record. No continuation framework was built |
+| **P3.1** | two false claims: that Arrhenius `dk/dT` grows without bound, and that BDF is L-stable at every order | corrected everywhere editable. `dk/dT → 0` as `T → ∞` (`k → k0`); it is maximised at `E/2R = 4375 K`, far above the 1000 K ceiling, so it rises monotonically only *within the envelope*. BDF is **stiffly stable** (Gear), A-stable at orders 1–2 only. The one occurrence inside the hashed preregistration is recorded as an erratum instead |
+| **P3.3** | `int(500.9) → 500` silently ran a different experiment from the one declared | counts must be genuine `int`. Fractional floats, integral floats, strings, `None`, NaN/Inf and `bool` are all refused — `bool` explicitly, since it is an `int` subclass and would read as 1 |
+
+### What the fixes revealed
+
+Two things worth recording, because neither was known before:
+
+- **P2.1's guard is real but non-binding on every K1 regime.** On BDF the
+  accepted nodes already resolve every excursion — step control clusters them
+  exactly at the peak — so union and node-only extrema agree to the last bit on
+  R1, R2, R3, R6a, R6b, R7 and R8. A binding case does exist and is pinned as a
+  regression test: **Radau at rtol=1e-3**, whose collocation interpolant leaves
+  the node hull by 1.3e-7 mol/m³. The guard tightens a bound; on this domain it
+  has never yet changed an admissibility verdict.
+- **R8's physics does not survive its own tolerance ladder.** At rtol=1e-12 the
+  runaway hits genuine step-size collapse (`NOT_CONVERGED`). So R8's gate is
+  refused by *both* routes — three rungs converged-but-unusable and one that
+  did not converge at all — which is a stronger negative than K1 originally
+  recorded.
+
+### Test count
+
+The K1 tests grew from **109 to 160**; the full authoritative suite from
+**1066 to 1117**. All 51 additions are regression tests for the six defects,
+including the adversarial cases the review asked for, and two that pin the
+frozen artifact's superseded semantics so they cannot be mistaken for drift.
 
 ## Final verdict
 

@@ -167,6 +167,25 @@ def test_a2_stiffness_was_measured_not_asserted(by_regime) -> None:
     assert by_regime["R3"]["stiffness"]["work_ratio_is_lower_bound"] is True
 
 
+def test_the_frozen_artifact_uses_the_superseded_budget_accounting(
+    by_regime,
+) -> None:
+    """P3.2 compatibility, pinned rather than left implicit.
+
+    v1.0.1 counted the REFUSED call as work: a 500-evaluation budget was
+    reported as 501 evaluations. The artifact is frozen and is not rewritten,
+    so a reader comparing it against a fresh run will see 501 here and 500
+    there. The corrected semantics — ``rhs_evaluations_completed`` = 500,
+    ``rhs_evaluations_attempted`` = 501 — apply prospectively and are enforced
+    by the P3.2 tests in ``tests/domains/kinetics``.
+    """
+    r5 = by_regime["R5"]
+    assert r5["rhs_evaluations"] == 501, (
+        "the frozen artifact records the superseded attempted-count semantics"
+    )
+    assert r5["rhs_budget"] == 500
+
+
 def test_a3_the_computational_limit_produced_a_genuine_non_success(
     by_regime,
 ) -> None:
@@ -252,6 +271,16 @@ def test_a9_three_steady_states_but_one_attractor(by_regime) -> None:
 
 
 def test_a10_provenance_is_complete_for_every_regime(by_regime) -> None:
+    """Completeness of the FROZEN 1.0.1 artifact, historical semantics included.
+
+    ``git_commit == BASE_COMMIT`` here is the *defect this branch corrected*,
+    not the behaviour it endorses: v1.0.1 passed the frozen Core baseline into
+    the executing-revision field. The artifact is frozen and is deliberately
+    not rewritten, so this test pins what it actually records. The corrected
+    semantics — ``git_commit`` = the revision that ran,
+    ``core_baseline_commit`` = the frozen Core revision — are enforced on the
+    live code path by the P1.1 tests in ``tests/domains/kinetics``.
+    """
     for rid, row in by_regime.items():
         provenance = row["provenance"]
         assert provenance["models"], rid

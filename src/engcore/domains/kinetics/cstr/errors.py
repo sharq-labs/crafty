@@ -31,10 +31,33 @@ class IntegrationBudgetExceeded(KineticsCSTRError):
     integration was still making progress when it was stopped. The solver
     adapter catches it and reports MAX_ITERATIONS, which is the existing
     convergence state that means exactly "stopped at a work cap".
+
+    TWO COUNTS, BECAUSE THEY ARE DIFFERENT NUMBERS
+    -----------------------------------------------
+    ``completed``  evaluations the budget admitted and which were carried out.
+                   This is the work the result actually rests on, and it never
+                   exceeds ``budget``.
+    ``attempted``  ``completed + 1`` — the call that was refused. It is
+                   recorded because "the integrator asked for one more" is the
+                   evidence that the run was stopped rather than finished, but
+                   it is not work that happened.
+
+    Reporting a single number here was a real defect: a budget of 500 used to
+    be reported as 501 evaluations, which is a count of work that was never
+    done. Callers that want "how much did this cost" want ``completed``.
     """
 
-    def __init__(self, message: str, *, evaluations: int, budget: int, t: float):
+    def __init__(
+        self,
+        message: str,
+        *,
+        completed: int,
+        attempted: int,
+        budget: int,
+        t: float,
+    ):
         super().__init__(message)
-        self.evaluations = int(evaluations)
+        self.completed = int(completed)
+        self.attempted = int(attempted)
         self.budget = int(budget)
         self.t = float(t)

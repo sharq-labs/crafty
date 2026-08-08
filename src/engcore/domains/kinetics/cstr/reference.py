@@ -33,11 +33,38 @@ equation in one unknown:
 
     g(T) = a (T_f - T) + beta k(T) C_A*(T) - gamma (T - T_c) = 0
 
-``g`` is continuous on the model's temperature envelope, so every root can be
-bracketed by scanning for sign changes and then refined by Brent's method. For
-an exothermic reaction ``g`` can cross zero three times — the ignition/
-extinction multiplicity — and this function returns all of them rather than the
-first, because "the steady state" is not well defined when there are three.
+``g`` is continuous on the model's temperature envelope, so a root at which it
+*changes sign* can be bracketed by scanning and then refined by Brent's method.
+For an exothermic reaction ``g`` crosses zero three times over part of the
+coolant-temperature range — the ignition/extinction multiplicity — and this
+function returns all such crossings rather than the first, because "the steady
+state" is not well defined when there are three.
+
+WHAT THIS SEARCH DOES AND DOES NOT PROMISE — READ BEFORE QUOTING A COUNT
+--------------------------------------------------------------------------
+It finds every **transversal** root: every temperature at which ``g`` changes
+sign, to the resolution of the scan. That is a strictly weaker claim than "every
+stationary point", and the difference is not academic here.
+
+At a **fold** (a saddle-node bifurcation, exactly where the multiplicity window
+opens and closes) two roots merge into one double root at which ``g`` touches
+zero without crossing it. A sign-change scan cannot see a tangential root, and
+refining the scan does not fix it: no finite grid makes a non-crossing touch
+into a crossing. Arbitrarily close to a fold the two roots are still transversal
+but separated by less than the scan spacing, so they are missed as a pair —
+which at least fails safely, by reporting one root rather than a spurious one.
+
+The claim is therefore narrowed rather than the algorithm extended: this
+function reports transversal roots, may report fewer than the true count within
+a scan spacing of a fold, and never reports a root that is not one. Detecting
+tangential roots honestly needs a bifurcation/continuation method, which is a
+great deal of machinery for a case this milestone does not exercise and does not
+need — K1's regimes sit well away from the folds.
+
+Consumers must therefore not read the returned count as "the number of steady
+states this reactor has". :func:`steady_states` returns the roots it can
+bracket; :data:`SEARCH_SEMANTICS` states this in one line for anything that
+serializes the result.
 
 =====================================================================
 REFERENCE 2 — an exact invariant of the nonlinear system
@@ -91,6 +118,17 @@ from .errors import ReactorConfigurationError
 STEADY_STATE_REFERENCE_ID = "kinetics.cstr.algebraic_steady_state_brentq"
 STEADY_STATE_EXPRESSION = (
     "g(T) = a(T_f - T) + beta k(T) a C_Af/(a + k(T)) - gamma(T - T_c) = 0"
+)
+
+#: The exact scope of what the steady-state search returns. Carried into
+#: serialized verification records so a reader of a stored result cannot
+#: mistake the count for "the number of steady states this reactor has".
+SEARCH_SEMANTICS = (
+    "transversal roots only: every sign change of g on the scanned interval, "
+    "refined by Brent. A tangential (double) root at a fold does not change "
+    "sign and is not detected, and two roots closer together than the scan "
+    "spacing are reported as none rather than as one spurious root. Never "
+    "reports a root that is not one"
 )
 INVARIANT_REFERENCE_ID = "kinetics.cstr.adiabatic_reaction_free_invariant"
 INVARIANT_EXPRESSION = (
@@ -222,13 +260,19 @@ def steady_states(
     scan_points: int = 20001,
     xtol: float = 1.0e-12,
 ) -> tuple[SteadyState, ...]:
-    """Every stationary point in ``[search_min_k, search_max_k]``.
+    """Every **transversal** root in ``[search_min_k, search_max_k]``.
 
     A dense uniform scan brackets the sign changes; Brent's method refines each
     bracket. The scan is dense on purpose: an ignition branch can be narrow,
     and a coarse scan that stepped over a bracketed pair would silently report
     one steady state where there are three — the failure mode that would make
     this reference agree with a wrong answer.
+
+    This is NOT a promise to return every stationary point. A tangential root
+    at a fold does not change sign and is not found, and a pair separated by
+    less than the scan spacing is missed as a pair. See :data:`SEARCH_SEMANTICS`
+    and the module docstring; the shortfall is always in the safe direction
+    (fewer roots, never a spurious one).
     """
     a = _check_positive(dilution_rate_per_s, "dilution_rate_per_s")
     low = _check_positive(search_min_k, "search_min_k")

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import platform
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -56,6 +57,37 @@ from .k1_config import (
 # =====================================================================
 # Environment — recorded, never auto-harvested into provenance identity
 # =====================================================================
+
+def resolve_source_commit() -> str:
+    """The revision that is actually executing, resolved at the EXPERIMENT layer.
+
+    Deliberately here and not in the Scientific Core. The core's provenance
+    module collects nothing on its own — auto-harvesting repository or machine
+    state would be a privacy problem and a determinism problem — so the caller
+    supplies it, and this experiment is the caller.
+
+    Returns a sentinel rather than raising when the revision cannot be
+    determined (no git, a tarball export, a dirty detached state). A provenance
+    record that honestly says "unknown" is worth more than one that fails the
+    run, and far more than one that quietly substitutes some other commit —
+    which is the defect this function exists to prevent.
+    """
+    try:
+        completed = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=Path(__file__).resolve().parents[2],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return "unknown"
+    revision = completed.stdout.strip()
+    if completed.returncode != 0 or not revision:
+        return "unknown"
+    return revision
+
 
 def environment() -> dict[str, str]:
     """Facts that could change a floating-point result, and nothing else.
@@ -105,7 +137,7 @@ def classify(result) -> str:
 # The regimes
 # =====================================================================
 
-def run_regime(spec) -> dict[str, Any]:
+def run_regime(spec, *, source_commit: str) -> dict[str, Any]:
     run = spec.build()
     problem = build_cstr_problem(run, problem_id=f"k1-{spec.regime_id}")
     result = solve_reactor(
@@ -113,7 +145,11 @@ def run_regime(spec) -> dict[str, Any]:
         run_id=f"k1-{spec.regime_id}",
         solver=CSTRSolver(),
         problem=problem,
-        git_commit=BASE_COMMIT,
+        # The revision that ran, NOT the Core baseline. Passing BASE_COMMIT
+        # here was the original defect: it pointed provenance at a commit that
+        # predates this solver.
+        source_commit=source_commit,
+        core_baseline_commit=BASE_COMMIT,
         environment=environment(),
     )
     numerics = dict(result.metadata.get("numerics", {}))
@@ -192,7 +228,12 @@ def run_regime(spec) -> dict[str, Any]:
     # --- provenance completeness, checked rather than assumed ---
     row["provenance"] = {
         "software_version": result.provenance.software_version,
+        # The executing revision. Distinct from the Core baseline beside it.
         "git_commit": result.provenance.git_commit,
+        "source_commit": result.provenance.git_commit,
+        "core_baseline_commit": result.provenance.metadata.get(
+            "core_baseline_commit"
+        ),
         "models": [list(m) for m in result.provenance.models],
         "solvers": [list(s) for s in result.provenance.solvers],
         "input_names": sorted(result.provenance.inputs),
@@ -450,7 +491,8 @@ def probe_step_size_collapse() -> dict[str, Any]:
 # =====================================================================
 
 def run_k1() -> dict[str, Any]:
-    rows = [run_regime(spec) for spec in REGIMES]
+    source_commit = resolve_source_commit()
+    rows = [run_regime(spec, source_commit=source_commit) for spec in REGIMES]
     invalid = [run_invalid_declaration(d) for d in INVALID_DECLARATIONS]
     collapse = probe_step_size_collapse()
 
@@ -557,7 +599,11 @@ def run_k1() -> dict[str, Any]:
     return {
         "experiment_id": EXPERIMENT_ID,
         "experiment_version": K1_VERSION,
+        # The frozen Core revision this builds on. Context, not execution.
         "base_commit": BASE_COMMIT,
+        "core_baseline_commit": BASE_COMMIT,
+        # The revision that actually produced the numbers below.
+        "source_commit": source_commit,
         "config": config_payload(),
         "config_hash": config_hash(),
         "environment": environment(),

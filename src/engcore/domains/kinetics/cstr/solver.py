@@ -12,23 +12,35 @@ Thermal domains keep them:
 
 WHY BDF, AND WHY RADAU AS THE SECOND ARM
 -----------------------------------------
-The system is stiff: ``dk/dT = k E/(R T**2)`` makes the chemical mode orders of
-magnitude faster than the flow mode ``q/V`` during ignition, while the horizon
-of interest is set by the slow mode. An explicit method must resolve the fast
-mode for stability even where it is dynamically irrelevant, so its cost is set
-by the stiffness ratio rather than by the accuracy wanted.
+The system is stiff: over the operating range ``dk/dT = k E/(R T**2)`` makes
+the chemical mode orders of magnitude faster than the flow mode ``q/V`` during
+ignition, while the horizon of interest is set by the slow mode. An explicit
+method must resolve the fast mode for stability even where it is dynamically
+irrelevant, so its cost is set by the stiffness ratio rather than by the
+accuracy wanted. (The derivative rises steeply across the envelope but does not
+grow without bound: ``k -> k0`` and ``dk/dT -> 0`` as ``T -> infinity``. See
+:mod:`problem`.)
 
 BDF is the production method. Variable-order (1-5) backward differentiation
 with a quasi-Newton corrector and an analytic Jacobian: the standard choice for
-stiff chemical kinetics, cheap per step because it reuses factorizations across
-steps, and L-stable at every order it uses here.
+stiff chemical kinetics, and cheap per step because it reuses factorizations
+across steps.
+
+Its stability property, stated accurately: BDF is **stiffly stable** in Gear's
+sense — its stability region contains the whole negative real axis and a wedge
+around it, so strongly damped modes are integrated at step sizes set by
+accuracy rather than by stability. It is A-stable only at orders 1-2; at the
+higher orders SciPy selects it is A(alpha)-stable with alpha shrinking as the
+order rises. It is **not** L-stable at every order it uses, and this module
+previously said it was.
 
 Radau (5th-order Radau IIA, fully implicit Runge-Kutta) is the cross-method
 arm. It is a genuinely different family — one-step rather than multistep, so
 its error propagation and its startup behaviour have nothing structural in
-common with BDF's — while also being L-stable, which is required: the fast
-chemical mode must be *damped*, not oscillated, which is exactly what rules out
-the trapezoidal/Crank-Nicolson family for this problem.
+common with BDF's — and it *is* both A-stable and L-stable. Damping rather than
+oscillating on the fast chemical mode is what this problem requires, and it is
+exactly what rules out the trapezoidal/Crank-Nicolson family, which is A-stable
+but not L-stable and rings on stiff modes.
 
 RK45 is admitted for one purpose only: as a measuring instrument. The ratio of
 its right-hand-side evaluations to BDF's is how this domain evidences that a
@@ -112,24 +124,37 @@ _R = MOLAR_GAS_CONSTANT.magnitude_in(GAS_CONSTANT_UNIT)
 
 @dataclass
 class _EvaluationCounter:
-    """Right-hand-side evaluation count and the budget it must respect."""
+    """Right-hand-side evaluation count and the budget it must respect.
+
+    ``completed`` counts evaluations the budget ADMITTED. The check happens
+    before the count is incremented, so a budget of N admits exactly N
+    evaluations and the (N+1)-th call is refused without being counted as work.
+
+    The increment sits at admission rather than after the right-hand side
+    returns because the body below cannot raise -- it returns finite values or
+    NaN -- so "admitted" and "carried out" are the same set here.
+    """
 
     budget: int
-    count: int = 0
+    completed: int = 0
+    attempted: int = 0
     non_finite_events: int = 0
     non_positive_temperature_events: int = 0
 
     def charge(self, t: float) -> None:
-        self.count += 1
-        if self.count > self.budget:
+        if self.completed >= self.budget:
+            self.attempted = self.completed + 1
             raise IntegrationBudgetExceeded(
                 f"right-hand-side evaluation budget of {self.budget} exhausted "
                 f"at t = {t:.6g} s; the integration was still progressing when "
                 f"it was stopped",
-                evaluations=self.count,
+                completed=self.completed,
+                attempted=self.attempted,
                 budget=self.budget,
                 t=t,
             )
+        self.completed += 1
+        self.attempted = self.completed
 
 
 @dataclass(frozen=True)
@@ -400,12 +425,15 @@ class CSTRSolver:
                     f"exhausted at t = {exc.t:.6g} s of "
                     f"{run.operation.end_time_s:.6g} s",
                 ),
-                iterations=exc.evaluations,
+                # The work the run actually rests on, never the refused call.
+                iterations=exc.completed,
                 wall_seconds=time.perf_counter() - started,
                 diagnostics={
                     **common,
                     "outcome": "rhs_budget_exhausted",
-                    "rhs_evaluations": exc.evaluations,
+                    "rhs_evaluations": exc.completed,
+                    "rhs_evaluations_completed": exc.completed,
+                    "rhs_evaluations_attempted": exc.attempted,
                     "abort_time_s": exc.t,
                     "fraction_of_horizon_completed": (
                         exc.t / run.operation.end_time_s
@@ -421,14 +449,16 @@ class CSTRSolver:
             return RawSolverOutput(
                 convergence=ConvergenceState.FAILED,
                 warnings=(f"integrator raised {type(exc).__name__}",),
-                iterations=system.counter.count,
+                iterations=system.counter.completed,
                 wall_seconds=time.perf_counter() - started,
                 diagnostics={
                     **common,
                     "outcome": "backend_exception",
                     "error_type": type(exc).__name__,
                     "error": str(exc),
-                    "rhs_evaluations": system.counter.count,
+                    "rhs_evaluations": system.counter.completed,
+                    "rhs_evaluations_completed": system.counter.completed,
+                    "rhs_evaluations_attempted": system.counter.attempted,
                     "non_finite_rhs_events": system.counter.non_finite_events,
                 },
             )
@@ -442,7 +472,9 @@ class CSTRSolver:
         # measure the same thing by different routes, and a disagreement is
         # itself worth seeing.
         work = {
-            "rhs_evaluations": int(system.counter.count),
+            "rhs_evaluations": int(system.counter.completed),
+            "rhs_evaluations_completed": int(system.counter.completed),
+            "rhs_evaluations_attempted": int(system.counter.attempted),
             "scipy_nfev": int(getattr(solution, "nfev", 0)),
             "scipy_njev": int(getattr(solution, "njev", 0)),
             "scipy_nlu": int(getattr(solution, "nlu", 0)),
@@ -468,7 +500,7 @@ class CSTRSolver:
                     if solution.status == -1
                     else "trajectory contains non-finite values",
                 ),
-                iterations=int(system.counter.count),
+                iterations=int(system.counter.completed),
                 wall_seconds=wall,
                 diagnostics={
                     **common,
@@ -498,7 +530,7 @@ class CSTRSolver:
             return RawSolverOutput(
                 convergence=ConvergenceState.FAILED,
                 warnings=(str(solution.message),),
-                iterations=int(system.counter.count),
+                iterations=int(system.counter.completed),
                 wall_seconds=wall,
                 diagnostics={
                     **common,
@@ -512,12 +544,35 @@ class CSTRSolver:
         # --- completed horizon -------------------------------------------
         concentration = states[0]
         temperature = states[1]
-        peak_index = int(np.argmax(temperature))
 
         # The uniform grid is used for the invariant/conservation checks and
         # for cross-run comparison; it never influenced the integration path.
         grid = system.output_grid
         sampled = np.asarray(solution.sol(grid), dtype=np.float64)
+
+        # THE ENVELOPE IS ASSESSED OVER BOTH SAMPLINGS, NOT JUST THE NODES.
+        #
+        # An adaptive integrator only guarantees its error estimate AT the
+        # accepted nodes. Between two nodes the interpolant can carry the state
+        # somewhere neither node shows — and for a stiff ignition the nodes can
+        # straddle an excursion. Assessing physical admissibility from the
+        # nodes alone would therefore let a trajectory leave the model's
+        # validity envelope in between and be reported as never having left it.
+        #
+        # The dense output is already computed for the invariant check, so
+        # unioning the two samplings is free. What this buys is a strictly
+        # better *lower bound* on the true excursion.
+        #
+        # WHAT IS NOT CLAIMED: this is not the exact continuous extremum. No
+        # interpolant-root-finding or Chebyshev bound is performed, so the
+        # reported extrema remain a sampled minimum/maximum over
+        # (accepted nodes union dense grid). A narrow enough excursion between
+        # two adjacent dense samples would still be missed, and the diagnostic
+        # names say "sampled" so a reader is not invited to over-read them.
+        all_time = np.concatenate((times, grid))
+        all_concentration = np.concatenate((concentration, sampled[0]))
+        all_temperature = np.concatenate((temperature, sampled[1]))
+        peak_index = int(np.argmax(all_temperature))
 
         caf = run.operation.caf_mol_per_m3
         final_concentration = float(concentration[-1])
@@ -528,12 +583,14 @@ class CSTRSolver:
         values = {
             CA_FINAL_METRIC: final_concentration,
             T_FINAL_METRIC: float(temperature[-1]),
-            # Maximum over the integrator's OWN accepted steps, which cluster
-            # where the solution moves fastest — that is, at the peak. Reading
-            # it from a uniform grid instead would under-resolve a sharp
-            # ignition and report a peak that never happened to be sampled.
-            T_MAX_METRIC: float(temperature[peak_index]),
-            T_AT_MAX_METRIC: float(times[peak_index]),
+            # Maximum over the accepted steps AND the dense sample. The
+            # accepted steps cluster where the solution moves fastest, so they
+            # resolve a sharp ignition that a uniform grid alone would miss;
+            # the dense sample covers the quiet stretches where the integrator
+            # takes long steps. Neither sampling dominates the other, so the
+            # peak is read from their union.
+            T_MAX_METRIC: float(all_temperature[peak_index]),
+            T_AT_MAX_METRIC: float(all_time[peak_index]),
             CONVERSION_METRIC: float(conversion),
         }
 
@@ -541,7 +598,7 @@ class CSTRSolver:
             convergence=ConvergenceState.CONVERGED,
             values=values,
             residuals={},
-            iterations=int(system.counter.count),
+            iterations=int(system.counter.completed),
             wall_seconds=wall,
             diagnostics={
                 **common,
@@ -552,11 +609,25 @@ class CSTRSolver:
                 "trajectory_finite": True,
                 "reached_time_s": float(times[-1]),
                 "fraction_of_horizon_completed": 1.0,
-                "min_concentration_mol_per_m3": float(np.min(concentration)),
-                "max_concentration_mol_per_m3": float(np.max(concentration)),
-                "min_temperature_k": float(np.min(temperature)),
-                "max_temperature_k": float(np.max(temperature)),
-                "peak_time_s": float(times[peak_index]),
+                # Sampled extrema over accepted nodes UNION the dense grid.
+                # A lower bound on the true continuous excursion, not the
+                # exact extremum — see the comment above the union.
+                "min_concentration_mol_per_m3": float(np.min(all_concentration)),
+                "max_concentration_mol_per_m3": float(np.max(all_concentration)),
+                "min_temperature_k": float(np.min(all_temperature)),
+                "max_temperature_k": float(np.max(all_temperature)),
+                "envelope_sampling": (
+                    "accepted solver nodes union dense output on the uniform "
+                    "grid; a sampled bound, not an exact continuous extremum"
+                ),
+                "envelope_sample_count": int(all_temperature.size),
+                # The node-only extrema, kept so the contribution of dense
+                # sampling is visible rather than merged away.
+                "max_temperature_k_nodes_only": float(np.max(temperature)),
+                "min_concentration_mol_per_m3_nodes_only": float(
+                    np.min(concentration)
+                ),
+                "peak_time_s": float(all_time[peak_index]),
                 "concentration_ceiling_mol_per_m3":
                     run.concentration_ceiling_mol_per_m3,
                 # The uniform sample used by the conservation/invariant checks.
@@ -602,7 +673,8 @@ def solve_reactor(
     solver: CSTRSolver | None = None,
     problem: ScientificProblem | None = None,
     software_version: str = "engcore.domains.kinetics.cstr/0.1.0",
-    git_commit: str | None = None,
+    source_commit: str | None = None,
+    core_baseline_commit: str | None = None,
     timestamp: str | None = None,
     environment: Mapping[str, str] | None = None,
     parent_run_id: str | None = None,
@@ -610,6 +682,27 @@ def solve_reactor(
     """Run the full contract lifecycle for one reactor and return a result.
 
     Orchestration only: every stage goes through the protocol.
+
+    TWO COMMIT IDENTITIES, AND THEY ARE NOT INTERCHANGEABLE
+    --------------------------------------------------------
+    ``source_commit``         the revision of THIS repository that actually
+                              executed and produced the numbers. It is what
+                              ``ProvenanceRecord.git_commit`` means: "to
+                              re-derive this result, check out that revision".
+    ``core_baseline_commit``  the frozen Core revision the domain was built
+                              against. It is context, not execution identity,
+                              and it lives in provenance metadata.
+
+    Conflating them is not a cosmetic error. K1 originally passed the frozen
+    Core V0.2 baseline into ``git_commit`` — a commit that predates this solver
+    entirely, so the provenance record pointed at a revision where the code
+    that produced the result did not yet exist. Anyone trying to reproduce it
+    from that field would check out a tree with no kinetics domain in it.
+
+    Both are caller-supplied. Neither is harvested from git here, and nothing
+    in the Scientific Core harvests either: auto-collecting machine or repo
+    state would be both a privacy problem and a determinism problem, which is
+    the position ``ProvenanceRecord`` already takes.
 
     The large trajectory arrays are deliberately excluded from the result's
     metadata — they are evidence for the validation stage, not a diagnostic a
@@ -662,7 +755,8 @@ def solve_reactor(
     provenance = ProvenanceRecord(
         run_id=run_id,
         software_version=software_version,
-        git_commit=git_commit,
+        # The EXECUTING revision. Never the Core baseline — see the docstring.
+        git_commit=source_commit,
         models=model_identities,
         solvers=((SOLVER_ID, SOLVER_VERSION),),
         inputs=inputs,
@@ -679,6 +773,15 @@ def solve_reactor(
             "backend": BACKEND,
             "solver_backend_identity": solver.identity.backend,
             "run_canonical": run.to_dict(),
+            # Context, not execution identity. Recorded under its own name so
+            # it can never be mistaken for the revision that ran.
+            "core_baseline_commit": core_baseline_commit,
+            "commit_identity_semantics": (
+                "git_commit is the source revision that produced this result; "
+                "core_baseline_commit is the frozen Core revision the domain "
+                "was built against. They are different questions and are never "
+                "the same field"
+            ),
         },
     )
 

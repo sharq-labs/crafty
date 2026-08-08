@@ -23,12 +23,24 @@ stiffness, and multiplicity of steady states.
 
 WHY THIS PROBLEM AND NOT A GENTLER ONE
 ---------------------------------------
-The exponential in ``k(T)`` couples the two states with a derivative
-``dk/dT = k E/(R T**2)`` that grows without bound in T. During an ignition
-transient the chemical mode is orders of magnitude faster than the flow mode
-``q/V``, while the horizon of interest is set by the *slow* mode. That ratio is
-the definition of stiffness, and it is a property of the physics rather than
-something imposed on the problem to make it look hard.
+The exponential in ``k(T)`` couples the two states through
+
+    dk/dT = k E / (R T**2)
+
+which over the model's validity envelope rises steeply with temperature: k
+climbs by orders of magnitude between 300 K and 900 K. During an ignition
+transient the chemical mode is therefore orders of magnitude faster than the
+flow mode ``q/V``, while the horizon of interest is set by the *slow* mode.
+That ratio is the definition of stiffness, and it is a property of the physics
+rather than something imposed on the problem to make it look hard.
+
+``dk/dT`` does NOT grow without bound in T, and it is worth being exact about
+why. As ``T -> infinity`` the exponential saturates, ``k -> k0`` and
+``dk/dT -> 0``; the derivative is maximised at ``T = E/(2R)`` and decays
+beyond it. For this parameterization ``E/(2R) = 4375 K``, which is far above
+the 1000 K ceiling of the declared envelope, so ``dk/dT`` is monotonically
+increasing everywhere this model is allowed to be used. The steepness is a
+statement about the operating range, not an unbounded growth.
 
 DIMENSIONAL CHECK, PERFORMED ON THE EQUATIONS
 ----------------------------------------------
@@ -355,6 +367,32 @@ def _non_negative(value: Quantity, unit: str, label: str) -> float:
     return magnitude
 
 
+def _require_integer(value: Any, label: str) -> int:
+    """A count must be declared as a genuine integer.
+
+    ``int(500.9)`` is 500, and accepting that would silently run a different
+    experiment from the one declared — a budget or an output count is a
+    discrete quantity, and a fractional one is a mistake in the caller rather
+    than a value to round. NaN and infinity raise inside ``int()`` at best and
+    would be meaningless as counts at worst.
+
+    ``bool`` is refused explicitly. It is a subclass of ``int`` in Python, so
+    ``n_output_points=True`` would otherwise be silently accepted as 1.
+    """
+    if isinstance(value, bool):
+        raise ReactorConfigurationError(
+            f"{label} must be an int, got a bool ({value!r}); bool is an int "
+            f"subclass in Python and would be read as {int(value)}"
+        )
+    if not isinstance(value, int):
+        raise ReactorConfigurationError(
+            f"{label} must be declared as an int, got "
+            f"{type(value).__name__} ({value!r}); a count is discrete and is "
+            f"not rounded for the caller"
+        )
+    return int(value)
+
+
 def _valid_temperature(value: Quantity, label: str) -> float:
     """Enforce the model's declared temperature envelope at the boundary."""
     kelvin = value.magnitude_in(TEMPERATURE_UNIT)
@@ -576,8 +614,17 @@ class IntegrationSettings:
     #: measurement this domain relies on.
     ALLOWED_METHODS = ("BDF", "Radau", "RK45")
     #: Methods admissible as a production integrator for a stiff regime. Both
-    #: are L-stable, which is required: the fast chemical mode must be damped
-    #: rather than oscillated, which rules out the trapezoidal family.
+    #: damp the fast chemical mode rather than oscillating on it, which is what
+    #: this problem requires and what rules out the trapezoidal family.
+    #:
+    #: The two get there differently, and the difference is not cosmetic.
+    #: Radau IIA (order 5) is A-stable AND L-stable. BDF is A-stable only at
+    #: orders 1-2; at the higher orders SciPy uses it is A(alpha)-stable with
+    #: alpha shrinking as the order rises, and it is *stiffly stable* in Gear's
+    #: sense — its stability region contains the whole negative real axis and a
+    #: wedge around it, which is what makes it the standard choice for stiff
+    #: chemical kinetics. Claiming BDF is L-stable at every order it uses would
+    #: be false.
     STIFF_METHODS = ("BDF", "Radau")
 
     def __post_init__(self) -> None:
@@ -594,13 +641,13 @@ class IntegrationSettings:
                     f"{label} must be finite and strictly positive, got {value!r}"
                 )
             object.__setattr__(self, label, value)
-        budget = int(self.max_rhs_evaluations)
+        budget = _require_integer(self.max_rhs_evaluations, "max_rhs_evaluations")
         if budget < 1:
             raise ReactorConfigurationError(
                 f"max_rhs_evaluations must be at least 1, got {budget}"
             )
         object.__setattr__(self, "max_rhs_evaluations", budget)
-        points = int(self.n_output_points)
+        points = _require_integer(self.n_output_points, "n_output_points")
         if points < 2:
             raise ReactorConfigurationError(
                 f"n_output_points must be at least 2, got {points}"

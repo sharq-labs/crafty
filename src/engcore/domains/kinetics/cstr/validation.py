@@ -90,6 +90,7 @@ from .problem import (
 from .reference import (
     INVARIANT_EXPRESSION,
     INVARIANT_REFERENCE_ID,
+    SEARCH_SEMANTICS,
     STEADY_STATE_EXPRESSION,
     STEADY_STATE_REFERENCE_ID,
     adiabatic_invariant_exact,
@@ -411,17 +412,38 @@ MIN_RUNGS = 3
 
 @dataclass(frozen=True)
 class ToleranceRungResult:
+    """One rung's outcome.
+
+    ``converged`` and ``usable`` are separate fields because K1 proved they are
+    separate facts. A rung can complete the horizon, report CONVERGED and
+    produce a full set of metrics while its trajectory sits outside the model's
+    validity envelope — that is exactly regime R8. Treating "metrics were
+    produced" as "this rung counts" would let such a rung carry a sequence to
+    NUMERICALLY_CONVERGED, and the gate would then certify a ladder built on
+    results the domain had already refused to call usable.
+    """
+
     rung: ToleranceRung
     converged: bool
+    usable: bool
     qois: dict[str, float]
     rhs_evaluations: int
     wall_seconds_telemetry: float | None
+    unusable_reason: str = ""
     max_relative_change: float | None = None
+
+    @property
+    def counts_toward_verification(self) -> bool:
+        """Only a converged AND usable rung is evidence about accuracy."""
+        return self.converged and self.usable
 
     def to_dict(self) -> dict[str, Any]:
         return {
             **self.rung.to_dict(),
             "converged": self.converged,
+            "usable": self.usable,
+            "counts_toward_verification": self.counts_toward_verification,
+            "unusable_reason": self.unusable_reason,
             "qois": dict(self.qois),
             "rhs_evaluations": self.rhs_evaluations,
             "wall_seconds_telemetry": self.wall_seconds_telemetry,
@@ -596,6 +618,7 @@ class CSTRVerificationReport:
             "steady_state_rel_error": self.steady_state_rel_error,
             "steady_state_rel_tol": self.steady_state_rel_tol,
             "steady_states_found": [dict(s) for s in self.steady_states_found],
+            "steady_state_search_semantics": SEARCH_SEMANTICS,
             "cross_method_agrees": self.cross_method_agrees,
             "cross_method_detail": self.cross_method_detail,
             "cross_method_max_rel_difference":
@@ -653,6 +676,24 @@ def run_verification_gate(
             problem=problem,
         )
         converged = bool(result.values)
+        # A completed solve is not automatically evidence about accuracy. If
+        # the domain refused to call the result usable — an inadmissible state,
+        # a trajectory outside the model's validity envelope — then it must not
+        # contribute to any validation level, however well the integrator
+        # behaved. Withheld, not downgraded to a failure: the solve really did
+        # converge, and saying otherwise would be a different lie.
+        usable = bool(converged and result.is_usable)
+        unusable_reason = ""
+        if converged and not usable:
+            failing = "; ".join(
+                f"{check.name}: {check.detail}"
+                for check in result.validation.failures
+            )
+            unusable_reason = (
+                f"the solve completed and reported "
+                f"{result.convergence.value}, but the result is not usable "
+                f"({failing or 'no detail recorded'})"
+            )
         qois = {
             name: result.values[name].magnitude
             for name in CONVERGENCE_QOIS
@@ -663,25 +704,38 @@ def run_verification_gate(
             ToleranceRungResult(
                 rung=rung,
                 converged=converged,
+                usable=usable,
                 qois=qois,
                 rhs_evaluations=int(numerics.get("rhs_evaluations", 0)),
                 wall_seconds_telemetry=result.metadata.get(
                     "wall_seconds_telemetry"
                 ),
+                unusable_reason=unusable_reason,
             )
         )
-        if converged:
+        # Only a usable rung may become the reference the reference-comparisons
+        # are taken against.
+        if usable:
             finest_result = result
 
     # --- tolerance-independence gate --------------------------------------
     reasons: list[str] = []
     if len(rows) < MIN_RUNGS:
         reasons.append(f"only {len(rows)} rungs; at least {MIN_RUNGS} are required")
-    failed = [r for r in rows if not r.converged]
-    if failed:
+    incomplete = [r for r in rows if not r.converged]
+    if incomplete:
         reasons.append(
-            f"{len(failed)} of {len(rows)} rungs did not complete the horizon"
+            f"{len(incomplete)} of {len(rows)} rungs did not complete the horizon"
         )
+    unusable = [r for r in rows if r.converged and not r.usable]
+    if unusable:
+        reasons.append(
+            f"{len(unusable)} of {len(rows)} rungs completed but produced a "
+            f"result the domain does not consider usable, so the sequence "
+            f"cannot establish numerical adequacy: "
+            + "; ".join(r.unusable_reason for r in unusable[:1])
+        )
+    failed = incomplete or unusable
 
     annotated: list[ToleranceRungResult] = list(rows)
     if not failed and len(rows) >= 2:
@@ -697,9 +751,11 @@ def run_verification_gate(
                 ToleranceRungResult(
                     rung=current.rung,
                     converged=current.converged,
+                    usable=current.usable,
                     qois=current.qois,
                     rhs_evaluations=current.rhs_evaluations,
                     wall_seconds_telemetry=current.wall_seconds_telemetry,
+                    unusable_reason=current.unusable_reason,
                     max_relative_change=worst,
                 )
             )
@@ -854,7 +910,8 @@ def run_verification_gate(
                     f"{steady_state_rel_tol:.3e}. The reference solves the "
                     f"algebraic residual by Brent bracketing and shares no "
                     f"arithmetic with the integrator. "
-                    f"{len(found)} steady state(s) exist in the envelope"
+                    f"{len(found)} transversal steady state(s) were found in "
+                    f"the envelope ({SEARCH_SEMANTICS})"
                 )
             elif not tolerance_independent:
                 steady_state_detail = (

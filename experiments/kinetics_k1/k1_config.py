@@ -122,14 +122,18 @@ NOMINAL_FEED_TEMPERATURE = CUSTOMARY_PARAMETERS["T_feed_K"]
 
 #: BDF is the production method for every scored regime. Variable-order
 #: backward differentiation with an analytic Jacobian: the standard choice for
-#: stiff chemical kinetics, and L-stable at every order it uses, which the fast
-#: chemical mode requires.
+#: stiff chemical kinetics because it is *stiffly stable* in Gear's sense — its
+#: stability region contains the whole negative real axis and a wedge around it,
+#: so a strongly damped mode does not dictate the step size. It is A-stable only
+#: at orders 1-2 and A(alpha)-stable above that; it is NOT L-stable at every
+#: order it uses. See PREREGISTRATION_ERRATA below.
 PRODUCTION_METHOD = "BDF"
 
 #: Radau (5th-order Radau IIA, fully implicit Runge-Kutta) is the cross-method
-#: arm — a different family, also L-stable. The comparison is preregistered
-#: HERE, before any run, and it awards no validation level: both arms share the
-#: domain's right-hand side, its Jacobian and SciPy's step control.
+#: arm — a different family, and genuinely A-stable and L-stable. The
+#: comparison is preregistered HERE, before any run, and it awards no validation
+#: level: both arms share the domain's right-hand side, its Jacobian and SciPy's
+#: step control.
 CROSS_METHOD = "Radau"
 
 #: RK45 is the stiffness probe. Never a production method; its only role is to
@@ -893,6 +897,47 @@ GATE_THRESHOLDS = {
         "could not have failed"
     ),
 }
+
+
+# =====================================================================
+# 9. Errata against the frozen preregistration
+# =====================================================================
+
+#: Corrections to text that is INSIDE the hashed preregistration payload and
+#: therefore cannot be edited without breaking the freeze.
+#:
+#: This constant is deliberately NOT referenced by :func:`config_payload`. If it
+#: were, recording an erratum would change the preregistration hash, which is
+#: the one thing a frozen artifact must never do. The frozen text stays wrong
+#: and stays hashed; the correction lives beside it and is carried into the
+#: report. A test asserts the hash is unaffected by this constant existing.
+#:
+#: Nothing here changes a number, a threshold, a regime or a result. Every
+#: erratum is a statement about wording.
+PREREGISTRATION_ERRATA = (
+    {
+        "field": "integration.method_justification",
+        "frozen_text_says": (
+            "BDF: ... L-stable, the standard choice for stiff chemical "
+            "kinetics"
+        ),
+        "correction": (
+            "BDF is A-stable only at orders 1-2 and A(alpha)-stable at the "
+            "higher orders SciPy uses, so it is NOT L-stable at every order it "
+            "runs at. The accurate justification is that BDF is stiffly stable "
+            "in Gear's sense: its stability region contains the whole negative "
+            "real axis and a wedge around it, which is why it is the standard "
+            "choice for stiff chemical kinetics. Radau IIA is A-stable and "
+            "L-stable, so that half of the frozen sentence is correct."
+        ),
+        "affects_any_result": False,
+        "why_not_rewritten": (
+            "the sentence is inside the hashed preregistration payload; "
+            "editing it would change config_hash and break the freeze that "
+            "makes 'these results came from that configuration' checkable"
+        ),
+    },
+)
 
 
 def config_payload() -> dict[str, Any]:

@@ -13,7 +13,10 @@ from __future__ import annotations
 
 import ast
 import dataclasses
+import hashlib
+import json
 import math
+import re
 from pathlib import Path
 
 import numpy as np
@@ -684,12 +687,57 @@ def test_case_a_is_not_reported_as_a_failed_method() -> None:
 
 
 def test_the_budget_error_carries_where_it_stopped() -> None:
+    """P3.2: completed work and the refused call are different numbers."""
     system = assemble(reactor("tiny", budget=3))
     with pytest.raises(IntegrationBudgetExceeded) as caught:
         for _ in range(10):
             system.rhs(0.0, system.initial_state)
     assert caught.value.budget == 3
-    assert caught.value.evaluations == 4
+    # Exactly three evaluations were admitted and carried out...
+    assert caught.value.completed == 3
+    # ...and the fourth was refused. It is recorded as evidence that the run
+    # was stopped rather than finished, but it is not work that happened.
+    assert caught.value.attempted == 4
+    assert caught.value.completed <= caught.value.budget
+
+
+def test_a_budget_admits_exactly_its_own_number_of_evaluations() -> None:
+    """P3.2: a budget of N means N completed evaluations, never N+1."""
+    for budget in (1, 2, 7, 50):
+        system = assemble(reactor(f"b{budget}", budget=budget))
+        for _ in range(budget):
+            system.rhs(0.0, system.initial_state)
+        assert system.counter.completed == budget
+        with pytest.raises(IntegrationBudgetExceeded) as caught:
+            system.rhs(0.0, system.initial_state)
+        assert caught.value.completed == budget
+        assert caught.value.attempted == budget + 1
+
+
+def test_the_reported_cost_never_exceeds_the_budget() -> None:
+    """P3.2: the count a caller reads as 'what this cost' is bounded."""
+    constrained = reactor(
+        "budget-report",
+        op=operation(ua=0.0, tf=350.0, caf=2600.0, end=600.0),
+        ca0=2600.0, t0=350.0, budget=500,
+    )
+    result = solve_reactor(constrained, run_id="budget-report-1")
+    numerics = result.metadata["numerics"]
+    assert numerics["rhs_evaluations"] == 500
+    assert numerics["rhs_evaluations_completed"] == 500
+    assert numerics["rhs_evaluations_attempted"] == 501
+    assert result.metadata["iterations"] == 500
+
+
+def test_a_completed_run_reports_equal_completed_and_attempted() -> None:
+    """Nothing was refused, so the two counts coincide."""
+    result = solve_reactor(BENIGN, run_id="counts-1")
+    numerics = result.metadata["numerics"]
+    assert (
+        numerics["rhs_evaluations_completed"]
+        == numerics["rhs_evaluations_attempted"]
+        == numerics["rhs_evaluations"]
+    )
 
 
 def test_case_b_step_size_collapse_reports_not_converged() -> None:
@@ -1007,3 +1055,418 @@ def test_stationarity_is_required_before_a_steady_state_is_claimed() -> None:
     assert gate.steady_state_verified is False
     assert gate.steady_state_rel_error is None
     assert "not settled" in gate.steady_state_detail
+
+
+# =====================================================================
+# P1.1 — the two commit identities must not be confusable
+# =====================================================================
+
+#: A stand-in for "the frozen Core baseline" and "the revision that ran".
+#: Deliberately different strings: the whole point is that they are answers to
+#: different questions and must never share a field.
+_BASELINE = "0" * 40
+_SOURCE = "f" * 40
+
+
+def test_provenance_records_the_executing_revision_not_the_baseline() -> None:
+    result = solve_reactor(
+        BENIGN,
+        run_id="commit-identity-1",
+        source_commit=_SOURCE,
+        core_baseline_commit=_BASELINE,
+    )
+    # git_commit answers "which revision produced this?"
+    assert result.provenance.git_commit == _SOURCE
+    # The baseline is context and lives under its own name.
+    assert result.provenance.metadata["core_baseline_commit"] == _BASELINE
+    assert result.provenance.git_commit != _BASELINE
+
+
+def test_the_two_commit_identities_are_separate_fields() -> None:
+    """Neither can be read out of the other's slot."""
+    result = solve_reactor(
+        BENIGN,
+        run_id="commit-identity-2",
+        source_commit=_SOURCE,
+        core_baseline_commit=_BASELINE,
+    )
+    payload = result.provenance.to_dict()
+    assert payload["git_commit"] == _SOURCE
+    assert payload["metadata"]["core_baseline_commit"] == _BASELINE
+    # The record states which is which, so a downstream reader cannot guess.
+    assert "source revision" in payload["metadata"]["commit_identity_semantics"]
+
+
+def test_an_omitted_source_revision_is_recorded_as_absent_not_invented() -> None:
+    result = solve_reactor(
+        BENIGN, run_id="commit-identity-3", core_baseline_commit=_BASELINE
+    )
+    assert result.provenance.git_commit is None
+    assert result.provenance.metadata["core_baseline_commit"] == _BASELINE
+
+
+def test_the_scientific_core_never_harvests_a_commit() -> None:
+    """P1.1: the revision is caller-supplied; the core collects nothing."""
+    import re
+
+    core = REPO_ROOT / "src" / "engcore" / "scientific"
+    pattern = re.compile(r"subprocess|rev-parse|GitPython|\bdulwich\b")
+    offenders = [
+        str(path.relative_to(REPO_ROOT))
+        for path in core.rglob("*.py")
+        if pattern.search(path.read_text(encoding="utf-8"))
+    ]
+    assert offenders == [], offenders
+
+
+def test_the_experiment_never_passes_the_baseline_as_the_source_revision(
+) -> None:
+    """The original defect, pinned so it cannot come back."""
+    source = (
+        REPO_ROOT / "experiments" / "kinetics_k1" / "k1_run.py"
+    ).read_text(encoding="utf-8")
+    assert "source_commit=BASE_COMMIT" not in source
+    assert "git_commit=BASE_COMMIT" not in source
+    assert "core_baseline_commit=BASE_COMMIT" in source
+
+
+def test_the_resolved_source_revision_is_not_the_core_baseline() -> None:
+    """Resolution happens at the experiment layer and returns a real answer."""
+    from experiments.kinetics_k1 import BASE_COMMIT
+    from experiments.kinetics_k1.k1_run import resolve_source_commit
+
+    resolved = resolve_source_commit()
+    assert resolved == "unknown" or re.fullmatch(r"[0-9a-f]{40}", resolved)
+    # K1's own commits postdate the frozen Core baseline, so a correctly
+    # resolved revision can never equal it.
+    assert resolved != BASE_COMMIT
+
+
+# =====================================================================
+# P1.2 — an unusable result may not earn a validation level
+# =====================================================================
+
+def _runaway() -> ReactorRun:
+    """R8's physics: a flawless integration that leaves the envelope."""
+    return reactor(
+        "gate-runaway",
+        op=operation(ua=0.0, tf=350.0, caf=4000.0, end=300.0),
+        ca0=4000.0, t0=350.0,
+    )
+
+
+def test_the_gate_awards_nothing_to_a_converged_but_unusable_run() -> None:
+    """P1.2: metrics present is not the same as evidence about accuracy."""
+    runaway = _runaway()
+    # Precondition: every rung really does converge and produce metrics.
+    single = solve_reactor(runaway, run_id="gate-runaway-single")
+    assert single.convergence is ConvergenceState.CONVERGED
+    assert single.values
+    assert single.is_usable is False
+
+    gate = run_verification_gate(runaway, run_id_prefix="gate-runaway")
+    assert gate.tolerance_independent is False
+    assert gate.levels_earned == ()
+    assert gate.invariant_verified is False
+    assert gate.steady_state_verified is False
+
+
+def test_the_gate_records_why_an_unusable_rung_was_withheld() -> None:
+    gate = run_verification_gate(_runaway(), run_id_prefix="gate-runaway-why")
+    assert "not usable" in gate.tolerance_detail
+    assert "validity envelope" in gate.tolerance_detail
+
+    # Withheld, not relabelled as a failure. Most rungs converge perfectly well
+    # and are refused only because the trajectory leaves the model's envelope,
+    # which is the distinction P1.2 exists to preserve.
+    completed_but_refused = [
+        rung for rung in gate.rungs if rung.converged and not rung.usable
+    ]
+    assert completed_but_refused, "no rung exercised the converged/unusable case"
+    assert all(rung.unusable_reason for rung in completed_but_refused)
+
+    # Not one rung, by either route, may count as evidence about accuracy.
+    assert all(not rung.counts_toward_verification for rung in gate.rungs)
+
+
+def test_an_unusable_rung_never_becomes_the_reference_for_a_comparison(
+) -> None:
+    """The reference comparisons must not be taken against a refused result."""
+    gate = run_verification_gate(_runaway(), run_id_prefix="gate-runaway-ref")
+    assert gate.invariant_max_rel_error is None
+    assert gate.steady_state_rel_error is None
+    assert gate.cross_method_agrees is None
+
+
+def test_a_usable_run_still_earns_its_levels() -> None:
+    """P1.2 must not have made the gate unable to award anything."""
+    gate = run_verification_gate(ADIABATIC, run_id_prefix="gate-usable")
+    assert all(rung.counts_toward_verification for rung in gate.rungs)
+    assert ValidationLevel.NUMERICALLY_CONVERGED in gate.levels_earned
+
+
+# =====================================================================
+# P2.1 — the envelope is assessed over dense samples too
+# =====================================================================
+
+def test_the_envelope_bound_is_never_looser_than_the_nodes_alone() -> None:
+    """The union can only tighten the reported excursion."""
+    for label, run in (
+        ("benign", BENIGN),
+        ("adiabatic", ADIABATIC),
+        ("runaway", _runaway()),
+    ):
+        solver = CSTRSolver()
+        problem = build_cstr_problem(run, problem_id=f"env-{label}")
+        solver.bind_run(run, problem.problem_id)
+        raw = solver.solve(solver.prepare(problem))
+        d = raw.diagnostics
+        assert d["max_temperature_k"] >= d["max_temperature_k_nodes_only"], label
+        assert (
+            d["min_concentration_mol_per_m3"]
+            <= d["min_concentration_mol_per_m3_nodes_only"]
+        ), label
+        # Strictly more evidence than the nodes alone.
+        assert d["envelope_sample_count"] > d["accepted_steps"] + 1, label
+
+
+def test_dense_sampling_catches_an_excursion_the_nodes_miss() -> None:
+    """P2.1 adversarial: a case where the node hull is genuinely not enough.
+
+    Radau's collocation interpolant is a polynomial through the stage values,
+    and at a loose tolerance it leaves the hull of the accepted nodes. The
+    excursion is small here, but it is real and reproducible, and it is exactly
+    the class of event an accepted-nodes-only envelope cannot see.
+    """
+    run = reactor(
+        "radau-interp",
+        op=operation(ua=0.0, tf=350.0, caf=2600.0, end=600.0),
+        ca0=2600.0, t0=350.0, method="Radau", rtol=1e-3, npts=200001,
+    )
+    run = run.with_integration(
+        run.integration.with_tolerances(
+            rtol=1e-3, atol_concentration=1e-1, atol_temperature=1e-1
+        )
+    )
+    solver = CSTRSolver()
+    problem = build_cstr_problem(run, problem_id="radau-interp")
+    solver.bind_run(run, problem.problem_id)
+    raw = solver.solve(solver.prepare(problem))
+    d = raw.diagnostics
+    assert raw.convergence is ConvergenceState.CONVERGED
+    # The dense sample finds state the accepted nodes never reported.
+    assert (
+        d["min_concentration_mol_per_m3"]
+        < d["min_concentration_mol_per_m3_nodes_only"]
+    )
+
+
+def test_the_envelope_does_not_claim_an_exact_continuous_extremum() -> None:
+    """A sampled bound must say it is one."""
+    solver = CSTRSolver()
+    problem = build_cstr_problem(BENIGN, problem_id="env-claim")
+    solver.bind_run(BENIGN, problem.problem_id)
+    raw = solver.solve(solver.prepare(problem))
+    sampling = raw.diagnostics["envelope_sampling"]
+    assert "sampled bound" in sampling
+    assert "not an exact continuous extremum" in sampling
+
+
+# =====================================================================
+# P2.2 — the steady-state search promises transversal roots only
+# =====================================================================
+
+def _find_states(tc: float, **kwargs):
+    run = reactor("ss-scan", op=operation(tc=tc, end=3600.0))
+    return steady_states(
+        dilution_rate_per_s=run.operation.dilution_rate_per_s,
+        feed_concentration_mol_per_m3=run.operation.caf_mol_per_m3,
+        feed_temperature_k=run.operation.tf_k,
+        coolant_temperature_k=run.operation.tc_k,
+        beta_m3_k_per_mol=run.chemistry.beta_m3_k_per_mol,
+        gamma_per_s=run.gamma_per_s,
+        k0_per_s=run.chemistry.k0_per_s,
+        activation_energy_j_per_mol=run.chemistry.e_j_per_mol,
+        search_min_k=MIN_VALID_TEMPERATURE_K,
+        search_max_k=MAX_VALID_TEMPERATURE_K,
+        **kwargs,
+    ), run
+
+
+def test_a_coarse_scan_misses_a_close_pair_rather_than_inventing_one() -> None:
+    """P2.2: the documented shortfall is real, and it fails safely."""
+    coarse, run = _find_states(300.0, scan_points=11)
+    dense, _ = _find_states(300.0)
+    assert len(dense) == 3
+    # The upper pair sits ~20 K apart; an 11-point scan over 750 K steps over
+    # them. Fewer roots, never a spurious one.
+    assert len(coarse) < len(dense)
+    for state in coarse:
+        residual = steady_state_residual(
+            state.temperature_k,
+            dilution_rate_per_s=run.operation.dilution_rate_per_s,
+            feed_concentration_mol_per_m3=run.operation.caf_mol_per_m3,
+            feed_temperature_k=run.operation.tf_k,
+            coolant_temperature_k=run.operation.tc_k,
+            beta_m3_k_per_mol=run.chemistry.beta_m3_k_per_mol,
+            gamma_per_s=run.gamma_per_s,
+            k0_per_s=run.chemistry.k0_per_s,
+            activation_energy_j_per_mol=run.chemistry.e_j_per_mol,
+        )
+        assert abs(residual) < 1e-9
+
+
+def test_the_search_states_that_it_finds_transversal_roots_only() -> None:
+    from src.engcore.domains.kinetics.cstr.reference import SEARCH_SEMANTICS
+
+    assert "transversal" in SEARCH_SEMANTICS
+    assert "does not change sign" in SEARCH_SEMANTICS
+    assert "Never reports a root that is not one" in SEARCH_SEMANTICS
+    # The docstring must promise transversal roots and explicitly disclaim the
+    # stronger reading, rather than silently omitting it.
+    assert "transversal" in steady_states.__doc__
+    assert "NOT a promise to return every stationary point" in (
+        steady_states.__doc__
+    )
+
+
+def test_the_gate_carries_the_search_semantics_into_its_record() -> None:
+    """A stored count must not be readable as 'all steady states'."""
+    gate = run_verification_gate(BENIGN, run_id_prefix="ss-semantics")
+    payload = gate.to_dict()
+    assert "transversal" in payload["steady_state_search_semantics"]
+
+
+# =====================================================================
+# P3.1 — the two inaccurate scientific claims must not reappear
+# =====================================================================
+
+#: Words that mark a nearby mention of a wrong claim as a *correction* of it
+#: rather than an assertion of it. Checked on a normalized window, because the
+#: corrections are wrapped across comment lines and carry markdown emphasis, so
+#: an exact-substring negation check misses them.
+_NEGATION = re.compile(r"\b(not|never|false|wrong|incorrect|rules out)\b", re.I)
+
+
+def _affirmative_claims(phrase: str, *, skip_names: frozenset[str]) -> list[str]:
+    """Files asserting ``phrase`` without a negation in its neighbourhood.
+
+    The scan deliberately skips this test module: it necessarily contains every
+    phrase it is looking for, as the pattern it searches with.
+    """
+    offenders: list[str] = []
+    pattern = re.compile(re.escape(phrase))
+    for root in ("src", "tests", "experiments", "docs"):
+        for path in (REPO_ROOT / root).rglob("*"):
+            if path.suffix not in (".py", ".md") or not path.is_file():
+                continue
+            if path.name in skip_names:
+                continue
+            text = path.read_text(encoding="utf-8")
+            for match in pattern.finditer(text):
+                window = text[max(0, match.start() - 260):match.end() + 260]
+                # Collapse comment prefixes, line breaks and markdown emphasis
+                # so "**not**\n    #: L-stable" reads as ordinary prose.
+                normalized = re.sub(r"[*`]|\n\s*#:?", " ", window)
+                if _NEGATION.search(normalized):
+                    continue
+                offenders.append(str(path.relative_to(REPO_ROOT)))
+    return offenders
+
+
+def test_no_source_file_claims_the_arrhenius_derivative_is_unbounded() -> None:
+    """As T -> infinity, k -> k0 and dk/dT -> 0. It is not unbounded."""
+    offenders = _affirmative_claims(
+        "grows without bound", skip_names=frozenset({Path(__file__).name})
+    )
+    assert offenders == [], offenders
+
+
+def test_no_source_file_claims_bdf_is_l_stable_at_every_order() -> None:
+    """BDF is A-stable only at orders 1-2; L-stability does not hold above it."""
+    offenders = _affirmative_claims(
+        "L-stable at every order",
+        # The frozen preregistration JSON is hashed and cannot be edited; its
+        # erratum lives in k1_config.PREREGISTRATION_ERRATA instead.
+        skip_names=frozenset({Path(__file__).name, "k1_config_frozen.json"}),
+    )
+    assert offenders == [], offenders
+
+
+def test_the_frozen_preregistration_erratum_is_recorded() -> None:
+    """The one wrong claim that cannot be edited must be corrected beside it."""
+    from experiments.kinetics_k1.k1_config import (
+        PREREGISTRATION_ERRATA,
+        config_hash,
+        config_payload,
+    )
+
+    assert PREREGISTRATION_ERRATA
+    erratum = PREREGISTRATION_ERRATA[0]
+    assert erratum["field"] == "integration.method_justification"
+    assert "A-stable only at orders 1-2" in erratum["correction"]
+    assert erratum["affects_any_result"] is False
+    # Recording an erratum must not disturb the freeze it is an erratum about.
+    payload = json.dumps(config_payload(), sort_keys=True, separators=(",", ":"))
+    assert "PREREGISTRATION_ERRATA" not in payload
+    assert hashlib.sha256(payload.encode("utf-8")).hexdigest() == config_hash()
+
+
+def test_the_stiff_method_note_states_bdf_stability_accurately() -> None:
+    from src.engcore.domains.kinetics.cstr import problem as problem_module
+
+    source = Path(problem_module.__file__).read_text(encoding="utf-8")
+    assert "stiffly stable" in source
+    assert "A-stable only at" in source
+    # Radau IIA genuinely is L-stable, and that claim stays.
+    assert "Radau IIA (order 5) is A-stable AND L-stable" in source
+
+
+# =====================================================================
+# P3.3 — counts must be declared as genuine integers
+# =====================================================================
+
+@pytest.mark.parametrize("field", ["max_rhs_evaluations", "n_output_points"])
+@pytest.mark.parametrize(
+    "value",
+    [
+        500.9,                 # fractional: would silently truncate to 500
+        2000.7,
+        500.0,                 # integral float is still not an int declaration
+        "500",
+        True,                  # bool is an int subclass and would read as 1
+        False,
+        float("nan"),
+        float("inf"),
+        None,
+    ],
+)
+def test_a_count_must_be_declared_as_an_integer(field, value) -> None:
+    with pytest.raises(ReactorConfigurationError):
+        IntegrationSettings(**{field: value})
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("max_rhs_evaluations", 0),
+        ("max_rhs_evaluations", -1),
+        ("n_output_points", 0),
+        ("n_output_points", 1),
+        ("n_output_points", -5),
+    ],
+)
+def test_an_out_of_range_count_is_refused(field, value) -> None:
+    with pytest.raises(ReactorConfigurationError):
+        IntegrationSettings(**{field: value})
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [("max_rhs_evaluations", 1), ("max_rhs_evaluations", 500),
+     ("n_output_points", 2), ("n_output_points", 2001)],
+)
+def test_a_valid_integer_count_is_accepted(field, value) -> None:
+    settings = IntegrationSettings(**{field: value})
+    assert getattr(settings, field) == value
+    assert isinstance(getattr(settings, field), int)
