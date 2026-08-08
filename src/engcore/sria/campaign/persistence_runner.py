@@ -17,22 +17,19 @@ class IncrementalCampaignRunner(CampaignRunner):
     """CampaignRunner with V0.3 incremental checkpoint persistence.
 
     All scientific, decision, liveness, stopping, execution, assurance and
-    budget behavior remains in the existing runner.  The override is purposely
+    budget behavior remains in the existing runner. The override is purposely
     narrow: when the runner asks for a durable checkpoint, current state is
     handed directly to :class:`IncrementalCheckpointStore.save_state` so only
     journal deltas and one compact checkpoint are persisted.
     """
 
     def __init__(self, *args: Any, checkpoints=None, **kwargs: Any) -> None:
-        super().__init__(
-            *args,
-            checkpoints=checkpoints or IncrementalCheckpointStore(),
-            **kwargs,
-        )
-        if not isinstance(self._checkpoints, IncrementalCheckpointStore):
+        store = checkpoints if checkpoints is not None else IncrementalCheckpointStore()
+        if not isinstance(store, IncrementalCheckpointStore):
             raise TypeError(
                 "IncrementalCampaignRunner requires IncrementalCheckpointStore"
             )
+        super().__init__(*args, checkpoints=store, **kwargs)
 
     def _checkpoint(self):
         return self._checkpoints.save_state(
