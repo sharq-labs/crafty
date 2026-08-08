@@ -61,6 +61,10 @@ class BudgetExhausted(Exception):
     """
 
 
+class BudgetHistoryViolation(Exception):
+    """Budget charge history was mutated outside ``BudgetLedger.settle``."""
+
+
 @dataclass(frozen=True)
 class BudgetCharge:
     """One settled cost, with the prediction it is measured against."""
@@ -141,6 +145,13 @@ class BudgetLedger:
     enforced_cap: float | None = None
     enforced_cap_source: str = ""
 
+    def __setattr__(self, name: str, value: Any) -> None:
+        if name == "charges" and name in self.__dict__:
+            raise BudgetHistoryViolation(
+                "budget charges must be changed through BudgetLedger.settle"
+            )
+        super().__setattr__(name, value)
+
     def __post_init__(self) -> None:
         self.total_budget = float(self.total_budget)
         self.reserved_validation_budget = float(self.reserved_validation_budget)
@@ -157,7 +168,7 @@ class BudgetLedger:
             raise ValueError("budgets must be non-negative")
         if self.reserved_validation_budget > self.total_budget:
             raise ValueError("reserved validation budget exceeds the total budget")
-        self.charges = tuple(self.charges)
+        object.__setattr__(self, "charges", tuple(self.charges))
         seen = [c.charge_id for c in self.charges]
         duplicates = {c for c in seen if seen.count(c) > 1}
         if duplicates:
@@ -280,7 +291,7 @@ class BudgetLedger:
             from_general_pool=from_general,
             detail=detail,
         )
-        self.charges = self.charges + (charge,)
+        object.__setattr__(self, "charges", self.charges + (charge,))
         return charge
 
     def to_dict(self) -> dict[str, Any]:

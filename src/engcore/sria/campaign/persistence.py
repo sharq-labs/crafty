@@ -178,7 +178,9 @@ def _thaw_checkpoint_payload(value: Any) -> Any:
 
 
 def _thaw_checkpoint_event(event: CampaignEvent) -> CampaignEvent:
-    return CampaignEvent.from_dict(_thaw_checkpoint_payload(event.to_dict()))
+    cloned = CampaignEvent.from_dict(_thaw_checkpoint_payload(event.to_dict()))
+    object.__setattr__(cloned, "payload", _thaw_checkpoint_payload(cloned.payload))
+    return cloned
 
 
 @dataclass(frozen=True)

@@ -8,7 +8,11 @@ import pytest
 
 from src.engcore.scientific.ir.values import IntegerValue
 from src.engcore.sria.actions import ExecutorType, ResearchAction
-from src.engcore.sria.campaign.budget import BudgetCharge, BudgetLedger
+from src.engcore.sria.campaign.budget import (
+    BudgetCharge,
+    BudgetHistoryViolation,
+    BudgetLedger,
+)
 from src.engcore.sria.campaign.checkpoint import (
     CampaignCheckpoint,
     CheckpointStore,
@@ -982,7 +986,101 @@ def test_saved_events_do_not_share_caller_payload() -> None:
     before = copy.deepcopy(store.to_dict()["events"])
 
     payload["nested"]["attempts"].append(2)
-    events.events[0].payload["nested"]["attempts"].append(3)
+    with pytest.raises(TypeError, match="immutable"):
+        events.events[0].payload["nested"]["attempts"].append(3)
 
     assert store.to_dict()["events"] == before
+    assert store.verify_committed()
+
+
+def test_event_payload_prefix_mutation_fails_at_source() -> None:
+    events = CampaignEventLog(RUN_ID)
+    events.append(
+        CampaignEventType.CAMPAIGN_CREATED,
+        iteration=0,
+        payload={"nested": {"attempts": [1]}},
+    )
+    events.append(
+        CampaignEventType.SNAPSHOT_CREATED,
+        iteration=1,
+        payload={"tail": True},
+    )
+    budget = BudgetLedger(total_budget=10.0, reserved_validation_budget=1.0)
+    run = CampaignRun(
+        run_id=RUN_ID,
+        campaign_id="v03-review-campaign",
+        state=ExecutionState.READY,
+        iteration=1,
+        max_iterations=2,
+        event_log_digest=events.head_digest,
+    )
+    store = IncrementalCheckpointStore()
+    store.save_state(
+        run=run,
+        events=events,
+        budget=budget,
+        effects=EffectLedger(),
+    )
+    before = copy.deepcopy(store.to_dict()["events"])
+
+    with pytest.raises(TypeError, match="immutable"):
+        events.events[0].payload["nested"]["attempts"].append(2)
+
+    assert store.to_dict()["events"] == before
+    assert events.to_dict()["events"] == before
+    assert store.verify_committed()
+
+
+def test_budget_charge_history_rebind_fails_closed_on_normal_saves() -> None:
+    events = CampaignEventLog(RUN_ID)
+    events.append(CampaignEventType.CAMPAIGN_CREATED, iteration=0)
+    budget = BudgetLedger(total_budget=10.0, reserved_validation_budget=1.0)
+    first = budget.settle(
+        charge_id="charge-1",
+        action_id="action-1",
+        iteration=1,
+        family=ActionFamily.EXPLORE,
+        realized=1.0,
+        predicted=1.0,
+    )
+    budget.settle(
+        charge_id="charge-2",
+        action_id="action-2",
+        iteration=2,
+        family=ActionFamily.EXPLORE,
+        realized=2.0,
+        predicted=2.0,
+    )
+    run = CampaignRun(
+        run_id=RUN_ID,
+        campaign_id="v03-review-campaign",
+        state=ExecutionState.READY,
+        iteration=1,
+        max_iterations=2,
+        event_log_digest=events.head_digest,
+    )
+    store = IncrementalCheckpointStore()
+    store.save_state(
+        run=run,
+        events=events,
+        budget=budget,
+        effects=EffectLedger(),
+    )
+    before = copy.deepcopy(store.to_dict()["budget_journal"])
+    altered = BudgetCharge(
+        charge_id=first.charge_id,
+        action_id=first.action_id,
+        iteration=first.iteration,
+        family=first.family,
+        realized=3.0,
+        predicted=first.predicted,
+        from_general_pool=3.0,
+        detail=first.detail,
+    )
+
+    with pytest.raises(BudgetHistoryViolation, match="BudgetLedger.settle"):
+        budget.charges = (altered, budget.charges[-1])
+
+    assert budget.charges[0].to_dict() == first.to_dict()
+    assert store.to_dict()["budget_journal"] == before
     assert store.verify_committed()
