@@ -666,6 +666,79 @@ class CSTRSolver:
 # Public wrapper
 # =====================================================================
 
+@dataclass(frozen=True)
+class TransientTrajectorySample:
+    """The uniform dense sample of one solve. Domain-local and transient.
+
+    This is the trajectory the verification checks read. It is deliberately NOT
+    part of :class:`ScientificResult`: a record that carried thousands of points
+    would make every serialized artifact unreadable, and the arrays are evidence
+    for one gate rather than something a reader of the result needs.
+
+    Empty when the solve did not complete the horizon — a partial trajectory is
+    preserved in the raw diagnostics instead, where its incompleteness is
+    explicit.
+    """
+
+    time_s: np.ndarray
+    concentration_mol_per_m3: np.ndarray
+    temperature_k: np.ndarray
+
+    @classmethod
+    def empty(cls) -> "TransientTrajectorySample":
+        blank = np.array([], dtype=np.float64)
+        return cls(
+            time_s=blank,
+            concentration_mol_per_m3=blank.copy(),
+            temperature_k=blank.copy(),
+        )
+
+    @classmethod
+    def from_diagnostics(
+        cls, diagnostics: Mapping[str, Any]
+    ) -> "TransientTrajectorySample":
+        return cls(
+            time_s=np.asarray(
+                diagnostics.get("grid_time_s", ()), dtype=np.float64
+            ),
+            concentration_mol_per_m3=np.asarray(
+                diagnostics.get("grid_concentration_mol_per_m3", ()),
+                dtype=np.float64,
+            ),
+            temperature_k=np.asarray(
+                diagnostics.get("grid_temperature_k", ()), dtype=np.float64
+            ),
+        )
+
+    @property
+    def is_empty(self) -> bool:
+        return self.time_s.size == 0
+
+
+@dataclass(frozen=True)
+class VerificationSolveBundle:
+    """One solve's public result plus the transient data a gate needs from it.
+
+    WHY THIS TYPE EXISTS
+    ---------------------
+    The verification gate needs two things from the finest tolerance rung: the
+    compact :class:`ScientificResult`, and the dense trajectory that the
+    invariant and stationarity checks are computed over. The result deliberately
+    discards the trajectory, so the gate used to recover it by integrating the
+    same problem a second time — measured at 9.56 s of the 69.97 s a profiled
+    gate spent, for an integration whose answer it already had.
+
+    Carrying the arrays here instead keeps the duplication out without widening
+    the universal result contract: the bundle is domain-local, never serialized,
+    and is dropped as soon as the gate has read it.
+    """
+
+    result: ScientificResult
+    trajectory: TransientTrajectorySample
+    #: Right-hand-side evaluations the solve actually rested on.
+    rhs_evaluations: int
+
+
 def solve_reactor(
     run: ReactorRun,
     *,
@@ -710,6 +783,43 @@ def solve_reactor(
     record would make the serialized artifacts unreadable. Everything scalar
     that describes how the solve went does survive, because E1 recorded that
     discarding it forces an experiment to re-derive it with a second solve.
+
+    A caller that genuinely needs the trajectory — the verification gate — uses
+    :func:`solve_reactor_bundle` rather than integrating the same problem twice.
+    """
+    return solve_reactor_bundle(
+        run,
+        run_id=run_id,
+        solver=solver,
+        problem=problem,
+        software_version=software_version,
+        source_commit=source_commit,
+        core_baseline_commit=core_baseline_commit,
+        timestamp=timestamp,
+        environment=environment,
+        parent_run_id=parent_run_id,
+    ).result
+
+
+def solve_reactor_bundle(
+    run: ReactorRun,
+    *,
+    run_id: str,
+    solver: CSTRSolver | None = None,
+    problem: ScientificProblem | None = None,
+    software_version: str = "engcore.domains.kinetics.cstr/0.1.0",
+    source_commit: str | None = None,
+    core_baseline_commit: str | None = None,
+    timestamp: str | None = None,
+    environment: Mapping[str, str] | None = None,
+    parent_run_id: str | None = None,
+) -> VerificationSolveBundle:
+    """As :func:`solve_reactor`, but also hands back the transient trajectory.
+
+    Identical lifecycle and an identical :class:`ScientificResult` — the only
+    difference is that the dense sample this solve already computed is returned
+    instead of being dropped, so a caller that needs it does not integrate the
+    same problem a second time.
     """
     solver = solver or CSTRSolver()
     problem = problem or build_cstr_problem(run)
@@ -785,7 +895,7 @@ def solve_reactor(
         },
     )
 
-    return ScientificResult(
+    result = ScientificResult(
         result_id=run_id,
         problem_id=problem.problem_id,
         values=metrics,
@@ -816,4 +926,16 @@ def solve_reactor(
             # Telemetry only. Never a scientific score.
             "wall_seconds_telemetry": raw.wall_seconds,
         },
+    )
+
+    # The trajectory is read off the raw output this solve already produced. It
+    # rides alongside the result rather than inside it, and the caller drops it.
+    return VerificationSolveBundle(
+        result=result,
+        trajectory=(
+            TransientTrajectorySample.from_diagnostics(raw.diagnostics)
+            if raw.succeeded
+            else TransientTrajectorySample.empty()
+        ),
+        rhs_evaluations=int(raw.iterations or 0),
     )

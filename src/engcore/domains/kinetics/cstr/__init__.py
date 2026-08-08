@@ -108,7 +108,10 @@ from .solver import (
     SOLVER_ID,
     SOLVER_VERSION,
     CSTRSolver,
+    TransientTrajectorySample,
+    VerificationSolveBundle,
     solve_reactor,
+    solve_reactor_bundle,
 )
 from .validation import (
     CONVERGENCE_QOIS,
@@ -140,6 +143,9 @@ __all__ = [
     # solving
     "CSTRSolver",
     "solve_reactor",
+    "solve_reactor_bundle",
+    "VerificationSolveBundle",
+    "TransientTrajectorySample",
     "SOLVER_ID",
     "SOLVER_VERSION",
     "BACKEND",

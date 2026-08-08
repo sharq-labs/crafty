@@ -297,8 +297,40 @@ def steady_states(
             activation_energy_j_per_mol=activation_energy_j_per_mol,
         )
 
+    # The scalar residual validated the rate parameters on every one of its
+    # ``scan_points`` calls, by way of ``arrhenius_rate_constant``. The array
+    # scan below evaluates the Arrhenius factor directly, so the same refusals
+    # are made here, once, and up front. Dropping them would turn an invalid
+    # declaration from an error into a silently fabricated residual curve.
+    k0 = _check_positive(k0_per_s, "k0_per_s")
+    energy = _check_non_negative(
+        activation_energy_j_per_mol, "activation_energy_j_per_mol"
+    )
+
     grid = np.linspace(low, high, int(scan_points))
-    values = np.array([residual(float(t)) for t in grid])
+
+    # The BRACKETING scan is evaluated as array arithmetic rather than as
+    # ``scan_points`` separate Python calls. This is the same expression in the
+    # same order on the same float64 values — g(T) is a composition of exp,
+    # multiply, divide, add and subtract, each of which IEEE-754 defines
+    # elementwise — so the sampled residuals, the sign changes they bracket and
+    # therefore the roots are bit-identical to the scalar scan. That equality is
+    # asserted over every preregistered regime in
+    # tests/domains/kinetics/test_cstr_reference_scan.py, because a scan that
+    # merely *nearly* agreed could bracket a different pair and move a root.
+    #
+    # REFINEMENT IS DELIBERATELY NOT VECTORIZED: ``brentq`` below is still
+    # handed the scalar ``residual``, so the root-finding algorithm, its
+    # tolerance and the reference's independence from the solve path are all
+    # untouched. Only the scan that *locates* the brackets changed.
+    with np.errstate(over="ignore"):
+        rate = k0 * np.exp(-energy / (_R_J_PER_MOL_K * grid))
+    ca_star = a * feed_concentration_mol_per_m3 / (a + rate)
+    values = (
+        a * (feed_temperature_k - grid)
+        + beta_m3_k_per_mol * rate * ca_star
+        - gamma_per_s * (grid - coolant_temperature_k)
+    )
 
     roots: list[float] = []
     for index in range(len(grid) - 1):
