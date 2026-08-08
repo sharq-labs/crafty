@@ -1,13 +1,13 @@
 """Core V0.3 — incremental, digest-committed campaign persistence.
 
 The legacy checkpoint representation is logically correct but stores repeated
-prefixes of growing campaign history.  V0.3 stores each historical fact once in
+prefixes of growing campaign history. V0.3 stores each historical fact once in
 append-only journals and lets compact checkpoints commit to exact journal
 prefixes by count + head digest.
 
-The persistence layer deliberately materializes the legacy ``CampaignCheckpoint``
-shape on resume.  Storage changes; decision, evidence, budget, stopping and
-scientific semantics do not.
+The persistence layer materializes the legacy ``CampaignCheckpoint`` shape on
+resume. Storage changes; decision, evidence, budget, stopping and scientific
+semantics do not.
 """
 
 from __future__ import annotations
@@ -465,6 +465,9 @@ class IncrementalCheckpointStore:
         self._iteration_entries: list[IterationJournalEntry] = []
         self._checkpoints: list[CampaignCheckpointV3] = []
         self._effect_index: dict[str, str] = {}
+        self._spent_general = 0.0
+        self._spent_validation = 0.0
+        self._spent_total = 0.0
 
     def __len__(self) -> int:
         return len(self._checkpoints)
@@ -514,7 +517,6 @@ class IncrementalCheckpointStore:
             )
 
     def _require_committed_tail(self) -> None:
-        """Refuse writes through a journal suffix no checkpoint committed."""
         if not self._checkpoints:
             if any(
                 (
@@ -545,6 +547,11 @@ class IncrementalCheckpointStore:
     @staticmethod
     def _same_number(left: float, right: float) -> bool:
         return math.isclose(float(left), float(right), rel_tol=0.0, abs_tol=1e-12)
+
+    def _current_budget_overrun(self) -> float:
+        if self._budget_declaration is None:
+            return 0.0
+        return max(0.0, self._spent_total - self._budget_declaration.total_budget)
 
     def _sync_events(self, log: CampaignEventLog) -> None:
         if log.run_id != self._run_id:
@@ -593,26 +600,65 @@ class IncrementalCheckpointStore:
                 prev_digest=previous,
             )
             self._budget_entries.append(entry)
+            self._spent_general += float(charge.from_general_pool)
+            self._spent_validation += float(charge.from_validation_reservation)
+            self._spent_total += float(charge.realized)
             previous = entry.digest
 
-    def _sync_effects(self, ledger: EffectLedger) -> None:
-        for key, reference in self._effect_index.items():
-            if ledger.applied.get(key) != reference:
-                raise PersistenceIntegrityError(
-                    f"applied effect {key!r} changed or disappeared"
-                )
-        new_keys = sorted(set(ledger.applied) - set(self._effect_index))
+    def _append_effect_items(self, items) -> None:
         previous = self._effect_entries[-1].digest if self._effect_entries else ""
-        for key in new_keys:
+        for key, reference in items:
+            key = str(key)
+            reference = str(reference)
+            if key in self._effect_index:
+                raise PersistenceIntegrityError(
+                    f"effect key {key!r} would be appended twice"
+                )
             entry = EffectJournalEntry(
                 sequence=len(self._effect_entries),
                 key=key,
-                reference=str(ledger.applied[key]),
+                reference=reference,
                 prev_digest=previous,
             )
             self._effect_entries.append(entry)
-            self._effect_index[key] = entry.reference
+            self._effect_index[key] = reference
             previous = entry.digest
+
+    def _sync_effects(self, ledger: EffectLedger, *, legacy_scan: bool = False) -> None:
+        persisted = len(self._effect_entries)
+        if legacy_scan:
+            # One-time migration compatibility: old serialized EffectLedger
+            # mappings are sorted by key, so order is not a stable prefix across
+            # legacy checkpoints. Migration may pay O(N); normal V0.3 saves may not.
+            for key, reference in self._effect_index.items():
+                if ledger.applied.get(key) != reference:
+                    raise PersistenceIntegrityError(
+                        f"applied effect {key!r} changed or disappeared"
+                    )
+            items = sorted(
+                (key, reference)
+                for key, reference in ledger.applied.items()
+                if key not in self._effect_index
+            )
+            self._append_effect_items(items)
+            return
+
+        try:
+            if ledger.journal_length < persisted:
+                raise PersistenceIntegrityError("effect history shrank")
+            if persisted:
+                expected = (
+                    self._effect_entries[-1].key,
+                    self._effect_entries[-1].reference,
+                )
+                if ledger.entry_at(persisted - 1) != expected:
+                    raise PersistenceIntegrityError(
+                        "effect history changed before persisted head"
+                    )
+            items = ledger.entries_from(persisted)
+        except ResumeViolation as exc:
+            raise PersistenceIntegrityError(str(exc)) from exc
+        self._append_effect_items(items)
 
     def _sync_iterations(self, run: CampaignRun) -> None:
         persisted = len(self._iteration_entries)
@@ -642,18 +688,14 @@ class IncrementalCheckpointStore:
         effects: EffectLedger,
         plan: IterationPlan | None = None,
         obligation_state: Mapping[str, bool] | None = None,
+        _legacy_effect_scan: bool = False,
     ) -> CampaignCheckpointV3:
-        """Persist only new history plus one compact current-state checkpoint.
-
-        The save path validates only the new record against the committed head.
-        Full O(N) chain verification belongs to load/resume/audit, not every
-        checkpoint append.
-        """
+        """Persist only deltas plus one compact current-state checkpoint."""
         self._adopt_run_identity(run.run_id)
         self._require_committed_tail()
         self._sync_events(events)
         self._sync_budget(budget)
-        self._sync_effects(effects)
+        self._sync_effects(effects, legacy_scan=_legacy_effect_scan)
         self._sync_iterations(run)
 
         previous = self._checkpoints[-1] if self._checkpoints else None
@@ -674,10 +716,10 @@ class IncrementalCheckpointStore:
             iteration_head_digest=(
                 self._iteration_entries[-1].digest if self._iteration_entries else ""
             ),
-            spent_general=budget.spent_general,
-            spent_validation=budget.spent_validation,
-            spent_total=budget.spent_total,
-            budget_overrun=budget.overrun,
+            spent_general=self._spent_general,
+            spent_validation=self._spent_validation,
+            spent_total=self._spent_total,
+            budget_overrun=self._current_budget_overrun(),
             plan=plan,
             obligation_state=obligation_state or {},
             previous_checkpoint_digest=previous.digest if previous else "",
@@ -720,7 +762,6 @@ class IncrementalCheckpointStore:
         self._verify_checkpoint_commitment(checkpoint, verify_budget=False)
 
     def save(self, checkpoint: CampaignCheckpoint) -> CampaignCheckpointV3:
-        """Compatibility seam used by legacy migration and equivalence tests."""
         return self.save_state(
             run=checkpoint.run,
             events=checkpoint.events,
@@ -728,6 +769,7 @@ class IncrementalCheckpointStore:
             effects=checkpoint.effects,
             plan=checkpoint.plan,
             obligation_state=checkpoint.obligation_state,
+            _legacy_effect_scan=True,
         )
 
     @staticmethod
@@ -832,12 +874,11 @@ class IncrementalCheckpointStore:
             checkpoint.iteration_head_digest,
             "iteration",
         )
-        # Legacy CampaignRun.event_log_digest is operational state, not a
-        # checkpoint-head commitment: some valid M5 durable boundaries append an
-        # event after the most recent state transition.  V0.3 therefore preserves
-        # that field byte-for-byte and commits the exact event prefix separately
-        # through event_count + event_head_digest.  Requiring equality here would
-        # both reject valid legacy migration and change resume state.
+        # ``CampaignRun.event_log_digest`` is operational state, not the V0.3
+        # checkpoint-head commitment. Frozen M5 can checkpoint immediately after
+        # appending an event, so this field may legitimately name an earlier
+        # event. Preserve it exactly; event_count + event_head_digest commits the
+        # persisted history.
         if verify_budget:
             self._verify_budget_summary(checkpoint)
 
@@ -870,7 +911,6 @@ class IncrementalCheckpointStore:
             seen.add(entry.key)
 
     def verify_committed(self) -> bool:
-        """Verify exactly the journal prefixes committed by the latest checkpoint."""
         self._verify_checkpoint_chain()
         if not self._checkpoints:
             return True
@@ -890,7 +930,6 @@ class IncrementalCheckpointStore:
         return True
 
     def verify_all(self) -> bool:
-        """Audit every stored record, including any uncommitted suffix."""
         self.verify_committed()
         self._verify_event_chain(len(self._events))
         self._verify_chained_entries(
@@ -912,9 +951,6 @@ class IncrementalCheckpointStore:
         if checkpoint is None:
             raise PersistenceIntegrityError("cannot materialize an empty store")
         self._verify_checkpoint_commitment(checkpoint)
-
-        # O(N) verification is allowed here: resume/audit pays it once rather
-        # than every checkpoint save paying for every historical prefix.
         self._verify_event_chain(checkpoint.event_count)
         self._verify_chained_entries(
             self._budget_entries, checkpoint.budget_charge_count, "budget"
@@ -1011,6 +1047,16 @@ class IncrementalCheckpointStore:
         store._effect_index = {
             entry.key: entry.reference for entry in store._effect_entries
         }
+        store._spent_general = sum(
+            float(entry.charge.from_general_pool) for entry in store._budget_entries
+        )
+        store._spent_validation = sum(
+            float(entry.charge.from_validation_reservation)
+            for entry in store._budget_entries
+        )
+        store._spent_total = sum(
+            float(entry.charge.realized) for entry in store._budget_entries
+        )
         declared_head = payload.get("checkpoint_head_digest", "")
         actual_head = store._checkpoints[-1].digest if store._checkpoints else ""
         if declared_head != actual_head:
@@ -1024,14 +1070,12 @@ class IncrementalCheckpointStore:
     def from_legacy_store(
         cls, legacy: LegacyCheckpointStore
     ) -> "IncrementalCheckpointStore":
-        """Explicit in-memory migration. The legacy store is not modified."""
         store = cls()
         for checkpoint in legacy.history:
             store.save(checkpoint)
         return store
 
     def save_to_path(self, path: str | Path) -> Path:
-        """Atomically replace one deterministic JSON image of the linear store."""
         target = Path(path)
         target.parent.mkdir(parents=True, exist_ok=True)
         temporary = target.with_name(target.name + ".tmp")
@@ -1047,7 +1091,6 @@ class IncrementalCheckpointStore:
         payload = json.loads(Path(path).read_text(encoding="utf-8"))
         if payload.get("schema") == PERSISTENCE_SCHEMA:
             return cls.from_dict(payload)
-        # Legacy CheckpointStore intentionally had no store-level schema.
         if "checkpoints" in payload:
             return cls.from_legacy_store(LegacyCheckpointStore.from_dict(payload))
         raise PersistenceIntegrityError("unknown campaign persistence format")
@@ -1056,7 +1099,6 @@ class IncrementalCheckpointStore:
     def migrate_legacy_file(
         cls, source: str | Path, destination: str | Path
     ) -> "IncrementalCheckpointStore":
-        """Create a V0.3 artifact without rewriting the legacy source."""
         payload = json.loads(Path(source).read_text(encoding="utf-8"))
         legacy = LegacyCheckpointStore.from_dict(payload)
         migrated = cls.from_legacy_store(legacy)
