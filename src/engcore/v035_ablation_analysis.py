@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 from pathlib import Path
 
 
@@ -69,8 +70,23 @@ def analyze(journal_path):
         "duplicate_run_records": "rejected",
         "multiple_completion_records": "rejected",
         "adaptive_arm": "adaptive_stacked_v035",
+        "json_nonfinite_values": "serialized_as_null",
     }
     return report
+
+
+def _strict_json_value(value):
+    """Recursively replace non-finite floats with JSON ``null`` values."""
+
+    if isinstance(value, float):
+        return value if math.isfinite(value) else None
+    if isinstance(value, dict):
+        return {k: _strict_json_value(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_strict_json_value(v) for v in value]
+    if isinstance(value, tuple):
+        return [_strict_json_value(v) for v in value]
+    return value
 
 
 def main() -> None:
@@ -79,7 +95,7 @@ def main() -> None:
     p.add_argument("--out", default=None)
     args = p.parse_args()
 
-    report = analyze(args.journal)
+    report = _strict_json_value(analyze(args.journal))
     out = Path(args.out) if args.out else (
         Path(args.journal).parent / "ablation_analysis_v035.json"
     )
