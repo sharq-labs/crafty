@@ -776,6 +776,55 @@ def test_effect_applied_attribute_rebind_fails_closed() -> None:
     assert effects.entries_from(0) == (("k", "reference-A"),)
 
 
+def test_event_payload_init_reproducer_fails_closed_and_restart_retains_event() -> None:
+    events = CampaignEventLog(RUN_ID)
+    events.append(
+        CampaignEventType.CAMPAIGN_CREATED,
+        iteration=0,
+        payload={"status": "original", "nested": {"attempts": [1]}},
+    )
+    original_payload = events.events[0].to_dict()["payload"]
+    original_digest = events.events[0].digest
+
+    with pytest.raises(TypeError, match="immutable"):
+        events.events[0].payload.__init__({"status": "rewritten"})
+
+    assert events.events[0].to_dict()["payload"] == original_payload
+    assert events.events[0].digest == original_digest
+
+    events.append(
+        CampaignEventType.BUDGET_UPDATED,
+        iteration=1,
+        payload={"status": "valid-append"},
+    )
+    budget = BudgetLedger(total_budget=10.0, reserved_validation_budget=1.0)
+    run = CampaignRun(
+        run_id=RUN_ID,
+        campaign_id="v03-review-campaign",
+        state=ExecutionState.READY,
+        iteration=1,
+        max_iterations=1,
+        event_log_digest=events.head_digest,
+    )
+    store = IncrementalCheckpointStore()
+    store.save_state(
+        run=run,
+        events=events,
+        budget=budget,
+        effects=EffectLedger(),
+    )
+    reloaded = IncrementalCheckpointStore.from_dict(
+        json.loads(json.dumps(store.to_dict()))
+    )
+    restored = reloaded.latest()
+
+    assert restored is not None
+    assert restored.events.events[0].to_dict()["payload"] == original_payload
+    assert restored.events.events[1].to_dict()["payload"] == {
+        "status": "valid-append"
+    }
+
+
 def test_checkpoint_record_obligation_state_mutation_fails_closed() -> None:
     events = CampaignEventLog(RUN_ID)
     events.append(CampaignEventType.CAMPAIGN_CREATED, iteration=0)
@@ -851,6 +900,40 @@ def test_checkpoint_record_run_metadata_mutation_fails_closed() -> None:
     assert store.to_dict()["checkpoints"][-1]["run_state"]["metadata"] == {
         "nested": {"attempts": [1, 2], "flags": {"accepted": True}},
         "phase": "ready",
+    }
+
+
+def test_checkpoint_record_run_metadata_init_reproducer_fails_closed() -> None:
+    events = CampaignEventLog(RUN_ID)
+    events.append(CampaignEventType.CAMPAIGN_CREATED, iteration=0)
+    budget = BudgetLedger(total_budget=10.0, reserved_validation_budget=1.0)
+    run = CampaignRun(
+        run_id=RUN_ID,
+        campaign_id="v03-review-campaign",
+        state=ExecutionState.READY,
+        iteration=1,
+        max_iterations=1,
+        event_log_digest=events.head_digest,
+        metadata={"status": "legitimate"},
+    )
+    store = IncrementalCheckpointStore()
+    store.save_state(
+        run=run,
+        events=events,
+        budget=budget,
+        effects=EffectLedger(),
+    )
+    record = store.latest_record
+    assert record is not None
+    before = record.digest
+
+    with pytest.raises(PersistenceIntegrityError, match="immutable"):
+        record.run_state.metadata.__init__({"status": "rewritten"})
+
+    assert record.run_state.metadata == {"status": "legitimate"}
+    assert record.digest == before
+    assert store.to_dict()["checkpoints"][-1]["run_state"]["metadata"] == {
+        "status": "legitimate"
     }
 
 
@@ -1893,3 +1976,26 @@ def test_effect_journal_reproducer_cannot_forge_persisted_effect() -> None:
 
     assert restored is not None
     assert dict(restored.effects.applied) == {"real-effect": "real-ref"}
+
+
+def test_effect_journal_init_reproducer_fails_closed_and_reloads_legitimate_effect() -> None:
+    effects = EffectLedger()
+    effects.mark("legitimate-effect", "legitimate-ref")
+    before_applied = dict(effects.applied)
+    before_journal = effects.entries_from(0)
+
+    with pytest.raises(ResumeViolation, match="effect journal"):
+        effects._journal.__init__([("forged", "ref")])
+
+    assert dict(effects.applied) == before_applied
+    assert effects.entries_from(0) == before_journal
+
+    store, _, _, _, _ = _normal_save_fixture(effects=effects)
+    reloaded = IncrementalCheckpointStore.from_dict(
+        json.loads(json.dumps(store.to_dict()))
+    )
+    restored = reloaded.latest()
+
+    assert restored is not None
+    assert dict(restored.effects.applied) == before_applied
+    assert restored.effects.entries_from(0) == before_journal

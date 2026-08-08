@@ -114,6 +114,12 @@ class _EffectAppliedMapping(dict[str, str]):
         "effect mapping must be changed through EffectLedger.mark/once"
     )
 
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        if getattr(self, "_initialized", False):
+            self._reject_mutation()
+        super().__init__(*args, **kwargs)
+        self._initialized = True
+
     def _reject_mutation(self, *args: Any, **kwargs: Any) -> None:
         raise ResumeViolation(self._MUTATION_MESSAGE)
 
@@ -149,6 +155,12 @@ class _EffectJournal(list[tuple[str, str]]):
     """Append-order journal that only ``EffectLedger`` may extend."""
 
     _MUTATION_MESSAGE = "effect journal must be changed through EffectLedger.mark/once"
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        if getattr(self, "_initialized", False):
+            self._reject_mutation()
+        super().__init__(*args, **kwargs)
+        self._initialized = True
 
     def _reject_mutation(self, *args: Any, **kwargs: Any) -> None:
         raise ResumeViolation(self._MUTATION_MESSAGE)

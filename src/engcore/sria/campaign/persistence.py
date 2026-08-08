@@ -148,6 +148,12 @@ class _ImmutableCheckpointMapping(dict[str, Any]):
 
     _MUTATION_MESSAGE = "checkpoint record mappings are immutable"
 
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        if getattr(self, "_initialized", False):
+            self._reject_mutation()
+        super().__init__(*args, **kwargs)
+        self._initialized = True
+
     def _reject_mutation(self, *args: Any, **kwargs: Any) -> None:
         raise PersistenceIntegrityError(self._MUTATION_MESSAGE)
 
@@ -180,6 +186,12 @@ class _ImmutableCheckpointList(list[Any]):
     """List-compatible checkpoint payload sequence that rejects mutation."""
 
     _MUTATION_MESSAGE = "checkpoint record sequences are immutable"
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        if getattr(self, "_initialized", False):
+            self._reject_mutation()
+        super().__init__(*args, **kwargs)
+        self._initialized = True
 
     def _reject_mutation(self, *args: Any, **kwargs: Any) -> None:
         raise PersistenceIntegrityError(self._MUTATION_MESSAGE)

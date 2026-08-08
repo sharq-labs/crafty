@@ -40,6 +40,12 @@ class _ImmutableEventMapping(dict[str, Any]):
 
     _MUTATION_MESSAGE = "campaign event payloads are immutable"
 
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        if getattr(self, "_initialized", False):
+            self._reject_mutation()
+        super().__init__(*args, **kwargs)
+        self._initialized = True
+
     def _reject_mutation(self, *args: Any, **kwargs: Any) -> None:
         raise TypeError(self._MUTATION_MESSAGE)
 
@@ -72,6 +78,12 @@ class _ImmutableEventList(list[Any]):
     """List-compatible event payload sequence that rejects mutation."""
 
     _MUTATION_MESSAGE = "campaign event payloads are immutable"
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        if getattr(self, "_initialized", False):
+            self._reject_mutation()
+        super().__init__(*args, **kwargs)
+        self._initialized = True
 
     def _reject_mutation(self, *args: Any, **kwargs: Any) -> None:
         raise TypeError(self._MUTATION_MESSAGE)
