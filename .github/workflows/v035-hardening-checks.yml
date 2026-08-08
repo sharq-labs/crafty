@@ -1,0 +1,38 @@
+name: V0.3.5 Hardening Checks
+
+on:
+  pull_request:
+    paths:
+      - 'src/engcore/**'
+      - 'tests/**'
+      - '.github/workflows/v035-hardening-checks.yml'
+  push:
+    branches:
+      - main
+      - 'fix/v0.3.5-review-hardening'
+
+jobs:
+  hardening-regressions:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install numpy scipy scikit-learn pytest
+
+      - name: Compile sources
+        run: python -m compileall -q src tests
+
+      - name: Run V0.3.5 hardening regressions
+        run: python -m pytest -q tests/test_v035_hardening.py
+
+      - name: Run legacy smoke test
+        run: python -m pytest -q tests/test_smoke.py
