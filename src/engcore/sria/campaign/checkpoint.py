@@ -118,7 +118,10 @@ class EffectLedger:
     )
 
     def __post_init__(self) -> None:
-        self.applied = {str(k): str(v) for k, v in dict(self.applied).items()}
+        # Preserve the frozen ledger's declared mapping semantics exactly. The
+        # private journal is only an append-order acceleration and is not part of
+        # serialization/equality.
+        self.applied = dict(self.applied)
         self._journal = list(self.applied.items())
 
     def key(self, run_id: str, iteration: int, kind: str, subject: str) -> str:
@@ -135,6 +138,11 @@ class EffectLedger:
         return len(self._journal)
 
     def entry_at(self, index: int) -> tuple[str, str]:
+        """Return one absolute journal entry; negative indexes are not cursors."""
+        if index < 0 or index >= len(self._journal):
+            raise ResumeViolation(
+                f"effect journal index {index} outside 0..{len(self._journal) - 1}"
+            )
         return self._journal[index]
 
     def entries_from(self, index: int) -> tuple[tuple[str, str], ...]:
@@ -166,7 +174,6 @@ class EffectLedger:
 
     def mark(self, key: str, reference: str = "") -> None:
         """Record an effect performed elsewhere. Refuses to overwrite."""
-        key = str(key)
         if key in self.applied:
             raise ResumeViolation(
                 f"effect {key!r} is already recorded as applied; recording it "
