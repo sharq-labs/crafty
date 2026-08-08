@@ -23,6 +23,7 @@ from src.engcore.sria.campaign.persistence import (
     EffectJournalEntry,
     IncrementalCheckpointStore,
     PersistenceIntegrityError,
+    _copy_iteration_continuation,
 )
 from src.engcore.sria.campaign.state import CampaignRun, ExecutionState, IterationRecord
 from src.engcore.sria.decision.actions import ActionFamily
@@ -36,6 +37,7 @@ def _store(n: int = 3) -> IncrementalCheckpointStore:
     budget = BudgetLedger(total_budget=100.0, reserved_validation_budget=10.0)
     effects = EffectLedger()
     iterations: list[IterationRecord] = []
+    previous_run: CampaignRun | None = None
 
     for index in range(n):
         iteration = index + 1
@@ -72,6 +74,8 @@ def _store(n: int = 3) -> IncrementalCheckpointStore:
             iterations=tuple(iterations),
             event_log_digest=events.head_digest,
         )
+        if previous_run is not None:
+            _copy_iteration_continuation(previous_run, run)
         store.save_state(
             run=run,
             events=events,
@@ -79,6 +83,7 @@ def _store(n: int = 3) -> IncrementalCheckpointStore:
             effects=effects,
             obligation_state={"adequacy": iteration >= 2},
         )
+        previous_run = run
     return store
 
 

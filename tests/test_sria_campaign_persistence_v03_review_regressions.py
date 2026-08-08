@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import dataclasses
 import json
 
 import pytest
@@ -32,6 +33,7 @@ from src.engcore.sria.campaign.persistence import (
     CHECKPOINT_TUPLE_SCHEMA,
     IncrementalCheckpointStore,
     PersistenceIntegrityError,
+    _copy_iteration_continuation,
 )
 from src.engcore.sria.campaign.state import (
     CampaignRun,
@@ -1403,3 +1405,491 @@ def test_budget_materialization_duplicate_validation_is_linear() -> None:
     assert materialized is not None
     assert len(materialized.budget.charges) == len(charges)
     assert CountingChargeId.comparisons < len(charges)
+
+
+def test_failed_save_state_rolls_back_uncommitted_journal_suffixes() -> None:
+    events = CampaignEventLog(RUN_ID)
+    events.append(CampaignEventType.CAMPAIGN_CREATED, iteration=0)
+    budget = BudgetLedger(total_budget=10.0, reserved_validation_budget=1.0)
+    run = CampaignRun(
+        run_id=RUN_ID,
+        campaign_id="v03-review-campaign",
+        state=ExecutionState.READY,
+        iteration=1,
+        max_iterations=2,
+        event_log_digest=events.head_digest,
+    )
+    store = IncrementalCheckpointStore()
+    store.save_state(
+        run=run,
+        events=events,
+        budget=budget,
+        effects=EffectLedger(),
+    )
+    before = copy.deepcopy(store.to_dict())
+
+    events.append(CampaignEventType.BUDGET_UPDATED, iteration=1)
+    failed_run = CampaignRun(
+        run_id=RUN_ID,
+        campaign_id="v03-review-campaign",
+        state=ExecutionState.READY,
+        iteration=2,
+        max_iterations=2,
+        event_log_digest=events.head_digest,
+    )
+    changed_declaration = BudgetLedger(
+        total_budget=11.0,
+        reserved_validation_budget=1.0,
+    )
+
+    with pytest.raises(
+        PersistenceIntegrityError,
+        match="budget declaration changed",
+    ):
+        store.save_state(
+            run=failed_run,
+            events=events,
+            budget=changed_declaration,
+            effects=EffectLedger(),
+        )
+
+    assert store.to_dict() == before
+    store.save_state(
+        run=failed_run,
+        events=events,
+        budget=budget,
+        effects=EffectLedger(),
+    )
+    assert store.event_record_count == 2
+    assert store.verify_committed()
+
+
+def test_duplicate_budget_charge_ids_fail_closed_during_store_verification() -> None:
+    payload = copy.deepcopy(_store(2).to_dict())
+    payload["budget_journal"][1]["charge"]["charge_id"] = (
+        payload["budget_journal"][0]["charge"]["charge_id"]
+    )
+    new_budget_head = canonical_digest(
+        {
+            key: value
+            for key, value in payload["budget_journal"][1].items()
+            if key != "schema"
+        }
+    )
+    for checkpoint in payload["checkpoints"]:
+        if checkpoint["budget_charge_count"] == 2:
+            checkpoint["budget_head_digest"] = new_budget_head
+    _rechain_checkpoints(payload)
+
+    with pytest.raises(
+        PersistenceIntegrityError,
+        match="budget charge id 'charge-1' occurs twice",
+    ):
+        IncrementalCheckpointStore.from_dict(payload)
+
+
+def _normal_save_fixture(
+    *,
+    charges: tuple[BudgetCharge, ...] = (),
+    effects: EffectLedger | None = None,
+    iterations: tuple[IterationRecord, ...] = (),
+) -> tuple[
+    IncrementalCheckpointStore,
+    CampaignEventLog,
+    CampaignRun,
+    BudgetLedger,
+    EffectLedger,
+]:
+    events = CampaignEventLog(RUN_ID)
+    events.append(CampaignEventType.CAMPAIGN_CREATED, iteration=0)
+    budget = BudgetLedger(
+        total_budget=100.0,
+        reserved_validation_budget=10.0,
+        charges=charges,
+    )
+    effect_ledger = effects or EffectLedger()
+    run = CampaignRun(
+        run_id=RUN_ID,
+        campaign_id="v03-review-campaign",
+        state=ExecutionState.READY,
+        iteration=max(1, len(iterations)),
+        max_iterations=5,
+        iterations=iterations,
+        event_log_digest=events.head_digest,
+    )
+    store = IncrementalCheckpointStore()
+    store.save_state(
+        run=run,
+        events=events,
+        budget=budget,
+        effects=effect_ledger,
+    )
+    return store, events, run, budget, effect_ledger
+
+
+def _append_save_event(events: CampaignEventLog, iteration: int) -> None:
+    events.append(
+        CampaignEventType.BUDGET_UPDATED,
+        iteration=iteration,
+        payload={"iteration": iteration},
+    )
+
+
+def test_normal_save_rejects_budget_early_prefix_mutation() -> None:
+    charge_1 = _charge("charge-1", realized=1.0)
+    charge_2 = _charge("charge-2", realized=2.0)
+    store, events, run, _, effects = _normal_save_fixture(
+        charges=(charge_1, charge_2)
+    )
+    before = copy.deepcopy(store.to_dict())
+    _append_save_event(events, 3)
+    forged = BudgetLedger(
+        total_budget=100.0,
+        reserved_validation_budget=10.0,
+        charges=(
+            _charge("charge-1", realized=50.0),
+            charge_2,
+            _charge("charge-3", realized=3.0),
+        ),
+    )
+    continued_run = dataclasses.replace(run, event_log_digest=events.head_digest)
+
+    with pytest.raises(PersistenceIntegrityError, match="budget history does not prove"):
+        store.save_state(
+            run=continued_run,
+            events=events,
+            budget=forged,
+            effects=effects,
+        )
+
+    assert store.to_dict() == before
+
+
+def test_normal_save_rejects_budget_middle_prefix_mutation_with_same_tail() -> None:
+    charge_1 = _charge("charge-1", realized=1.0)
+    charge_2 = _charge("charge-2", realized=2.0)
+    charge_3 = _charge("charge-3", realized=3.0)
+    store, events, run, _, effects = _normal_save_fixture(
+        charges=(charge_1, charge_2, charge_3)
+    )
+    before = copy.deepcopy(store.to_dict())
+    _append_save_event(events, 4)
+    forged = BudgetLedger(
+        total_budget=100.0,
+        reserved_validation_budget=10.0,
+        charges=(
+            charge_1,
+            _charge("charge-2", realized=20.0),
+            charge_3,
+            _charge("charge-4", realized=4.0),
+        ),
+    )
+    continued_run = dataclasses.replace(run, event_log_digest=events.head_digest)
+
+    with pytest.raises(PersistenceIntegrityError, match="budget history does not prove"):
+        store.save_state(
+            run=continued_run,
+            events=events,
+            budget=forged,
+            effects=effects,
+        )
+
+    assert store.to_dict() == before
+
+
+def test_normal_save_rejects_effect_early_prefix_substitution() -> None:
+    effects = EffectLedger()
+    effects.mark("effect-1", "ref-1")
+    effects.mark("effect-2", "ref-2")
+    store, events, run, budget, _ = _normal_save_fixture(effects=effects)
+    before = copy.deepcopy(store.to_dict())
+    _append_save_event(events, 3)
+    forged = EffectLedger(applied={"forged-effect": "forged-ref", "effect-2": "ref-2"})
+    forged.mark("effect-3", "ref-3")
+    continued_run = dataclasses.replace(run, event_log_digest=events.head_digest)
+
+    with pytest.raises(PersistenceIntegrityError, match="effect history does not prove"):
+        store.save_state(
+            run=continued_run,
+            events=events,
+            budget=budget,
+            effects=forged,
+        )
+
+    assert store.to_dict() == before
+
+
+def test_normal_save_rejects_iteration_early_prefix_mutation() -> None:
+    iteration_1 = _iteration(1)
+    iteration_2 = _iteration(2)
+    store, events, _, budget, effects = _normal_save_fixture(
+        iterations=(iteration_1, iteration_2)
+    )
+    before = copy.deepcopy(store.to_dict())
+    _append_save_event(events, 3)
+    forged_run = CampaignRun(
+        run_id=RUN_ID,
+        campaign_id="v03-review-campaign",
+        state=ExecutionState.READY,
+        iteration=3,
+        max_iterations=5,
+        iterations=(
+            _iteration(1, execution_id="forged-exec-1"),
+            iteration_2,
+            _iteration(3),
+        ),
+        event_log_digest=events.head_digest,
+    )
+
+    with pytest.raises(
+        PersistenceIntegrityError,
+        match="iteration history does not prove",
+    ):
+        store.save_state(
+            run=forged_run,
+            events=events,
+            budget=budget,
+            effects=effects,
+        )
+
+    assert store.to_dict() == before
+
+
+def test_normal_save_rejects_iteration_middle_prefix_mutation() -> None:
+    iteration_1 = _iteration(1)
+    iteration_2 = _iteration(2)
+    iteration_3 = _iteration(3)
+    store, events, _, budget, effects = _normal_save_fixture(
+        iterations=(iteration_1, iteration_2, iteration_3)
+    )
+    before = copy.deepcopy(store.to_dict())
+    _append_save_event(events, 4)
+    forged_run = CampaignRun(
+        run_id=RUN_ID,
+        campaign_id="v03-review-campaign",
+        state=ExecutionState.READY,
+        iteration=4,
+        max_iterations=5,
+        iterations=(
+            iteration_1,
+            _iteration(2, execution_id="forged-exec-2"),
+            iteration_3,
+            _iteration(4),
+        ),
+        event_log_digest=events.head_digest,
+    )
+
+    with pytest.raises(
+        PersistenceIntegrityError,
+        match="iteration history does not prove",
+    ):
+        store.save_state(
+            run=forged_run,
+            events=events,
+            budget=budget,
+            effects=effects,
+        )
+
+    assert store.to_dict() == before
+
+
+def test_normal_save_accepts_valid_delta_continuation() -> None:
+    effects = EffectLedger()
+    effects.mark("effect-1", "ref-1")
+    effects.mark("effect-2", "ref-2")
+    run_iterations = (_iteration(1), _iteration(2))
+    store, events, run, budget, effects = _normal_save_fixture(
+        charges=(_charge("charge-1", realized=1.0), _charge("charge-2", realized=2.0)),
+        effects=effects,
+        iterations=run_iterations,
+    )
+    _append_save_event(events, 3)
+    budget.settle(
+        charge_id="charge-3",
+        action_id="action-3",
+        iteration=3,
+        family=ActionFamily.EXPLORE,
+        realized=3.0,
+        predicted=3.0,
+    )
+    effects.mark("effect-3", "ref-3")
+    continued_run = dataclasses.replace(
+        run,
+        iteration=3,
+        iterations=run.iterations + (_iteration(3),),
+        event_log_digest=events.head_digest,
+    )
+    _copy_iteration_continuation(run, continued_run)
+
+    record = store.save_state(
+        run=continued_run,
+        events=events,
+        budget=budget,
+        effects=effects,
+    )
+
+    assert record.budget_charge_count == 3
+    assert record.effect_count == 3
+    assert record.iteration_record_count == 3
+    assert store.verify_committed()
+
+
+def test_reloaded_materialized_state_accepts_valid_delta_continuation() -> None:
+    effects = EffectLedger()
+    effects.mark("effect-1", "ref-1")
+    effects.mark("effect-2", "ref-2")
+    source, _, _, _, _ = _normal_save_fixture(
+        charges=(_charge("charge-1", realized=1.0), _charge("charge-2", realized=2.0)),
+        effects=effects,
+        iterations=(_iteration(1), _iteration(2)),
+    )
+    loaded = IncrementalCheckpointStore.from_dict(
+        json.loads(json.dumps(source.to_dict()))
+    )
+    checkpoint = loaded.latest()
+    assert checkpoint is not None
+    _append_save_event(checkpoint.events, 3)
+    checkpoint.budget.settle(
+        charge_id="charge-3",
+        action_id="action-3",
+        iteration=3,
+        family=ActionFamily.EXPLORE,
+        realized=3.0,
+        predicted=3.0,
+    )
+    checkpoint.effects.mark("effect-3", "ref-3")
+    continued_run = dataclasses.replace(
+        checkpoint.run,
+        iteration=3,
+        iterations=checkpoint.run.iterations + (_iteration(3),),
+        event_log_digest=checkpoint.events.head_digest,
+    )
+    _copy_iteration_continuation(checkpoint.run, continued_run)
+
+    record = loaded.save_state(
+        run=continued_run,
+        events=checkpoint.events,
+        budget=checkpoint.budget,
+        effects=checkpoint.effects,
+    )
+
+    assert record.budget_charge_count == 3
+    assert record.effect_count == 3
+    assert record.iteration_record_count == 3
+    assert loaded.verify_committed()
+
+
+def test_effect_journal_rejects_direct_item_replacement() -> None:
+    effects = EffectLedger()
+    effects.mark("real-effect", "real-ref")
+
+    with pytest.raises(ResumeViolation, match="effect journal"):
+        effects._journal[0] = ("forged-effect", "forged-ref")
+
+
+def test_effect_journal_rejects_direct_deletion() -> None:
+    effects = EffectLedger()
+    effects.mark("real-effect", "real-ref")
+
+    with pytest.raises(ResumeViolation, match="effect journal"):
+        del effects._journal[0]
+
+
+def test_effect_journal_rejects_append_and_extend_bypass() -> None:
+    effects = EffectLedger()
+    effects.mark("real-effect", "real-ref")
+
+    with pytest.raises(ResumeViolation, match="effect journal"):
+        effects._journal.append(("forged-effect", "forged-ref"))
+    with pytest.raises(ResumeViolation, match="effect journal"):
+        effects._journal.extend((("forged-effect", "forged-ref"),))
+
+
+def test_effect_journal_rejects_clear_pop_and_remove() -> None:
+    effects = EffectLedger()
+    effects.mark("real-effect", "real-ref")
+
+    with pytest.raises(ResumeViolation, match="effect journal"):
+        effects._journal.clear()
+    with pytest.raises(ResumeViolation, match="effect journal"):
+        effects._journal.pop()
+    with pytest.raises(ResumeViolation, match="effect journal"):
+        effects._journal.remove(("real-effect", "real-ref"))
+
+
+def test_effect_journal_rejects_other_list_mutation_surfaces() -> None:
+    effects = EffectLedger()
+    effects.mark("real-effect", "real-ref")
+
+    with pytest.raises(ResumeViolation, match="effect journal"):
+        effects._journal[0:1] = [("forged-effect", "forged-ref")]
+    with pytest.raises(ResumeViolation, match="effect journal"):
+        effects._journal.insert(0, ("forged-effect", "forged-ref"))
+    with pytest.raises(ResumeViolation, match="effect journal"):
+        effects._journal.reverse()
+    with pytest.raises(ResumeViolation, match="effect journal"):
+        effects._journal.sort()
+    with pytest.raises(ResumeViolation, match="effect journal"):
+        effects._journal += [("forged-effect", "forged-ref")]
+    with pytest.raises(ResumeViolation, match="effect journal"):
+        effects._journal *= 2
+
+
+def test_effect_mark_still_appends_one_valid_effect() -> None:
+    effects = EffectLedger()
+
+    effects.mark("real-effect", "real-ref")
+
+    assert dict(effects.applied) == {"real-effect": "real-ref"}
+    assert effects.journal_length == 1
+    assert effects.entry_at(0) == ("real-effect", "real-ref")
+
+
+def test_effect_once_semantics_are_unchanged() -> None:
+    calls = 0
+    effects = EffectLedger()
+
+    def side_effect() -> str:
+        nonlocal calls
+        calls += 1
+        return "result-ref"
+
+    first, did_first = effects.once(
+        "effect-once",
+        side_effect,
+        reference=lambda value: value,
+    )
+    second, did_second = effects.once(
+        "effect-once",
+        side_effect,
+        reference=lambda value: value,
+    )
+
+    assert (first, did_first) == ("result-ref", True)
+    assert (second, did_second) == (None, False)
+    assert calls == 1
+    assert effects.entry_at(0) == ("effect-once", "result-ref")
+
+
+def test_effect_checkpoint_round_trip_preserves_exact_reference() -> None:
+    effects = EffectLedger()
+    effects.mark("real-effect", "real-ref")
+
+    restored = EffectLedger.from_dict(json.loads(json.dumps(effects.to_dict())))
+
+    assert dict(restored.applied) == {"real-effect": "real-ref"}
+    assert restored.entry_at(0) == ("real-effect", "real-ref")
+
+
+def test_effect_journal_reproducer_cannot_forge_persisted_effect() -> None:
+    effects = EffectLedger()
+    effects.mark("real-effect", "real-ref")
+
+    with pytest.raises(ResumeViolation, match="effect journal"):
+        effects._journal[0] = ("forged-effect", "forged-ref")
+
+    store, _, _, _, _ = _normal_save_fixture(effects=effects)
+    restored = store.latest()
+
+    assert restored is not None
+    assert dict(restored.effects.applied) == {"real-effect": "real-ref"}

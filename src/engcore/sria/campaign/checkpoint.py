@@ -145,6 +145,54 @@ class _EffectAppliedMapping(dict[str, str]):
         dict.__setitem__(self, key, reference)
 
 
+class _EffectJournal(list[tuple[str, str]]):
+    """Append-order journal that only ``EffectLedger`` may extend."""
+
+    _MUTATION_MESSAGE = "effect journal must be changed through EffectLedger.mark/once"
+
+    def _reject_mutation(self, *args: Any, **kwargs: Any) -> None:
+        raise ResumeViolation(self._MUTATION_MESSAGE)
+
+    def __setitem__(self, index: Any, value: Any) -> None:
+        self._reject_mutation()
+
+    def __delitem__(self, index: Any) -> None:
+        self._reject_mutation()
+
+    def append(self, value: tuple[str, str]) -> None:
+        self._reject_mutation()
+
+    def clear(self) -> None:
+        self._reject_mutation()
+
+    def extend(self, values: Any) -> None:
+        self._reject_mutation()
+
+    def insert(self, index: int, value: tuple[str, str]) -> None:
+        self._reject_mutation()
+
+    def pop(self, index: int = -1) -> tuple[str, str]:
+        self._reject_mutation()
+
+    def remove(self, value: tuple[str, str]) -> None:
+        self._reject_mutation()
+
+    def reverse(self) -> None:
+        self._reject_mutation()
+
+    def sort(self, *args: Any, **kwargs: Any) -> None:
+        self._reject_mutation()
+
+    def __iadd__(self, values: Any) -> "_EffectJournal":
+        self._reject_mutation()
+
+    def __imul__(self, value: int) -> "_EffectJournal":
+        self._reject_mutation()
+
+    def _record(self, key: str, reference: str) -> None:
+        list.append(self, (key, reference))
+
+
 @dataclass
 class EffectLedger:
     """Records which at-most-once effects have already happened.
@@ -156,13 +204,15 @@ class EffectLedger:
     """
 
     applied: dict[str, str] = field(default_factory=dict)
-    _journal: list[tuple[str, str]] = field(
-        default_factory=list, init=False, repr=False, compare=False
+    _journal: _EffectJournal = field(
+        default_factory=_EffectJournal, init=False, repr=False, compare=False
     )
 
     def __setattr__(self, name: str, value: Any) -> None:
         if name == "applied" and name in self.__dict__:
             raise ResumeViolation(_EffectAppliedMapping._MUTATION_MESSAGE)
+        if name == "_journal" and name in self.__dict__:
+            raise ResumeViolation(_EffectJournal._MUTATION_MESSAGE)
         super().__setattr__(name, value)
 
     def __post_init__(self) -> None:
@@ -174,7 +224,7 @@ class EffectLedger:
             "applied",
             _EffectAppliedMapping(dict(self.applied)),
         )
-        self._journal = list(self.applied.items())
+        object.__setattr__(self, "_journal", _EffectJournal(self.applied.items()))
 
     def key(self, run_id: str, iteration: int, kind: str, subject: str) -> str:
         return f"{run_id}:{iteration}:{kind}:{subject}"
@@ -233,7 +283,7 @@ class EffectLedger:
             )
         ref = str(reference)
         self.applied._record(key, ref)
-        self._journal.append((key, ref))
+        self._journal._record(key, ref)
 
     def to_dict(self) -> dict[str, Any]:
         return {

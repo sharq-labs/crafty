@@ -12,7 +12,12 @@ from typing import Any
 from .budget import BudgetLedger
 from .checkpoint import EffectLedger
 from .events import CampaignEvent, CampaignEventLog
-from .persistence import IncrementalCheckpointStore
+from .persistence import (
+    IncrementalCheckpointStore,
+    _copy_budget_continuation,
+    _copy_effect_continuation,
+    _copy_iteration_continuation,
+)
 from .runner import CampaignRunner
 
 
@@ -52,6 +57,12 @@ class IncrementalCampaignRunner(CampaignRunner):
             obligation_state=dict(self._obligation_state),
         )
 
+    def _advance(self, state: Any, **changes: Any) -> Any:
+        previous = self._run
+        advanced = super()._advance(state, **changes)
+        _copy_iteration_continuation(previous, advanced)
+        return advanced
+
     @staticmethod
     def _adopt_events(events: CampaignEventLog) -> CampaignEventLog:
         frozen_events = tuple(
@@ -76,6 +87,8 @@ class IncrementalCampaignRunner(CampaignRunner):
             enforced_cap_source=checkpoint.budget.enforced_cap_source,
         )
         self._effects = EffectLedger(applied=dict(checkpoint.effects.applied))
+        _copy_budget_continuation(checkpoint.budget, self._budget)
+        _copy_effect_continuation(checkpoint.effects, self._effects)
         self._plan = checkpoint.plan
         self._obligation_state = dict(checkpoint.obligation_state)
         if self._plan is not None:

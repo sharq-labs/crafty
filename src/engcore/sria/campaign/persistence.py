@@ -47,6 +47,76 @@ _RESERVED_CHECKPOINT_PAYLOAD_SCHEMAS = frozenset(
         CHECKPOINT_MAPPING_SCHEMA,
     }
 )
+_BUDGET_CONTINUATION_ATTR = "_sria_v03_budget_continuation"
+_EFFECT_CONTINUATION_ATTR = "_sria_v03_effect_continuation"
+_ITERATION_CONTINUATION_ATTR = "_sria_v03_iteration_continuation"
+
+
+def _continuation_token(count: int, head_digest: str) -> tuple[int, str]:
+    return (int(count), str(head_digest))
+
+
+def _head_digest_for_entries(entries: list[Any], count: int) -> str:
+    if count < 0 or count > len(entries):
+        raise PersistenceIntegrityError(
+            f"continuation cursor {count} exceeds journal length {len(entries)}"
+        )
+    return entries[count - 1].digest if count else ""
+
+
+def _stamp_budget_continuation(
+    ledger: BudgetLedger, count: int, head_digest: str
+) -> None:
+    setattr(ledger, _BUDGET_CONTINUATION_ATTR, _continuation_token(count, head_digest))
+
+
+def _stamp_effect_continuation(
+    ledger: EffectLedger, count: int, head_digest: str
+) -> None:
+    setattr(ledger, _EFFECT_CONTINUATION_ATTR, _continuation_token(count, head_digest))
+
+
+def _stamp_iteration_continuation(
+    run: CampaignRun, count: int, head_digest: str
+) -> None:
+    object.__setattr__(
+        run,
+        _ITERATION_CONTINUATION_ATTR,
+        _continuation_token(count, head_digest),
+    )
+
+
+def _copy_budget_continuation(source: BudgetLedger, target: BudgetLedger) -> None:
+    token = getattr(source, _BUDGET_CONTINUATION_ATTR, None)
+    if token is not None:
+        setattr(target, _BUDGET_CONTINUATION_ATTR, token)
+
+
+def _copy_effect_continuation(source: EffectLedger, target: EffectLedger) -> None:
+    token = getattr(source, _EFFECT_CONTINUATION_ATTR, None)
+    if token is not None:
+        setattr(target, _EFFECT_CONTINUATION_ATTR, token)
+
+
+def _copy_iteration_continuation(source: CampaignRun, target: CampaignRun) -> None:
+    token = getattr(source, _ITERATION_CONTINUATION_ATTR, None)
+    if token is not None:
+        object.__setattr__(target, _ITERATION_CONTINUATION_ATTR, token)
+
+
+def _require_continuation(
+    *,
+    label: str,
+    value: Any,
+    attr: str,
+    count: int,
+    head_digest: str,
+) -> None:
+    expected = _continuation_token(count, head_digest)
+    if getattr(value, attr, None) != expected:
+        raise PersistenceIntegrityError(
+            f"{label} history does not prove continuation from persisted prefix"
+        )
 
 
 def _is_encoded_checkpoint_tuple(value: Mapping[str, Any]) -> bool:
@@ -856,11 +926,21 @@ class IncrementalCheckpointStore:
                         f"legacy budget history changed before persisted head at "
                         f"charge {index}"
                     )
-        elif persisted and (
-            ledger.charges[persisted - 1].to_dict()
-            != self._budget_entries[-1].charge.to_dict()
-        ):
-            raise PersistenceIntegrityError("budget history changed before persisted head")
+        elif persisted:
+            _require_continuation(
+                label="budget",
+                value=ledger,
+                attr=_BUDGET_CONTINUATION_ATTR,
+                count=persisted,
+                head_digest=self._budget_entries[-1].digest,
+            )
+            if (
+                ledger.charges[persisted - 1].to_dict()
+                != self._budget_entries[-1].charge.to_dict()
+            ):
+                raise PersistenceIntegrityError(
+                    "budget history changed before persisted head"
+                )
         previous = self._budget_entries[-1].digest if self._budget_entries else ""
         for charge in ledger.charges[persisted:]:
             entry = BudgetJournalEntry(
@@ -916,6 +996,13 @@ class IncrementalCheckpointStore:
             if ledger.journal_length < persisted:
                 raise PersistenceIntegrityError("effect history shrank")
             if persisted:
+                _require_continuation(
+                    label="effect",
+                    value=ledger,
+                    attr=_EFFECT_CONTINUATION_ATTR,
+                    count=persisted,
+                    head_digest=self._effect_entries[-1].digest,
+                )
                 expected = (
                     self._effect_entries[-1].key,
                     self._effect_entries[-1].reference,
@@ -944,11 +1031,21 @@ class IncrementalCheckpointStore:
                         f"legacy iteration history changed before persisted head "
                         f"at record {index}"
                     )
-        elif persisted and (
-            run.iterations[persisted - 1].to_dict()
-            != self._iteration_entries[-1].record.to_dict()
-        ):
-            raise PersistenceIntegrityError("iteration history changed before persisted head")
+        elif persisted:
+            _require_continuation(
+                label="iteration",
+                value=run,
+                attr=_ITERATION_CONTINUATION_ATTR,
+                count=persisted,
+                head_digest=self._iteration_entries[-1].digest,
+            )
+            if (
+                run.iterations[persisted - 1].to_dict()
+                != self._iteration_entries[-1].record.to_dict()
+            ):
+                raise PersistenceIntegrityError(
+                    "iteration history changed before persisted head"
+                )
         previous = self._iteration_entries[-1].digest if self._iteration_entries else ""
         for record in run.iterations[persisted:]:
             entry = IterationJournalEntry(
@@ -973,48 +1070,92 @@ class IncrementalCheckpointStore:
         _legacy_iteration_prefix_validation: bool = False,
     ) -> CampaignCheckpointV3:
         """Persist only deltas plus one compact current-state checkpoint."""
-        self._adopt_run_identity(run.run_id)
-        self._require_committed_tail()
-        self._sync_events(events)
-        self._sync_budget(
-            budget,
-            legacy_prefix_validation=_legacy_budget_prefix_validation,
-        )
-        self._sync_effects(effects, legacy_scan=_legacy_effect_scan)
-        self._sync_iterations(
-            run,
-            legacy_prefix_validation=_legacy_iteration_prefix_validation,
-        )
+        original_run_id = self._run_id
+        original_budget_declaration = self._budget_declaration
+        original_spent_general = self._spent_general
+        original_spent_validation = self._spent_validation
+        original_spent_total = self._spent_total
+        original_event_count = len(self._events)
+        original_budget_count = len(self._budget_entries)
+        original_effect_count = len(self._effect_entries)
+        original_iteration_count = len(self._iteration_entries)
+        original_checkpoint_count = len(self._checkpoints)
+        try:
+            self._adopt_run_identity(run.run_id)
+            self._require_committed_tail()
+            self._sync_events(events)
+            self._sync_budget(
+                budget,
+                legacy_prefix_validation=_legacy_budget_prefix_validation,
+            )
+            self._sync_effects(effects, legacy_scan=_legacy_effect_scan)
+            self._sync_iterations(
+                run,
+                legacy_prefix_validation=_legacy_iteration_prefix_validation,
+            )
 
-        previous = self._checkpoints[-1] if self._checkpoints else None
-        record = CampaignCheckpointV3(
-            checkpoint_sequence=len(self._checkpoints),
-            run_state=CompactRunState.from_run(run),
-            event_count=len(self._events),
-            event_head_digest=self._events[-1].digest if self._events else "",
-            budget_charge_count=len(self._budget_entries),
-            budget_head_digest=(
-                self._budget_entries[-1].digest if self._budget_entries else ""
-            ),
-            budget_declaration_digest=self._budget_declaration_digest(),
-            effect_count=len(self._effect_entries),
-            effect_head_digest=(
-                self._effect_entries[-1].digest if self._effect_entries else ""
-            ),
-            iteration_record_count=len(self._iteration_entries),
-            iteration_head_digest=(
-                self._iteration_entries[-1].digest if self._iteration_entries else ""
-            ),
-            spent_general=self._spent_general,
-            spent_validation=self._spent_validation,
-            spent_total=self._spent_total,
-            budget_overrun=self._current_budget_overrun(),
-            plan=plan,
-            obligation_state=obligation_state or {},
-            previous_checkpoint_digest=previous.digest if previous else "",
-        )
-        self._verify_new_checkpoint(record, previous)
-        self._checkpoints.append(record)
+            previous = self._checkpoints[-1] if self._checkpoints else None
+            record = CampaignCheckpointV3(
+                checkpoint_sequence=len(self._checkpoints),
+                run_state=CompactRunState.from_run(run),
+                event_count=len(self._events),
+                event_head_digest=self._events[-1].digest if self._events else "",
+                budget_charge_count=len(self._budget_entries),
+                budget_head_digest=(
+                    self._budget_entries[-1].digest if self._budget_entries else ""
+                ),
+                budget_declaration_digest=self._budget_declaration_digest(),
+                effect_count=len(self._effect_entries),
+                effect_head_digest=(
+                    self._effect_entries[-1].digest if self._effect_entries else ""
+                ),
+                iteration_record_count=len(self._iteration_entries),
+                iteration_head_digest=(
+                    self._iteration_entries[-1].digest
+                    if self._iteration_entries
+                    else ""
+                ),
+                spent_general=self._spent_general,
+                spent_validation=self._spent_validation,
+                spent_total=self._spent_total,
+                budget_overrun=self._current_budget_overrun(),
+                plan=plan,
+                obligation_state=obligation_state or {},
+                previous_checkpoint_digest=previous.digest if previous else "",
+            )
+            self._verify_new_checkpoint(record, previous)
+            self._checkpoints.append(record)
+            _stamp_budget_continuation(
+                budget,
+                len(self._budget_entries),
+                _head_digest_for_entries(self._budget_entries, len(self._budget_entries)),
+            )
+            _stamp_effect_continuation(
+                effects,
+                len(self._effect_entries),
+                _head_digest_for_entries(self._effect_entries, len(self._effect_entries)),
+            )
+            _stamp_iteration_continuation(
+                run,
+                len(self._iteration_entries),
+                _head_digest_for_entries(
+                    self._iteration_entries, len(self._iteration_entries)
+                ),
+            )
+        except Exception:
+            for entry in self._effect_entries[original_effect_count:]:
+                self._effect_index.pop(entry.key, None)
+            del self._events[original_event_count:]
+            del self._budget_entries[original_budget_count:]
+            del self._effect_entries[original_effect_count:]
+            del self._iteration_entries[original_iteration_count:]
+            del self._checkpoints[original_checkpoint_count:]
+            self._run_id = original_run_id
+            self._budget_declaration = original_budget_declaration
+            self._spent_general = original_spent_general
+            self._spent_validation = original_spent_validation
+            self._spent_total = original_spent_total
+            raise
         return record
 
     def _verify_new_checkpoint(
@@ -1262,6 +1403,16 @@ class IncrementalCheckpointStore:
                 )
             seen.add(entry.key)
 
+    def _verify_budget_charge_uniqueness(self, count: int) -> None:
+        seen: set[str] = set()
+        for entry in self._budget_entries[:count]:
+            charge_id = str(entry.charge.charge_id)
+            if charge_id in seen:
+                raise PersistenceIntegrityError(
+                    f"budget charge id {charge_id!r} occurs twice in budget journal"
+                )
+            seen.add(charge_id)
+
     def verify_committed(self) -> bool:
         self._verify_checkpoint_chain()
         if not self._checkpoints:
@@ -1277,6 +1428,7 @@ class IncrementalCheckpointStore:
         self._verify_chained_entries(
             self._iteration_entries, head.iteration_record_count, "iteration"
         )
+        self._verify_budget_charge_uniqueness(head.budget_charge_count)
         self._verify_effect_uniqueness(head.effect_count)
         self._verify_budget_history()
         return True
@@ -1293,6 +1445,7 @@ class IncrementalCheckpointStore:
         self._verify_chained_entries(
             self._iteration_entries, len(self._iteration_entries), "iteration"
         )
+        self._verify_budget_charge_uniqueness(len(self._budget_entries))
         self._verify_effect_uniqueness(len(self._effect_entries))
         return True
 
@@ -1315,6 +1468,7 @@ class IncrementalCheckpointStore:
             checkpoint.iteration_record_count,
             "iteration",
         )
+        self._verify_budget_charge_uniqueness(checkpoint.budget_charge_count)
         self._verify_effect_uniqueness(checkpoint.effect_count)
 
         events = CampaignEventLog(
@@ -1343,6 +1497,21 @@ class IncrementalCheckpointStore:
             for entry in self._iteration_entries[: checkpoint.iteration_record_count]
         )
         run = checkpoint.run_state.materialize(iterations)
+        _stamp_budget_continuation(
+            budget,
+            checkpoint.budget_charge_count,
+            checkpoint.budget_head_digest,
+        )
+        _stamp_effect_continuation(
+            effects,
+            checkpoint.effect_count,
+            checkpoint.effect_head_digest,
+        )
+        _stamp_iteration_continuation(
+            run,
+            checkpoint.iteration_record_count,
+            checkpoint.iteration_head_digest,
+        )
         return CampaignCheckpoint(
             run=run,
             events=events,
