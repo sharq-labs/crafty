@@ -689,11 +689,22 @@ class IncrementalCheckpointStore:
             raise PersistenceIntegrityError(str(exc)) from exc
         self._append_effect_items(items)
 
-    def _sync_iterations(self, run: CampaignRun) -> None:
+    def _sync_iterations(
+        self, run: CampaignRun, *, legacy_prefix_validation: bool = False
+    ) -> None:
         persisted = len(self._iteration_entries)
         if len(run.iterations) < persisted:
             raise PersistenceIntegrityError("iteration history shrank")
-        if persisted and (
+        if legacy_prefix_validation:
+            for index, (incoming, existing) in enumerate(
+                zip(run.iterations[:persisted], self._iteration_entries)
+            ):
+                if incoming.to_dict() != existing.record.to_dict():
+                    raise PersistenceIntegrityError(
+                        f"legacy iteration history changed before persisted head "
+                        f"at record {index}"
+                    )
+        elif persisted and (
             run.iterations[persisted - 1].to_dict()
             != self._iteration_entries[-1].record.to_dict()
         ):
@@ -719,6 +730,7 @@ class IncrementalCheckpointStore:
         obligation_state: Mapping[str, bool] | None = None,
         _legacy_effect_scan: bool = False,
         _legacy_budget_prefix_validation: bool = False,
+        _legacy_iteration_prefix_validation: bool = False,
     ) -> CampaignCheckpointV3:
         """Persist only deltas plus one compact current-state checkpoint."""
         self._adopt_run_identity(run.run_id)
@@ -729,7 +741,10 @@ class IncrementalCheckpointStore:
             legacy_prefix_validation=_legacy_budget_prefix_validation,
         )
         self._sync_effects(effects, legacy_scan=_legacy_effect_scan)
-        self._sync_iterations(run)
+        self._sync_iterations(
+            run,
+            legacy_prefix_validation=_legacy_iteration_prefix_validation,
+        )
 
         previous = self._checkpoints[-1] if self._checkpoints else None
         record = CampaignCheckpointV3(
@@ -809,6 +824,7 @@ class IncrementalCheckpointStore:
             obligation_state=checkpoint.obligation_state,
             _legacy_effect_scan=True,
             _legacy_budget_prefix_validation=True,
+            _legacy_iteration_prefix_validation=True,
         )
 
     @staticmethod

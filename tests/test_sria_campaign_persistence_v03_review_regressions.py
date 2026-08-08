@@ -23,7 +23,11 @@ from src.engcore.sria.campaign.persistence import (
     IncrementalCheckpointStore,
     PersistenceIntegrityError,
 )
-from src.engcore.sria.campaign.state import CampaignRun, ExecutionState
+from src.engcore.sria.campaign.state import (
+    CampaignRun,
+    ExecutionState,
+    IterationRecord,
+)
 from src.engcore.sria.decision.actions import ActionFamily
 
 RUN_ID = "v03-review-regression"
@@ -104,6 +108,7 @@ def _legacy_checkpoint(
     *,
     iteration: int,
     charges: tuple[BudgetCharge, ...],
+    iterations: tuple[IterationRecord, ...] = (),
     total_budget: float = 100.0,
     reserved_validation_budget: float = 20.0,
     cost_unit: str = "hour",
@@ -123,6 +128,7 @@ def _legacy_checkpoint(
         state=ExecutionState.READY,
         iteration=iteration,
         max_iterations=5,
+        iterations=iterations,
         event_log_digest=events.head_digest,
     )
     return CampaignCheckpoint(
@@ -137,6 +143,40 @@ def _legacy_checkpoint(
             enforced_cap_source=enforced_cap_source,
         ),
         effects=EffectLedger(),
+    )
+
+
+def _iteration(
+    index: int,
+    *,
+    recommendation_id: str | None = None,
+    selected_action_id: str | None = None,
+    execution_id: str | None = None,
+    evidence_ids: tuple[str, ...] = (),
+    admitted_evidence_ids: tuple[str, ...] = (),
+    calibration_entry_ids: tuple[str, ...] = (),
+    predicted_cost: float | None = None,
+    realized_cost: float | None = None,
+    detail: str | None = None,
+) -> IterationRecord:
+    return IterationRecord(
+        iteration=index,
+        snapshot_digest=f"snapshot-{index}",
+        decision_basis_digest=f"basis-{index}",
+        recommendation_id=recommendation_id or f"rec-{index}",
+        recommendation_outcome="recommend_action",
+        selected_action_id=selected_action_id or f"action-{index}",
+        execution_id=execution_id or f"exec-{index}",
+        evidence_ids=evidence_ids or (f"evidence-{index}",),
+        assessment_ids=(f"assessment-{index}",),
+        arbiter_decision_id=f"arbiter-{index}",
+        arbiter_verdict="accepted",
+        admitted_evidence_ids=admitted_evidence_ids or (f"evidence-{index}",),
+        calibration_entry_ids=calibration_entry_ids or (f"calibration-{index}",),
+        predicted_cost=predicted_cost if predicted_cost is not None else float(index),
+        realized_cost=realized_cost if realized_cost is not None else float(index),
+        stop_proposed=False,
+        detail=detail or f"iteration-{index}",
     )
 
 
@@ -161,6 +201,10 @@ def _budget_fields(ledger: BudgetLedger) -> dict:
         "enforced_cap": ledger.enforced_cap,
         "enforced_cap_source": ledger.enforced_cap_source,
     }
+
+
+def _iteration_dicts(checkpoint: CampaignCheckpoint) -> list[dict]:
+    return [record.to_dict() for record in checkpoint.run.iterations]
 
 
 def test_earlier_budget_summary_tamper_is_detected_even_after_rechaining() -> None:
@@ -364,6 +408,106 @@ def test_repeated_charge_id_semantics_survive_valid_legacy_migration() -> None:
     )
     assert existing.to_dict() == charge_a.to_dict()
     assert restored.budget.to_dict() == before
+
+
+def test_legacy_migration_rejects_mutated_early_iteration_with_same_tail() -> None:
+    charge_a = _charge("charge-1", realized=1.0, predicted=1.0)
+    i1 = _iteration(1)
+    i2 = _iteration(2)
+    i3 = _iteration(3)
+    i1_modified = _iteration(1, execution_id="exec-1-modified")
+    legacy = _legacy_store(
+        _legacy_checkpoint(iteration=2, charges=(charge_a,), iterations=(i1, i2)),
+        _legacy_checkpoint(
+            iteration=3,
+            charges=(charge_a,),
+            iterations=(i1_modified, i2, i3),
+        ),
+    )
+
+    with pytest.raises(PersistenceIntegrityError, match="record 0"):
+        IncrementalCheckpointStore.from_legacy_store(legacy)
+
+
+def test_legacy_migration_rejects_middle_iteration_mutation() -> None:
+    charge_a = _charge("charge-1", realized=1.0, predicted=1.0)
+    i1 = _iteration(1)
+    i2 = _iteration(2)
+    i3 = _iteration(3)
+    i4 = _iteration(4)
+    i2_modified = _iteration(2, admitted_evidence_ids=("different-evidence",))
+    legacy = _legacy_store(
+        _legacy_checkpoint(
+            iteration=3,
+            charges=(charge_a,),
+            iterations=(i1, i2, i3),
+        ),
+        _legacy_checkpoint(
+            iteration=4,
+            charges=(charge_a,),
+            iterations=(i1, i2_modified, i3, i4),
+        ),
+    )
+
+    with pytest.raises(PersistenceIntegrityError, match="record 1"):
+        IncrementalCheckpointStore.from_legacy_store(legacy)
+
+
+def test_legacy_migration_rejects_same_iteration_id_altered_payload() -> None:
+    charge_a = _charge("charge-1", realized=1.0, predicted=1.0)
+    i1 = _iteration(1)
+    i2 = _iteration(2)
+    i1_same_id_modified_payload = _iteration(1, detail="same-id-different-payload")
+    legacy = _legacy_store(
+        _legacy_checkpoint(iteration=1, charges=(charge_a,), iterations=(i1,)),
+        _legacy_checkpoint(
+            iteration=2,
+            charges=(charge_a,),
+            iterations=(i1_same_id_modified_payload, i2),
+        ),
+    )
+
+    with pytest.raises(PersistenceIntegrityError, match="record 0"):
+        IncrementalCheckpointStore.from_legacy_store(legacy)
+
+
+def test_legacy_migration_accepts_valid_growing_iteration_prefixes() -> None:
+    charge_a = _charge("charge-1", realized=1.0, predicted=1.0)
+    iterations = (_iteration(1), _iteration(2), _iteration(3))
+    checkpoints = tuple(
+        _legacy_checkpoint(
+            iteration=index,
+            charges=(charge_a,),
+            iterations=iterations[:index],
+        )
+        for index in range(1, 4)
+    )
+
+    migrated = IncrementalCheckpointStore.from_legacy_store(
+        _legacy_store(*checkpoints)
+    )
+
+    assert len(migrated.records) == len(checkpoints)
+
+
+def test_legacy_migration_materializes_exact_iteration_history_for_each_checkpoint() -> None:
+    charge_a = _charge("charge-1", realized=1.0, predicted=1.0)
+    iterations = (_iteration(1), _iteration(2), _iteration(3))
+    checkpoints = tuple(
+        _legacy_checkpoint(
+            iteration=index,
+            charges=(charge_a,),
+            iterations=iterations[:index],
+        )
+        for index in range(1, 4)
+    )
+
+    migrated = IncrementalCheckpointStore.from_legacy_store(
+        _legacy_store(*checkpoints)
+    )
+
+    for source, restored in zip(checkpoints, migrated.history):
+        assert _iteration_dicts(restored) == _iteration_dicts(source)
 
 
 def test_corrupt_uncommitted_event_suffix_fails_closed_on_load() -> None:
