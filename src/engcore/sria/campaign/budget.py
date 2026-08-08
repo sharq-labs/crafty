@@ -169,8 +169,14 @@ class BudgetLedger:
         if self.reserved_validation_budget > self.total_budget:
             raise ValueError("reserved validation budget exceeds the total budget")
         object.__setattr__(self, "charges", tuple(self.charges))
-        seen = [c.charge_id for c in self.charges]
-        duplicates = {c for c in seen if seen.count(c) > 1}
+        seen: set[str] = set()
+        duplicates: set[str] = set()
+        for charge in self.charges:
+            charge_id = charge.charge_id
+            if charge_id in seen:
+                duplicates.add(charge_id)
+            else:
+                seen.add(charge_id)
         if duplicates:
             raise ValueError(f"duplicate budget charges: {sorted(duplicates)}")
 

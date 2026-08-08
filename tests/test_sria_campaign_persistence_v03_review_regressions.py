@@ -1349,3 +1349,57 @@ def test_budget_charge_history_rebind_fails_closed_on_normal_saves() -> None:
     assert budget.charges[0].to_dict() == first.to_dict()
     assert store.to_dict()["budget_journal"] == before
     assert store.verify_committed()
+
+
+def test_budget_materialization_duplicate_validation_is_linear() -> None:
+    class CountingChargeId(str):
+        comparisons = 0
+
+        def __eq__(self, other: object) -> bool:
+            type(self).comparisons += 1
+            return super().__eq__(other)
+
+        def __hash__(self) -> int:
+            return super().__hash__()
+
+    events = CampaignEventLog(RUN_ID)
+    events.append(CampaignEventType.CAMPAIGN_CREATED, iteration=0)
+    charges = tuple(
+        BudgetCharge(
+            charge_id=CountingChargeId(f"charge-{index}"),
+            action_id=f"action-{index}",
+            iteration=index,
+            family=ActionFamily.EXPLORE,
+            realized=1.0,
+            predicted=1.0,
+            from_general_pool=1.0,
+        )
+        for index in range(100)
+    )
+    budget = BudgetLedger(
+        total_budget=200.0,
+        reserved_validation_budget=0.0,
+        charges=charges,
+    )
+    run = CampaignRun(
+        run_id=RUN_ID,
+        campaign_id="v03-review-campaign",
+        state=ExecutionState.READY,
+        iteration=1,
+        max_iterations=1,
+        event_log_digest=events.head_digest,
+    )
+    store = IncrementalCheckpointStore()
+    store.save_state(
+        run=run,
+        events=events,
+        budget=budget,
+        effects=EffectLedger(),
+    )
+
+    CountingChargeId.comparisons = 0
+    materialized = store.latest()
+
+    assert materialized is not None
+    assert len(materialized.budget.charges) == len(charges)
+    assert CountingChargeId.comparisons < len(charges)
