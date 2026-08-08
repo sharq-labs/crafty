@@ -1,31 +1,11 @@
 """M5L — checkpoint, resume and idempotency.
 
 A research campaign spends real compute and admits real scientific evidence, so
-an interrupted run must resume without doing either twice. "Re-run the loop and
-hope it works out" is not a resume strategy: re-executing a completed simulation
-burns budget that was already spent, and re-admitting a processed result would
-add a second belief contribution from one experiment.
-
-The mechanism is one idea applied uniformly. Every side effect that must happen
-at most once is performed through :meth:`EffectLedger.once`, keyed by a
-deterministic string derived from the run, iteration and subject. The ledger
-records the key **and the result reference** before the effect is considered
-done; a repeat call with the same key returns the recorded reference and does
-not invoke the effect.
-
-    execute   run:iter:execute:<action_id>
-    evidence  run:iter:evidence:<action_id>
-    admit     run:iter:admit:<evidence_id>
-    calibrate run:iter:calibrate:<record_id>
-    charge    run:iter:charge:<action_id>
-
-That covers the four duplications the brief names — execution, admission,
-calibration rows, budget — plus M3's single-use authorization, which is
-protected twice over: once by the ledger, and once by the frozen
-``consume_authorization`` in the admission authority itself.
-
-A checkpoint is the run state, the event log, the budget ledger and the effect
-ledger together. Resume rebuilds from the checkpoint and replays nothing.
+an interrupted run must resume without doing either twice. Every side effect
+that must happen at most once is recorded by :class:`EffectLedger` under a
+deterministic key. Legacy serialization remains unchanged; Core V0.3 adds only
+an in-memory append-order view so incremental persistence can read effect deltas
+without rescanning the entire applied mapping at every checkpoint.
 """
 
 from __future__ import annotations
@@ -50,18 +30,7 @@ T = TypeVar("T")
 
 @dataclass(frozen=True)
 class IterationPlan:
-    """The exact artifacts one iteration was decided on, stored before it runs.
-
-    M5 rebuilt these on resume and argued the rebuild was equivalent. M5.1 does
-    not rely on the argument. A decision is made against a specific snapshot, a
-    specific dependency manifest and a specific candidate; if a resume rebuilds
-    any of them it is making a *new* decision wearing the old one's iteration
-    number. Storing the artifacts before execution begins removes the question.
-
-    Nothing here is recomputed on load: the snapshot, manifest, recommendation
-    and selected action are deserialized as recorded, which is also what keeps
-    M4.4 coherence meaningful across a restart.
-    """
+    """The exact artifacts one iteration was decided on, stored before it runs."""
 
     iteration: int
     snapshot: Any
@@ -115,18 +84,12 @@ class IterationPlan:
         from ..decision.replay import ExecutionDependencyManifest
 
         raw_action = payload["action"]
-        action_type = (
-            CompositeAction
-            if "composite_id" in raw_action
-            else AtomicAction
-        )
+        action_type = CompositeAction if "composite_id" in raw_action else AtomicAction
         return cls(
             iteration=int(payload["iteration"]),
             snapshot=BeliefSnapshot.from_dict(payload["snapshot"]),
             manifest=ExecutionDependencyManifest.from_dict(payload["manifest"]),
-            recommendation=DecisionRecommendation.from_dict(
-                payload["recommendation"]
-            ),
+            recommendation=DecisionRecommendation.from_dict(payload["recommendation"]),
             action=action_type.from_dict(raw_action),
             charter_version=payload.get("charter_version", ""),
             campaign_id=payload.get("campaign_id", ""),
@@ -143,12 +106,20 @@ class ResumeViolation(Exception):
 class EffectLedger:
     """Records which at-most-once effects have already happened.
 
-    Not a cache. A cache may forget; this may not. The distinction matters
-    because forgetting here means executing a simulation twice or admitting one
-    result as two independent pieces of evidence.
+    ``_journal`` is an in-memory V0.3 acceleration only. It is deliberately not
+    serialized, so the frozen V0.2 wire shape and digest semantics are unchanged.
+    Reconstructing it once on load is O(N), which the V0.3 preregistration
+    explicitly permits; persistence can then consume only newly appended effects.
     """
 
     applied: dict[str, str] = field(default_factory=dict)
+    _journal: list[tuple[str, str]] = field(
+        default_factory=list, init=False, repr=False, compare=False
+    )
+
+    def __post_init__(self) -> None:
+        self.applied = {str(k): str(v) for k, v in dict(self.applied).items()}
+        self._journal = list(self.applied.items())
 
     def key(self, run_id: str, iteration: int, kind: str, subject: str) -> str:
         return f"{run_id}:{iteration}:{kind}:{subject}"
@@ -159,6 +130,26 @@ class EffectLedger:
     def reference(self, key: str) -> str:
         return self.applied.get(key, "")
 
+    @property
+    def journal_length(self) -> int:
+        return len(self._journal)
+
+    def entry_at(self, index: int) -> tuple[str, str]:
+        return self._journal[index]
+
+    def entries_from(self, index: int) -> tuple[tuple[str, str], ...]:
+        """Return effect deltas without rescanning the committed prefix."""
+        if index < 0 or index > len(self._journal):
+            raise ResumeViolation(
+                f"effect journal cursor {index} outside 0..{len(self._journal)}"
+            )
+        if len(self.applied) != len(self._journal):
+            raise ResumeViolation(
+                "effect mapping changed outside EffectLedger.mark/once; "
+                "append history can no longer be trusted"
+            )
+        return tuple(self._journal[index:])
+
     def once(
         self,
         key: str,
@@ -166,27 +157,24 @@ class EffectLedger:
         *,
         reference: Callable[[T], str] = lambda value: "",
     ) -> tuple[T | None, bool]:
-        """Run ``effect`` only if ``key`` has not been applied.
-
-        Returns ``(value, performed)``. On a repeat the value is ``None`` and
-        ``performed`` is ``False`` — the caller is expected to consult
-        :meth:`reference` rather than re-deriving the result, because
-        re-deriving it is exactly what must not happen.
-        """
+        """Run ``effect`` only if ``key`` has not already been applied."""
         if key in self.applied:
             return None, False
         value = effect()
-        self.applied[key] = str(reference(value))
+        self.mark(key, str(reference(value)))
         return value, True
 
     def mark(self, key: str, reference: str = "") -> None:
         """Record an effect performed elsewhere. Refuses to overwrite."""
+        key = str(key)
         if key in self.applied:
             raise ResumeViolation(
                 f"effect {key!r} is already recorded as applied; recording it "
                 f"again would license a duplicate side effect"
             )
-        self.applied[key] = str(reference)
+        ref = str(reference)
+        self.applied[key] = ref
+        self._journal.append((key, ref))
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -208,15 +196,7 @@ class CampaignCheckpoint:
     events: CampaignEventLog
     budget: BudgetLedger
     effects: EffectLedger
-    #: The in-flight iteration's exact decision artifacts, if one is in flight.
     plan: IterationPlan | None = None
-    #: Which declared validation obligations have been assessed, and how.
-    #:
-    #: Durable because it is *scientific* state, not bookkeeping: it feeds the
-    #: next snapshot's ``obligation_state`` (and therefore its digest), the
-    #: validation-liveness reachability check, and the Arbiter's stopping
-    #: review. Losing it on restart silently rewinds the campaign's assurance
-    #: record to "nothing has ever been assessed".
     obligation_state: Mapping[str, bool] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -265,12 +245,7 @@ class CampaignCheckpoint:
 
 
 class CheckpointStore:
-    """Append-only checkpoint history for one run.
-
-    Keeps every checkpoint rather than overwriting, so a resume can be audited
-    against the state it actually resumed from. ``latest()`` is what a resume
-    reads; the earlier entries are what an auditor reads.
-    """
+    """Append-only legacy checkpoint history for one run."""
 
     def __init__(self) -> None:
         self._checkpoints: list[CampaignCheckpoint] = []
