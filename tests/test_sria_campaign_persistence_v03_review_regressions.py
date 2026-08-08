@@ -825,6 +825,36 @@ def test_event_payload_init_reproducer_fails_closed_and_restart_retains_event() 
     }
 
 
+def test_event_payload_base_mutator_bypass_fails_closed() -> None:
+    events = CampaignEventLog(RUN_ID)
+    events.append(
+        CampaignEventType.CAMPAIGN_CREATED,
+        iteration=0,
+        payload={"status": "original", "nested": {"attempts": [1]}},
+    )
+    head_digest = events.head_digest
+    dict.__setitem__(events.events[0].payload, "status", "rewritten")
+    budget = BudgetLedger(total_budget=10.0, reserved_validation_budget=1.0)
+    run = CampaignRun(
+        run_id=RUN_ID,
+        campaign_id="v03-review-campaign",
+        state=ExecutionState.READY,
+        iteration=0,
+        max_iterations=1,
+        event_log_digest=head_digest,
+    )
+
+    with pytest.raises(TypeError, match="immutable"):
+        events.events[0].to_dict()
+    with pytest.raises(TypeError, match="immutable"):
+        IncrementalCheckpointStore().save_state(
+            run=run,
+            events=events,
+            budget=budget,
+            effects=EffectLedger(),
+        )
+
+
 def test_checkpoint_record_obligation_state_mutation_fails_closed() -> None:
     events = CampaignEventLog(RUN_ID)
     events.append(CampaignEventType.CAMPAIGN_CREATED, iteration=0)
@@ -935,6 +965,37 @@ def test_checkpoint_record_run_metadata_init_reproducer_fails_closed() -> None:
     assert store.to_dict()["checkpoints"][-1]["run_state"]["metadata"] == {
         "status": "legitimate"
     }
+
+
+def test_checkpoint_record_run_metadata_base_mutator_bypass_fails_closed() -> None:
+    events = CampaignEventLog(RUN_ID)
+    events.append(CampaignEventType.CAMPAIGN_CREATED, iteration=0)
+    budget = BudgetLedger(total_budget=10.0, reserved_validation_budget=1.0)
+    run = CampaignRun(
+        run_id=RUN_ID,
+        campaign_id="v03-review-campaign",
+        state=ExecutionState.READY,
+        iteration=1,
+        max_iterations=1,
+        event_log_digest=events.head_digest,
+        metadata={"nested": {"attempts": [1]}},
+    )
+    store = IncrementalCheckpointStore()
+    store.save_state(
+        run=run,
+        events=events,
+        budget=budget,
+        effects=EffectLedger(),
+    )
+    record = store.latest_record
+    assert record is not None
+
+    list.append(record.run_state.metadata["nested"]["attempts"], 2)
+
+    with pytest.raises(PersistenceIntegrityError, match="immutable"):
+        record.digest
+    with pytest.raises(PersistenceIntegrityError, match="immutable"):
+        store.to_dict()
 
 
 def test_checkpoint_record_plan_mutation_fails_closed() -> None:
@@ -1999,3 +2060,19 @@ def test_effect_journal_init_reproducer_fails_closed_and_reloads_legitimate_effe
     assert restored is not None
     assert dict(restored.effects.applied) == before_applied
     assert restored.effects.entries_from(0) == before_journal
+
+
+def test_effect_journal_base_mutator_bypass_fails_closed() -> None:
+    effects = EffectLedger()
+    effects.mark("legitimate-effect", "legitimate-ref")
+    list.__setitem__(effects._journal, 0, ("forged-effect", "forged-ref"))
+
+    with pytest.raises(ResumeViolation, match="effect journal"):
+        effects.entries_from(0)
+
+    reloaded = EffectLedger()
+    reloaded.mark("legitimate-effect", "legitimate-ref")
+    dict.__setitem__(reloaded.applied, "forged-effect", "forged-ref")
+
+    with pytest.raises(ResumeViolation, match="EffectLedger.mark/once"):
+        reloaded.to_dict()

@@ -102,6 +102,23 @@ class ResumeViolation(Exception):
     """A resume attempted something the recorded history forbids."""
 
 
+def _effect_payload_snapshot(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            str(key): _effect_payload_snapshot(item)
+            for key, item in sorted(dict.items(value))
+        }
+    if isinstance(value, list):
+        return [_effect_payload_snapshot(item) for item in list.__iter__(value)]
+    if isinstance(value, tuple):
+        return tuple(_effect_payload_snapshot(item) for item in value)
+    return value
+
+
+def _effect_payload_fingerprint(value: Any) -> str:
+    return canonical_digest(_effect_payload_snapshot(value))
+
+
 class _EffectAppliedMapping(dict[str, str]):
     """Dict-compatible read surface for effect references.
 
@@ -118,10 +135,31 @@ class _EffectAppliedMapping(dict[str, str]):
         if getattr(self, "_initialized", False):
             self._reject_mutation()
         super().__init__(*args, **kwargs)
+        self._fingerprint = _effect_payload_fingerprint(self)
         self._initialized = True
 
     def _reject_mutation(self, *args: Any, **kwargs: Any) -> None:
         raise ResumeViolation(self._MUTATION_MESSAGE)
+
+    def _validate_unchanged(self) -> None:
+        if self._fingerprint != _effect_payload_fingerprint(self):
+            self._reject_mutation()
+
+    def __contains__(self, key: object) -> bool:
+        self._validate_unchanged()
+        return dict.__contains__(self, key)
+
+    def __getitem__(self, key: str) -> str:
+        self._validate_unchanged()
+        return dict.__getitem__(self, key)
+
+    def __iter__(self):
+        self._validate_unchanged()
+        return dict.__iter__(self)
+
+    def __len__(self) -> int:
+        self._validate_unchanged()
+        return dict.__len__(self)
 
     def __setitem__(self, key: str, value: str) -> None:
         self._reject_mutation()
@@ -147,8 +185,17 @@ class _EffectAppliedMapping(dict[str, str]):
     def __ior__(self, other: Mapping[str, str]) -> "_EffectAppliedMapping":
         self._reject_mutation()
 
+    def get(self, key: str, default: Any = None) -> Any:
+        self._validate_unchanged()
+        return dict.get(self, key, default)
+
+    def items(self):
+        self._validate_unchanged()
+        return dict.items(self)
+
     def _record(self, key: str, reference: str) -> None:
         dict.__setitem__(self, key, reference)
+        self._fingerprint = _effect_payload_fingerprint(self)
 
 
 class _EffectJournal(list[tuple[str, str]]):
@@ -160,10 +207,27 @@ class _EffectJournal(list[tuple[str, str]]):
         if getattr(self, "_initialized", False):
             self._reject_mutation()
         super().__init__(*args, **kwargs)
+        self._fingerprint = _effect_payload_fingerprint(self)
         self._initialized = True
 
     def _reject_mutation(self, *args: Any, **kwargs: Any) -> None:
         raise ResumeViolation(self._MUTATION_MESSAGE)
+
+    def _validate_unchanged(self) -> None:
+        if self._fingerprint != _effect_payload_fingerprint(self):
+            self._reject_mutation()
+
+    def __getitem__(self, index: Any) -> Any:
+        self._validate_unchanged()
+        return list.__getitem__(self, index)
+
+    def __iter__(self):
+        self._validate_unchanged()
+        return list.__iter__(self)
+
+    def __len__(self) -> int:
+        self._validate_unchanged()
+        return list.__len__(self)
 
     def __setitem__(self, index: Any, value: Any) -> None:
         self._reject_mutation()
@@ -203,6 +267,7 @@ class _EffectJournal(list[tuple[str, str]]):
 
     def _record(self, key: str, reference: str) -> None:
         list.append(self, (key, reference))
+        self._fingerprint = _effect_payload_fingerprint(self)
 
 
 @dataclass

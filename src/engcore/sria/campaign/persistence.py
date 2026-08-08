@@ -143,6 +143,23 @@ class PersistenceIntegrityError(ResumeViolation):
     """Stored persistence state cannot be trusted for deterministic resume."""
 
 
+def _checkpoint_payload_snapshot(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            str(key): _checkpoint_payload_snapshot(item)
+            for key, item in sorted(dict.items(value))
+        }
+    if isinstance(value, list):
+        return [_checkpoint_payload_snapshot(item) for item in list.__iter__(value)]
+    if isinstance(value, tuple):
+        return tuple(_checkpoint_payload_snapshot(item) for item in value)
+    return value
+
+
+def _checkpoint_payload_fingerprint(value: Any) -> str:
+    return canonical_digest(_checkpoint_payload_snapshot(value))
+
+
 class _ImmutableCheckpointMapping(dict[str, Any]):
     """Dict-compatible checkpoint payload mapping that rejects mutation."""
 
@@ -152,10 +169,31 @@ class _ImmutableCheckpointMapping(dict[str, Any]):
         if getattr(self, "_initialized", False):
             self._reject_mutation()
         super().__init__(*args, **kwargs)
+        self._fingerprint = _checkpoint_payload_fingerprint(self)
         self._initialized = True
 
     def _reject_mutation(self, *args: Any, **kwargs: Any) -> None:
         raise PersistenceIntegrityError(self._MUTATION_MESSAGE)
+
+    def _validate_unchanged(self) -> None:
+        if self._fingerprint != _checkpoint_payload_fingerprint(self):
+            self._reject_mutation()
+
+    def __contains__(self, key: object) -> bool:
+        self._validate_unchanged()
+        return dict.__contains__(self, key)
+
+    def __getitem__(self, key: str) -> Any:
+        self._validate_unchanged()
+        return dict.__getitem__(self, key)
+
+    def __iter__(self):
+        self._validate_unchanged()
+        return dict.__iter__(self)
+
+    def __len__(self) -> int:
+        self._validate_unchanged()
+        return dict.__len__(self)
 
     def __setitem__(self, key: str, value: Any) -> None:
         self._reject_mutation()
@@ -181,6 +219,22 @@ class _ImmutableCheckpointMapping(dict[str, Any]):
     def __ior__(self, other: Mapping[str, Any]) -> "_ImmutableCheckpointMapping":
         self._reject_mutation()
 
+    def get(self, key: str, default: Any = None) -> Any:
+        self._validate_unchanged()
+        return dict.get(self, key, default)
+
+    def items(self):
+        self._validate_unchanged()
+        return dict.items(self)
+
+    def keys(self):
+        self._validate_unchanged()
+        return dict.keys(self)
+
+    def values(self):
+        self._validate_unchanged()
+        return dict.values(self)
+
 
 class _ImmutableCheckpointList(list[Any]):
     """List-compatible checkpoint payload sequence that rejects mutation."""
@@ -191,10 +245,27 @@ class _ImmutableCheckpointList(list[Any]):
         if getattr(self, "_initialized", False):
             self._reject_mutation()
         super().__init__(*args, **kwargs)
+        self._fingerprint = _checkpoint_payload_fingerprint(self)
         self._initialized = True
 
     def _reject_mutation(self, *args: Any, **kwargs: Any) -> None:
         raise PersistenceIntegrityError(self._MUTATION_MESSAGE)
+
+    def _validate_unchanged(self) -> None:
+        if self._fingerprint != _checkpoint_payload_fingerprint(self):
+            self._reject_mutation()
+
+    def __getitem__(self, index: Any) -> Any:
+        self._validate_unchanged()
+        return list.__getitem__(self, index)
+
+    def __iter__(self):
+        self._validate_unchanged()
+        return list.__iter__(self)
+
+    def __len__(self) -> int:
+        self._validate_unchanged()
+        return list.__len__(self)
 
     def __setitem__(self, index: Any, value: Any) -> None:
         self._reject_mutation()
@@ -251,6 +322,8 @@ def _freeze_checkpoint_payload(value: Any) -> Any:
 
 
 def _decode_checkpoint_payload(value: Any) -> Any:
+    if isinstance(value, (_ImmutableCheckpointMapping, _ImmutableCheckpointList)):
+        value._validate_unchanged()
     if isinstance(value, Mapping) and value.get("schema") == CHECKPOINT_TUPLE_SCHEMA:
         if not _is_encoded_checkpoint_tuple(value):
             raise PersistenceIntegrityError("invalid checkpoint tuple payload")
@@ -280,6 +353,8 @@ def _decode_checkpoint_payload(value: Any) -> Any:
 
 
 def _encode_checkpoint_payload(value: Any) -> Any:
+    if isinstance(value, (_ImmutableCheckpointMapping, _ImmutableCheckpointList)):
+        value._validate_unchanged()
     if isinstance(value, Mapping):
         encoded = {
             str(key): _encode_checkpoint_payload(item)
@@ -330,6 +405,8 @@ def _freeze_checkpoint_event(event: CampaignEvent) -> CampaignEvent:
 
 
 def _thaw_checkpoint_payload(value: Any) -> Any:
+    if isinstance(value, (_ImmutableCheckpointMapping, _ImmutableCheckpointList)):
+        value._validate_unchanged()
     if isinstance(value, Mapping):
         return {
             str(key): _thaw_checkpoint_payload(item)
