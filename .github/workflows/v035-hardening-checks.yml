@@ -17,6 +17,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -27,9 +29,33 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install numpy scipy scikit-learn pytest
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install botorch gpytorch
 
       - name: Compile sources
         run: python -m compileall -q src tests
+
+      - name: Ensure frozen V0.3.4 files are untouched
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          git fetch origin main
+          changed="$(git diff --name-only origin/main...HEAD)"
+          forbidden=(
+            src/engcore/adaptive_stacked_engine.py
+            src/engcore/stacked_engine.py
+            src/engcore/hybrid_engine.py
+            src/engcore/logei_engine.py
+            src/engcore/v034_ablation_arena.py
+            src/engcore/v034_ablation_analysis.py
+            docs/ablation-protocol-v034.md
+          )
+          for path in "${forbidden[@]}"; do
+            if grep -Fxq "$path" <<< "$changed"; then
+              echo "Frozen V0.3.4 artifact changed: $path" >&2
+              exit 1
+            fi
+          done
 
       - name: Run V0.3.5 hardening regressions
         run: python -m pytest -q tests/test_v035_hardening.py
