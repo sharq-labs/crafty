@@ -146,7 +146,7 @@ def test_objective_projection_reads_only_attributable_result_metrics_and_units()
     evaluation = _evaluation("a", TWIN_A, 10.0, 5.0)
     projected = project_objectives(evaluation, (RANGE, MASS))
     assert [item.value.magnitude for item in projected] == [10.0, 5.0]
-    assert [item.value.unit for item in projected] == ["meter", "kilogram"]
+    assert [item.value.units for item in projected] == ["meter", "kilogram"]
 
     missing = ObjectiveDefinition(
         name="missing",
