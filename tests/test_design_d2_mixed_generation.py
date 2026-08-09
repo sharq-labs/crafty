@@ -11,13 +11,16 @@ from engcore.design import (
     CandidateGenerationBatch,
     CandidateGenerationPlan,
     CandidateProposal,
+    DesignCandidateReference,
     DesignSpace,
     GenerationStrategy,
     MixedVariableSampler,
     ProposalDecision,
+    bind_generation_to_twin,
     generate_initial_population,
     generation_binding_payload,
     validate_generation_binding,
+    validate_twin_generation_binding,
 )
 from engcore.scientific.errors import InvalidScientificProblem
 from engcore.scientific.experiments.optimizer_adapter import CandidateCodec
@@ -163,8 +166,8 @@ def test_plan_and_proposal_round_trip_deterministically() -> None:
 def test_proposal_round_trip_still_requires_explicit_design_space_validation() -> None:
     space = _mixed_space()
     other = DesignSpace(
-        space_id="other-space",
-        version="1",
+        space_id=space.space_id,
+        version="2",
         variables=space.variables,
     )
     proposal = CandidateProposal(
@@ -236,6 +239,7 @@ def test_generation_is_deterministic_and_materializes_candidate_twins() -> None:
     ]
     assert first.accepted_sequence_indices == second.accepted_sequence_indices
     assert len(first.candidates) == 16
+    assert first.design_space.reference.key == space.reference.key
     assert first.population.validate_candidates(first.candidates) is first.population
 
     for proposal, candidate, twin in zip(
@@ -261,6 +265,7 @@ def test_batch_validates_by_identity_not_tuple_position() -> None:
         materializer=_Materializer(),
     )
     rebuilt = CandidateGenerationBatch(
+        design_space=space,
         plan=batch.plan,
         population=batch.population,
         proposals=batch.proposals,
@@ -285,6 +290,7 @@ def test_batch_rejects_candidate_assignments_from_another_proposal() -> None:
     )
     with pytest.raises(InvalidScientificProblem, match="assignments do not match proposal"):
         CandidateGenerationBatch(
+            design_space=space,
             plan=batch.plan,
             population=batch.population,
             proposals=batch.proposals,
@@ -305,12 +311,105 @@ def test_batch_rejects_cross_wired_candidate_twin_pairs() -> None:
     second = replace(batch.candidates[1], twin=batch.twins[0].reference)
     with pytest.raises(InvalidScientificProblem, match="binding does not match proposal"):
         CandidateGenerationBatch(
+            design_space=space,
             plan=batch.plan,
             population=batch.population,
             proposals=batch.proposals,
             candidates=(first, second),
             twins=batch.twins,
             rejected=batch.rejected,
+        )
+
+
+def test_batch_rejects_proposal_outside_plan_attempt_window() -> None:
+    space = _mixed_space()
+    plan = _plan(space, count=1, sequence_start=1, attempt_budget=1)
+    batch = generate_initial_population(
+        design_space=space,
+        plan=plan,
+        materializer=_Materializer(),
+    )
+
+    sequence_index = 999
+    proposal = CandidateProposal(
+        candidate_id=plan.candidate_id_for(sequence_index),
+        design_space=space.reference,
+        sequence_index=sequence_index,
+        assignments=MixedVariableSampler(space).assignments_at(sequence_index),
+        strategy=plan.strategy,
+    )
+    twin = bind_generation_to_twin(_Materializer().materialize(proposal), proposal)
+    candidate = replace(
+        batch.candidates[0],
+        candidate_id=proposal.candidate_id,
+        twin=twin.reference,
+        assignments=proposal.assignments,
+        operator=proposal.strategy.value,
+    )
+    population = replace(batch.population, members=(candidate.reference,))
+
+    with pytest.raises(InvalidScientificProblem, match="outside generation plan"):
+        CandidateGenerationBatch(
+            design_space=space,
+            plan=plan,
+            population=population,
+            proposals=(proposal,),
+            candidates=(candidate,),
+            twins=(twin,),
+        )
+
+
+def test_batch_rejects_self_consistent_invalid_assignment_universe() -> None:
+    space = _mixed_space()
+    batch = generate_initial_population(
+        design_space=space,
+        plan=_plan(space, count=1),
+        materializer=_Materializer(),
+    )
+    proposal = CandidateProposal(
+        candidate_id=batch.proposals[0].candidate_id,
+        design_space=space.reference,
+        sequence_index=batch.proposals[0].sequence_index,
+        assignments={"rogue": Quantity(2.0, "m")},
+        strategy=batch.plan.strategy,
+    )
+    twin = bind_generation_to_twin(_Materializer().materialize(proposal), proposal)
+    candidate = replace(
+        batch.candidates[0],
+        assignments=proposal.assignments,
+        twin=twin.reference,
+    )
+
+    with pytest.raises(InvalidScientificProblem, match="missing variables"):
+        CandidateGenerationBatch(
+            design_space=space,
+            plan=batch.plan,
+            population=batch.population,
+            proposals=(proposal,),
+            candidates=(candidate,),
+            twins=(twin,),
+        )
+
+
+def test_batch_rejects_wrong_population_member() -> None:
+    space = _mixed_space()
+    batch = generate_initial_population(
+        design_space=space,
+        plan=_plan(space, count=1),
+        materializer=_Materializer(),
+    )
+    bad_population = replace(
+        batch.population,
+        members=(DesignCandidateReference("not-the-generated-candidate"),),
+    )
+    with pytest.raises(InvalidScientificProblem, match="identities do not match"):
+        CandidateGenerationBatch(
+            design_space=space,
+            plan=batch.plan,
+            population=bad_population,
+            proposals=batch.proposals,
+            candidates=batch.candidates,
+            twins=batch.twins,
         )
 
 
@@ -327,11 +426,16 @@ def test_generation_binding_payload_is_strictly_typed_and_canonical() -> None:
     malformed_payloads = []
     for field, value in (
         ("candidate_id", ""),
+        ("candidate_id", " candidate "),
         ("design_space_id", 123),
         ("design_space_version", {"bad": "shape"}),
         ("sequence_index", str(original["sequence_index"])),
+        ("sequence_index", True),
+        ("sequence_index", 0),
         ("strategy", "unknown_strategy"),
         ("assignment_digest", "not-a-digest"),
+        ("assignment_digest", original["assignment_digest"].upper()),
+        ("assignment_digest", 123),
     ):
         payload = dict(original)
         payload[field] = value
@@ -368,7 +472,7 @@ def test_generation_binding_must_match_proposal_candidate_and_twin_version() -> 
         strategy=proposal.strategy,
     )
     with pytest.raises(InvalidScientificProblem, match="does not match proposal identity"):
-        validate_generation_binding(twin, other_proposal)
+        validate_twin_generation_binding(twin, other_proposal)
 
     wrong_version_twin = replace(twin, version="2")
     with pytest.raises(InvalidScientificProblem, match="Twin reference does not match"):
