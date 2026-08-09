@@ -27,6 +27,7 @@ from .generation import (
     bind_generation_to_twin,
     generate_initial_population,
     generation_binding_payload,
+    validate_generation_binding,
 )
 from .population import DesignPopulation
 from .sampling import MixedVariableSampler
@@ -65,4 +66,5 @@ __all__ = [
     "generation_binding_payload",
     "project_objectives",
     "require_result_binding",
+    "validate_generation_binding",
 ]
