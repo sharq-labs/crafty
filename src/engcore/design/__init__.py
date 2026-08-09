@@ -7,8 +7,10 @@ from .evaluation import (
     DesignEvaluationReference,
     FidelitySelection,
     ProjectedObjective,
+    ResultBinding,
     SelectionEligibility,
     project_objectives,
+    require_result_binding,
 )
 from .fidelity import FidelityLadder, FidelityRung
 from .population import DesignPopulation
@@ -27,8 +29,10 @@ __all__ = [
     "FidelitySelection",
     "ParetoArchive",
     "ProjectedObjective",
+    "ResultBinding",
     "ScopedEliteArchive",
     "SelectionEligibility",
     "dominates",
     "project_objectives",
+    "require_result_binding",
 ]
