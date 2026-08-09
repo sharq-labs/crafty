@@ -1,8 +1,11 @@
 """K2 domain execution bridge.
 
-Scientific meaning stays in the CSTR adapter.  This module only constructs the
+Scientific meaning stays in the CSTR adapter. This module only constructs the
 frozen K2 parameterized reactor declarations, asks the adapter for admitted
 predictions, and compacts those predictions into K2's shared forward-row type.
+
+Execution telemetry is deliberately kept separate from scientific meaning.
+Worker count, batching and timing may change; the admitted rows may not.
 """
 
 from __future__ import annotations
@@ -10,10 +13,16 @@ from __future__ import annotations
 import os
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
-from typing import Mapping, Sequence
+from itertools import repeat
+from typing import Callable, Mapping, Sequence
 
 # Avoid nested BLAS/OpenMP fan-out when K2 uses process-level parallelism.
-for _name in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS", "NUMEXPR_NUM_THREADS"):
+for _name in (
+    "OMP_NUM_THREADS",
+    "MKL_NUM_THREADS",
+    "OPENBLAS_NUM_THREADS",
+    "NUMEXPR_NUM_THREADS",
+):
     os.environ.setdefault(_name, "1")
 
 import numpy as np
@@ -46,6 +55,46 @@ from .k2_config import (
 class ForwardTask:
     index: int
     coordinates: tuple[float, float]
+
+
+@dataclass(frozen=True)
+class ForwardTaskResult:
+    """One parameter point plus execution counts for its required conditions."""
+
+    row: AdmittedForwardRow
+    condition_attempts: int
+    condition_admitted: int
+    condition_rejected: int
+
+
+@dataclass(frozen=True)
+class ForwardBuildStats:
+    """Deterministic counts plus execution-policy telemetry for one grid build."""
+
+    parameter_points: int
+    condition_attempts: int
+    condition_admitted: int
+    condition_rejected: int
+    point_admitted: int
+    point_rejected: int
+    workers: int
+
+    def to_dict(self) -> dict[str, int]:
+        return {
+            "parameter_points": self.parameter_points,
+            "condition_attempts": self.condition_attempts,
+            "condition_admitted": self.condition_admitted,
+            "condition_rejected": self.condition_rejected,
+            "point_admitted": self.point_admitted,
+            "point_rejected": self.point_rejected,
+            "workers": self.workers,
+        }
+
+
+@dataclass(frozen=True)
+class ForwardBuildResult:
+    table: AdmittedForwardTable
+    stats: ForwardBuildStats
 
 
 def _sigma_for(observable_name: str) -> Quantity:
@@ -136,42 +185,136 @@ def _evaluate_task(
     task: ForwardTask,
     observations: ObservationSet,
     condition_ids: tuple[str, ...],
-) -> AdmittedForwardRow:
+) -> ForwardTaskResult:
+    """Evaluate every required condition so K2 can report exact attempt counts.
+
+    Once one condition is rejected the parameter point will receive zero
+    posterior mass, but the remaining declared conditions are still evaluated.
+    That costs some extra work on rejected points and gives the scored run exact
+    parameter-condition admission/rejection counts rather than inferred counts.
+    """
     log_k0, e_over_r_k = task.coordinates
-    try:
-        chemistry = chemistry_from_coordinates(log_k0, e_over_r_k)
-        adapter = CSTRInferenceForwardAdapter()
-        predictions = {}
-        for condition_id in condition_ids:
-            condition = CONDITION_BY_ID[condition_id]
+    chemistry = chemistry_from_coordinates(log_k0, e_over_r_k)
+    adapter = CSTRInferenceForwardAdapter()
+
+    predictions: dict[str, object] = {}
+    rejections: list[str] = []
+    admitted = 0
+    for condition_id in condition_ids:
+        condition = CONDITION_BY_ID[condition_id]
+        try:
             predictions[condition_id] = adapter.evaluate(
                 condition.build(chemistry),
                 observable_names=OBSERVABLE_NAMES,
                 run_id_prefix=f"k2-grid-{task.index}-{condition_id}",
             )
-        return AdmittedForwardRow.from_predictions(
+            admitted += 1
+        except InferenceAdmissibilityError as exc:
+            rejections.append(f"{condition_id}: {exc}")
+
+    attempts = len(condition_ids)
+    rejected = attempts - admitted
+    if rejections:
+        row = AdmittedForwardRow.rejected(
+            task.coordinates,
+            observations,
+            "; ".join(rejections),
+        )
+    else:
+        row = AdmittedForwardRow.from_predictions(
             task.coordinates,
             observations,
             predictions,
         )
-    except InferenceAdmissibilityError as exc:
-        return AdmittedForwardRow.rejected(task.coordinates, observations, str(exc))
+    return ForwardTaskResult(
+        row=row,
+        condition_attempts=attempts,
+        condition_admitted=admitted,
+        condition_rejected=rejected,
+    )
 
 
-def _worker_count(requested: str | int, tasks: int) -> int:
+def resolve_worker_count(requested: str | int, tasks: int) -> int:
+    """Resolve a capability-based process count without hardware-name tables."""
     if isinstance(requested, int):
         if requested < 1:
             raise ValueError("workers must be at least one")
         return min(requested, max(tasks, 1))
     text = str(requested).strip().lower()
     if text != "auto":
-        return _worker_count(int(text), tasks)
+        return resolve_worker_count(int(text), tasks)
     logical = max(1, int(os.cpu_count() or 1))
-    # For small batches Windows spawn/IPC can exceed the scientific work.  The
+    # For small batches Windows spawn/IPC can exceed the scientific work. The
     # cutoff is workload-derived from available task count, not a CPU model.
     if tasks < logical:
         return 1
     return min(logical, tasks)
+
+
+def build_forward_table_with_stats(
+    points: np.ndarray,
+    observations: ObservationSet,
+    *,
+    condition_ids: Sequence[str] = MULTI_CONDITION_IDS,
+    workers: str | int = "auto",
+    progress_callback: Callable[[int, int], None] | None = None,
+) -> ForwardBuildResult:
+    """Evaluate a complete parameter grid once and return exact work counts."""
+    points = np.asarray(points, dtype=np.float64)
+    if points.ndim != 2 or points.shape[1] != 2:
+        raise ValueError("K2 points must have shape (N, 2)")
+    condition_ids = tuple(str(value) for value in condition_ids)
+    if not condition_ids:
+        raise ValueError("K2 forward table requires at least one condition")
+    unknown = [value for value in condition_ids if value not in CONDITION_BY_ID]
+    if unknown:
+        raise ValueError(f"unknown K2 condition ids: {unknown!r}")
+
+    tasks = [
+        ForwardTask(index=i, coordinates=(float(row[0]), float(row[1])))
+        for i, row in enumerate(points)
+    ]
+    n_workers = resolve_worker_count(workers, len(tasks))
+
+    results: list[ForwardTaskResult] = []
+    if n_workers == 1:
+        iterator = (
+            _evaluate_task(task, observations, condition_ids)
+            for task in tasks
+        )
+        for completed, result in enumerate(iterator, 1):
+            results.append(result)
+            if progress_callback is not None:
+                progress_callback(completed, len(tasks))
+    else:
+        # Candidate rows vary materially in solver work. chunksize=1 is the
+        # correctness-neutral baseline measured to work well for this class of
+        # workload; later feedback tuning may change it without changing science.
+        with ProcessPoolExecutor(max_workers=n_workers) as executor:
+            iterator = executor.map(
+                _evaluate_task,
+                tasks,
+                repeat(observations),
+                repeat(condition_ids),
+                chunksize=1,
+            )
+            for completed, result in enumerate(iterator, 1):
+                results.append(result)
+                if progress_callback is not None:
+                    progress_callback(completed, len(tasks))
+
+    rows = [result.row for result in results]
+    table = AdmittedForwardTable.from_rows(PARAMETER_NAMES, observations, rows)
+    stats = ForwardBuildStats(
+        parameter_points=len(results),
+        condition_attempts=sum(item.condition_attempts for item in results),
+        condition_admitted=sum(item.condition_admitted for item in results),
+        condition_rejected=sum(item.condition_rejected for item in results),
+        point_admitted=sum(1 for item in results if item.row.admissible),
+        point_rejected=sum(1 for item in results if not item.row.admissible),
+        workers=n_workers,
+    )
+    return ForwardBuildResult(table=table, stats=stats)
 
 
 def build_forward_table(
@@ -181,30 +324,10 @@ def build_forward_table(
     condition_ids: Sequence[str] = MULTI_CONDITION_IDS,
     workers: str | int = "auto",
 ) -> AdmittedForwardTable:
-    """Evaluate a complete parameter grid once, serially or through one reused pool."""
-    points = np.asarray(points, dtype=np.float64)
-    if points.ndim != 2 or points.shape[1] != 2:
-        raise ValueError("K2 points must have shape (N, 2)")
-    condition_ids = tuple(str(value) for value in condition_ids)
-    tasks = [
-        ForwardTask(index=i, coordinates=(float(row[0]), float(row[1])))
-        for i, row in enumerate(points)
-    ]
-    n_workers = _worker_count(workers, len(tasks))
-    if n_workers == 1:
-        rows = [_evaluate_task(task, observations, condition_ids) for task in tasks]
-    else:
-        # Candidate rows are expensive and can vary materially in solve work.
-        # chunksize=1 is a correctness-neutral load-balancing baseline; K2's
-        # later feedback policy may tune it without changing any science.
-        with ProcessPoolExecutor(max_workers=n_workers) as executor:
-            rows = list(
-                executor.map(
-                    _evaluate_task,
-                    tasks,
-                    [observations] * len(tasks),
-                    [condition_ids] * len(tasks),
-                    chunksize=1,
-                )
-            )
-    return AdmittedForwardTable.from_rows(PARAMETER_NAMES, observations, rows)
+    """Compatibility wrapper returning only the admitted forward table."""
+    return build_forward_table_with_stats(
+        points,
+        observations,
+        condition_ids=condition_ids,
+        workers=workers,
+    ).table
