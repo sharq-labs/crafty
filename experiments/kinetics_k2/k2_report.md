@@ -10,7 +10,7 @@ Frozen preregistration commit: `824a4167a7ebead813dc3b023b9ace31742e3789`
 
 K1.5 frozen inference-admissibility boundary: `f479777d67295355fbf3fcf7877cd834d30eee99`
 
-Freeze report commit: this document records the post-regression freeze decision on `dev`.
+K2 freeze checkpoint commit: `9affbcedd2e21a9ccbff4e3d103afc96a95c9625`.
 
 ## Scope
 
