@@ -29,7 +29,12 @@ from src.engcore.domains.kinetics.cstr import (
     ReactorOperation,
     ReactorRun,
 )
-from src.engcore.domains.kinetics.cstr.problem import MOLAR_GAS_CONSTANT, GAS_CONSTANT_UNIT
+from src.engcore.domains.kinetics.cstr.problem import (
+    CA_FINAL_METRIC,
+    GAS_CONSTANT_UNIT,
+    MOLAR_GAS_CONSTANT,
+    T_FINAL_METRIC,
+)
 from src.engcore.scientific.units.quantity import Quantity
 
 from . import EXPERIMENT_ID
@@ -49,7 +54,7 @@ RECOVERY_SEEDS = tuple(range(20260810, 20260830))
 SIGMA_CONCENTRATION = Quantity(2.0, "mol/m**3")
 SIGMA_TEMPERATURE = Quantity(0.20, "kelvin")
 
-OBSERVABLE_NAMES = ("C_A_final", "T_final")
+OBSERVABLE_NAMES = (CA_FINAL_METRIC, T_FINAL_METRIC)
 
 
 @dataclass(frozen=True)
