@@ -54,8 +54,16 @@ class PredictiveAdmissionAudit:
             raise UQProblemError("supported_mass is outside probability bounds")
         if not 0.0 <= self.unsupported_mass <= 1.0 + 1.0e-12:
             raise UQProblemError("unsupported_mass is outside probability bounds")
-        if self.conditioning_factor < 1.0:
-            raise UQProblemError("conditioning_factor cannot be below one")
+        # Direct float64 summation of an already-normalized posterior can place
+        # supported_mass a final bit above one (for example
+        # 1.0000000000000002).  Then the mathematically expected factor >= 1
+        # is represented as 0.9999999999999998.  The same 1e-12 accounting
+        # tolerance used by the K3.1 preregistration admits this rounding dust;
+        # materially sub-unit factors still fail closed.
+        if self.conditioning_factor < 1.0 - 1.0e-12:
+            raise UQProblemError(
+                "conditioning_factor is materially below one beyond probability-accounting tolerance"
+            )
         if len(self.rejected_point_indices) != len(self.rejection_reasons):
             raise UQProblemError("rejected-point indices/reasons length mismatch")
         if int(self.rejected_point_count) != len(self.rejected_point_indices):
