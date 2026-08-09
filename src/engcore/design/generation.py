@@ -16,7 +16,12 @@ from types import MappingProxyType
 from typing import Any, Mapping, Protocol, runtime_checkable
 
 from ..scientific.errors import InvalidScientificProblem
-from ..scientific.ir.values import ScientificValue, decode_value, encode_value, require_scientific_value
+from ..scientific.ir.values import (
+    ScientificValue,
+    decode_value,
+    encode_value,
+    require_scientific_value,
+)
 from ..scientific.serialization import require_schema, schema_string
 from ..scientific.twins.definition import ScientificTwin, TwinKind
 from .candidate import DesignCandidate
@@ -54,8 +59,14 @@ class CandidateGenerationPlan:
             raise InvalidScientificProblem(
                 "generation plan requires exact DesignSpaceReference"
             )
-        if isinstance(self.count, bool) or not isinstance(self.count, int) or self.count < 1:
-            raise InvalidScientificProblem("generation plan count must be a positive integer")
+        if (
+            isinstance(self.count, bool)
+            or not isinstance(self.count, int)
+            or self.count < 1
+        ):
+            raise InvalidScientificProblem(
+                "generation plan count must be a positive integer"
+            )
         if isinstance(self.generation, bool) or not isinstance(self.generation, int):
             raise InvalidScientificProblem("generation number must be an integer")
         if self.generation != 0:
@@ -130,12 +141,16 @@ def _canonical_assignments(assignments: Mapping[str, ScientificValue]) -> str:
         name: encode_value(value)
         for name, value in sorted(assignments.items(), key=lambda item: item[0])
     }
-    return json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return json.dumps(
+        payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    )
 
 
 def assignment_digest(assignments: Mapping[str, ScientificValue]) -> str:
     """Content identity for an exact typed assignment set."""
-    return hashlib.sha256(_canonical_assignments(assignments).encode("utf-8")).hexdigest()
+    return hashlib.sha256(
+        _canonical_assignments(assignments).encode("utf-8")
+    ).hexdigest()
 
 
 @dataclass(frozen=True)
@@ -196,7 +211,9 @@ class CandidateProposal:
             "sequence_index": self.sequence_index,
             "assignments": {
                 name: encode_value(value)
-                for name, value in sorted(self.assignments.items(), key=lambda item: item[0])
+                for name, value in sorted(
+                    self.assignments.items(), key=lambda item: item[0]
+                )
             },
             "strategy": self.strategy.value,
             "digest": self.digest,
@@ -235,7 +252,9 @@ class ProposalDecision:
         if any(not reason for reason in reasons):
             raise InvalidScientificProblem("proposal decision reasons must be non-empty")
         if not self.accepted and not reasons:
-            raise InvalidScientificProblem("rejected proposal requires at least one reason")
+            raise InvalidScientificProblem(
+                "rejected proposal requires at least one reason"
+            )
         object.__setattr__(self, "reasons", reasons)
 
 
@@ -265,46 +284,6 @@ class ProposalRejection:
     reasons: tuple[str, ...]
 
 
-@dataclass(frozen=True)
-class CandidateGenerationBatch:
-    plan: CandidateGenerationPlan
-    population: DesignPopulation
-    proposals: tuple[CandidateProposal, ...]
-    candidates: tuple[DesignCandidate, ...]
-    twins: tuple[ScientificTwin, ...]
-    rejected: tuple[ProposalRejection, ...] = ()
-
-    def __post_init__(self) -> None:
-        count = self.plan.count
-        if not (
-            len(self.proposals)
-            == len(self.candidates)
-            == len(self.twins)
-            == len(self.population.members)
-            == count
-        ):
-            raise InvalidScientificProblem(
-                "successful D2 batch must contain exactly the requested candidate count"
-            )
-        candidate_ids = tuple(candidate.candidate_id for candidate in self.candidates)
-        proposal_ids = tuple(proposal.candidate_id for proposal in self.proposals)
-        population_ids = tuple(member.candidate_id for member in self.population.members)
-        if set(candidate_ids) != set(proposal_ids) or set(candidate_ids) != set(population_ids):
-            raise InvalidScientificProblem(
-                "D2 batch proposal/candidate/population identities do not match"
-            )
-        twin_keys = [twin.reference.key for twin in self.twins]
-        if len(twin_keys) != len(set(twin_keys)):
-            raise InvalidScientificProblem("D2 batch requires unique Twin references")
-        digests = [proposal.digest for proposal in self.proposals]
-        if len(digests) != len(set(digests)):
-            raise InvalidScientificProblem("D2 batch requires unique typed assignments")
-
-    @property
-    def accepted_sequence_indices(self) -> tuple[int, ...]:
-        return tuple(proposal.sequence_index for proposal in self.proposals)
-
-
 def _binding_payload(proposal: CandidateProposal) -> dict[str, Any]:
     return {
         "candidate_id": proposal.candidate_id,
@@ -318,8 +297,28 @@ def _binding_payload(proposal: CandidateProposal) -> dict[str, Any]:
 
 def _binding_string(proposal: CandidateProposal) -> str:
     return json.dumps(
-        _binding_payload(proposal), sort_keys=True, separators=(",", ":"), ensure_ascii=False
+        _binding_payload(proposal),
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
     )
+
+
+def _require_canonical_binding_text(value: Any, field_name: str) -> str:
+    if not isinstance(value, str) or not value or value != value.strip():
+        raise InvalidScientificProblem(
+            f"D2 generation binding {field_name} must be a non-empty canonical string"
+        )
+    return value
+
+
+def _require_digest(value: Any) -> str:
+    digest = _require_canonical_binding_text(value, "assignment_digest")
+    if len(digest) != 64 or any(ch not in "0123456789abcdef" for ch in digest):
+        raise InvalidScientificProblem(
+            "D2 generation binding assignment_digest must be 64 lowercase hex characters"
+        )
+    return digest
 
 
 def bind_generation_to_twin(
@@ -328,6 +327,10 @@ def bind_generation_to_twin(
     """Attach immutable internal generation identity to a candidate Twin."""
     if not isinstance(twin, ScientificTwin):
         raise InvalidScientificProblem("Twin materializer must return ScientificTwin")
+    if not isinstance(proposal, CandidateProposal):
+        raise InvalidScientificProblem(
+            "generation binding requires CandidateProposal"
+        )
     if twin.kind is not TwinKind.CANDIDATE:
         raise InvalidScientificProblem(
             "D2 Twin materializer must return ScientificTwin(kind=CANDIDATE)"
@@ -344,9 +347,13 @@ def bind_generation_to_twin(
 
 
 def generation_binding_payload(twin: ScientificTwin) -> dict[str, Any]:
-    """Read and validate the immutable JSON-string D2 binding from a Twin."""
+    """Read and strictly validate the canonical D2 binding carried by a Twin."""
     if not isinstance(twin, ScientificTwin):
         raise InvalidScientificProblem("generation binding requires ScientificTwin")
+    if twin.kind is not TwinKind.CANDIDATE:
+        raise InvalidScientificProblem(
+            "D2 generation binding is valid only for ScientificTwin(kind=CANDIDATE)"
+        )
     raw = twin.metadata.get(GENERATION_BINDING_METADATA_KEY)
     if not isinstance(raw, str) or not raw:
         raise InvalidScientificProblem("ScientificTwin is missing D2 generation binding")
@@ -354,6 +361,7 @@ def generation_binding_payload(twin: ScientificTwin) -> dict[str, Any]:
         payload = json.loads(raw)
     except Exception as exc:
         raise InvalidScientificProblem("malformed D2 generation binding JSON") from exc
+
     required = {
         "candidate_id",
         "design_space_id",
@@ -364,7 +372,243 @@ def generation_binding_payload(twin: ScientificTwin) -> dict[str, Any]:
     }
     if not isinstance(payload, dict) or set(payload) != required:
         raise InvalidScientificProblem("malformed D2 generation binding payload")
-    return payload
+
+    candidate_id = _require_canonical_binding_text(
+        payload["candidate_id"], "candidate_id"
+    )
+    design_space_id = _require_canonical_binding_text(
+        payload["design_space_id"], "design_space_id"
+    )
+    design_space_version = _require_canonical_binding_text(
+        payload["design_space_version"], "design_space_version"
+    )
+    sequence_index = payload["sequence_index"]
+    if (
+        isinstance(sequence_index, bool)
+        or not isinstance(sequence_index, int)
+        or sequence_index < 1
+    ):
+        raise InvalidScientificProblem(
+            "D2 generation binding sequence_index must be an integer >= 1"
+        )
+    strategy_raw = _require_canonical_binding_text(payload["strategy"], "strategy")
+    try:
+        strategy = GenerationStrategy(strategy_raw)
+    except ValueError as exc:
+        raise InvalidScientificProblem(
+            f"unknown D2 generation binding strategy {strategy_raw!r}"
+        ) from exc
+    digest = _require_digest(payload["assignment_digest"])
+
+    return {
+        "candidate_id": candidate_id,
+        "design_space_id": design_space_id,
+        "design_space_version": design_space_version,
+        "sequence_index": sequence_index,
+        "strategy": strategy.value,
+        "assignment_digest": digest,
+    }
+
+
+def validate_generation_binding(
+    twin: ScientificTwin,
+    proposal: CandidateProposal,
+    candidate: DesignCandidate | None = None,
+) -> ScientificTwin:
+    """Prove internal D2 proposal/candidate/Twin generation correspondence.
+
+    This validates D2 generation identity only. It does not prove that the
+    caller-owned materializer chose physically correct models or declarations.
+    """
+    if not isinstance(proposal, CandidateProposal):
+        raise InvalidScientificProblem(
+            "generation binding validation requires CandidateProposal"
+        )
+    payload = generation_binding_payload(twin)
+    expected = _binding_payload(proposal)
+    if payload != expected:
+        raise InvalidScientificProblem(
+            "ScientificTwin D2 generation binding does not match proposal identity"
+        )
+
+    if candidate is None:
+        return twin
+    if not isinstance(candidate, DesignCandidate):
+        raise InvalidScientificProblem(
+            "generation binding validation candidate must be DesignCandidate"
+        )
+    if candidate.candidate_id != proposal.candidate_id:
+        raise InvalidScientificProblem(
+            "D2 candidate id does not match proposal candidate id"
+        )
+    if candidate.design_space.key != proposal.design_space.key:
+        raise InvalidScientificProblem(
+            "D2 candidate design-space identity does not match proposal"
+        )
+    if dict(candidate.assignments) != dict(proposal.assignments):
+        raise InvalidScientificProblem(
+            "D2 candidate assignments do not match proposal assignments"
+        )
+    if assignment_digest(candidate.assignments) != proposal.digest:
+        raise InvalidScientificProblem(
+            "D2 candidate assignment digest does not match proposal digest"
+        )
+    if candidate.generation != 0 or candidate.parents:
+        raise InvalidScientificProblem(
+            "D2 generated candidate must be generation zero with no parents"
+        )
+    if candidate.operator != proposal.strategy.value:
+        raise InvalidScientificProblem(
+            "D2 candidate operator does not match proposal generation strategy"
+        )
+    if candidate.twin.key != twin.reference.key:
+        raise InvalidScientificProblem(
+            "D2 candidate Twin reference does not match materialized Twin"
+        )
+    return twin
+
+
+@dataclass(frozen=True)
+class CandidateGenerationBatch:
+    plan: CandidateGenerationPlan
+    population: DesignPopulation
+    proposals: tuple[CandidateProposal, ...]
+    candidates: tuple[DesignCandidate, ...]
+    twins: tuple[ScientificTwin, ...]
+    rejected: tuple[ProposalRejection, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.plan, CandidateGenerationPlan):
+            raise InvalidScientificProblem(
+                "D2 batch requires CandidateGenerationPlan"
+            )
+        if not isinstance(self.population, DesignPopulation):
+            raise InvalidScientificProblem("D2 batch requires DesignPopulation")
+
+        proposals = tuple(self.proposals)
+        candidates = tuple(self.candidates)
+        twins = tuple(self.twins)
+        rejected = tuple(self.rejected)
+        if any(not isinstance(item, CandidateProposal) for item in proposals):
+            raise InvalidScientificProblem(
+                "D2 batch proposals must be CandidateProposal records"
+            )
+        if any(not isinstance(item, DesignCandidate) for item in candidates):
+            raise InvalidScientificProblem(
+                "D2 batch candidates must be DesignCandidate records"
+            )
+        if any(not isinstance(item, ScientificTwin) for item in twins):
+            raise InvalidScientificProblem(
+                "D2 batch twins must be ScientificTwin records"
+            )
+        if any(not isinstance(item, ProposalRejection) for item in rejected):
+            raise InvalidScientificProblem(
+                "D2 batch rejected entries must be ProposalRejection records"
+            )
+
+        count = self.plan.count
+        if not (
+            len(proposals)
+            == len(candidates)
+            == len(twins)
+            == len(self.population.members)
+            == count
+        ):
+            raise InvalidScientificProblem(
+                "successful D2 batch must contain exactly the requested candidate count"
+            )
+
+        if self.population.population_id != self.plan.population_id:
+            raise InvalidScientificProblem(
+                "D2 batch population id does not match generation plan"
+            )
+        if self.population.design_space.key != self.plan.design_space.key:
+            raise InvalidScientificProblem(
+                "D2 batch population design-space identity does not match generation plan"
+            )
+        if self.population.generation != self.plan.generation:
+            raise InvalidScientificProblem(
+                "D2 batch population generation does not match generation plan"
+            )
+
+        proposal_ids = [proposal.candidate_id for proposal in proposals]
+        candidate_ids = [candidate.candidate_id for candidate in candidates]
+        population_ids = [member.candidate_id for member in self.population.members]
+        if len(proposal_ids) != len(set(proposal_ids)):
+            raise InvalidScientificProblem("D2 batch proposal ids must be unique")
+        if len(candidate_ids) != len(set(candidate_ids)):
+            raise InvalidScientificProblem("D2 batch candidate ids must be unique")
+        if set(candidate_ids) != set(proposal_ids) or set(candidate_ids) != set(
+            population_ids
+        ):
+            raise InvalidScientificProblem(
+                "D2 batch proposal/candidate/population identities do not match"
+            )
+
+        twin_keys = [twin.reference.key for twin in twins]
+        if len(twin_keys) != len(set(twin_keys)):
+            raise InvalidScientificProblem("D2 batch requires unique Twin references")
+        candidate_twin_keys = [candidate.twin.key for candidate in candidates]
+        if len(candidate_twin_keys) != len(set(candidate_twin_keys)):
+            raise InvalidScientificProblem(
+                "D2 batch candidates must reference unique Twin identities"
+            )
+        if set(candidate_twin_keys) != set(twin_keys):
+            raise InvalidScientificProblem(
+                "D2 batch candidate/Twin identity sets do not match"
+            )
+
+        digests = [proposal.digest for proposal in proposals]
+        if len(digests) != len(set(digests)):
+            raise InvalidScientificProblem(
+                "D2 batch requires unique typed assignments"
+            )
+        sequence_indices = [proposal.sequence_index for proposal in proposals]
+        if len(sequence_indices) != len(set(sequence_indices)):
+            raise InvalidScientificProblem(
+                "D2 batch proposal sequence indices must be unique"
+            )
+
+        proposal_by_id = {proposal.candidate_id: proposal for proposal in proposals}
+        candidate_by_id = {
+            candidate.candidate_id: candidate for candidate in candidates
+        }
+        twin_by_key = {twin.reference.key: twin for twin in twins}
+
+        for candidate_id, proposal in proposal_by_id.items():
+            if proposal.design_space.key != self.plan.design_space.key:
+                raise InvalidScientificProblem(
+                    "D2 batch proposal design-space identity does not match plan"
+                )
+            if proposal.strategy is not self.plan.strategy:
+                raise InvalidScientificProblem(
+                    "D2 batch proposal strategy does not match generation plan"
+                )
+            if proposal.candidate_id != self.plan.candidate_id_for(
+                proposal.sequence_index
+            ):
+                raise InvalidScientificProblem(
+                    "D2 batch proposal candidate id does not match plan/sequence identity"
+                )
+
+            candidate = candidate_by_id[candidate_id]
+            twin = twin_by_key.get(candidate.twin.key)
+            if twin is None:
+                raise InvalidScientificProblem(
+                    "D2 batch candidate references a Twin absent from batch"
+                )
+            validate_generation_binding(twin, proposal, candidate)
+
+        self.population.validate_candidates(candidates)
+
+        object.__setattr__(self, "proposals", proposals)
+        object.__setattr__(self, "candidates", candidates)
+        object.__setattr__(self, "twins", twins)
+        object.__setattr__(self, "rejected", rejected)
+
+    @property
+    def accepted_sequence_indices(self) -> tuple[int, ...]:
+        return tuple(proposal.sequence_index for proposal in self.proposals)
 
 
 def _require_gate_alignment(space: DesignSpace, gate: ProposalGate | None) -> None:
@@ -401,7 +645,9 @@ def generate_initial_population(
     if not isinstance(design_space, DesignSpace):
         raise InvalidScientificProblem("D2 generation requires DesignSpace")
     if not isinstance(plan, CandidateGenerationPlan):
-        raise InvalidScientificProblem("D2 generation requires CandidateGenerationPlan")
+        raise InvalidScientificProblem(
+            "D2 generation requires CandidateGenerationPlan"
+        )
     if plan.design_space.key != design_space.reference.key:
         raise InvalidScientificProblem("generation plan design-space identity mismatch")
     if not hasattr(materializer, "materialize"):
@@ -483,6 +729,7 @@ def generate_initial_population(
             parents=(),
             operator=plan.strategy.value,
         ).validate_against(design_space)
+        validate_generation_binding(twin, proposal, candidate)
 
         proposals.append(proposal)
         candidates.append(candidate)
