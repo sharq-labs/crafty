@@ -7,7 +7,8 @@ our platform to a thin wrapper around existing packages.
 
 What this package owns: the scientific IR, model representation and validity,
 solver orchestration contracts, validation semantics, uncertainty, provenance,
-experiment representation, and the optimizer integration boundary.
+experiment representation, scientific-twin representation, and the optimizer
+integration boundary.
 
 What it deliberately does not own: numerical algorithms. Mature libraries
 (SciPy, SUNDIALS, FEniCSx, Cantera, ngspice, ...) will be reached through
@@ -112,6 +113,7 @@ from .solvers import (
     SolverRegistry,
     SolverSettings,
 )
+from .twins import ScientificTwin, TwinDatum, TwinDatumRole, TwinKind, TwinReference
 from .units import Quantity, coerce_quantity, dimensionality, normalize_unit
 
 SCIENTIFIC_CORE_VERSION = "0.1.0-v0-foundation"
@@ -195,6 +197,12 @@ __all__ = [
     "Uncertainty",
     "UncertaintyKind",
     "ProvenanceRecord",
+    # twins
+    "ScientificTwin",
+    "TwinDatum",
+    "TwinDatumRole",
+    "TwinKind",
+    "TwinReference",
     # experiments
     "ScientificExperiment",
     "ExperimentBudget",
