@@ -410,16 +410,11 @@ def generation_binding_payload(twin: ScientificTwin) -> dict[str, Any]:
     }
 
 
-def validate_generation_binding(
+def validate_twin_generation_binding(
     twin: ScientificTwin,
     proposal: CandidateProposal,
-    candidate: DesignCandidate | None = None,
 ) -> ScientificTwin:
-    """Prove internal D2 proposal/candidate/Twin generation correspondence.
-
-    This validates D2 generation identity only. It does not prove that the
-    caller-owned materializer chose physically correct models or declarations.
-    """
+    """Prove the D2 generation identity binding for one Twin/proposal pair."""
     if not isinstance(proposal, CandidateProposal):
         raise InvalidScientificProblem(
             "generation binding validation requires CandidateProposal"
@@ -430,9 +425,20 @@ def validate_generation_binding(
         raise InvalidScientificProblem(
             "ScientificTwin D2 generation binding does not match proposal identity"
         )
+    return twin
 
-    if candidate is None:
-        return twin
+
+def validate_generation_binding(
+    twin: ScientificTwin,
+    proposal: CandidateProposal,
+    candidate: DesignCandidate,
+) -> ScientificTwin:
+    """Prove internal D2 proposal/candidate/Twin generation correspondence.
+
+    This validates D2 generation identity only. It does not prove that the
+    caller-owned materializer chose physically correct models or declarations.
+    """
+    validate_twin_generation_binding(twin, proposal)
     if not isinstance(candidate, DesignCandidate):
         raise InvalidScientificProblem(
             "generation binding validation candidate must be DesignCandidate"
@@ -470,6 +476,7 @@ def validate_generation_binding(
 
 @dataclass(frozen=True)
 class CandidateGenerationBatch:
+    design_space: DesignSpace
     plan: CandidateGenerationPlan
     population: DesignPopulation
     proposals: tuple[CandidateProposal, ...]
@@ -478,12 +485,21 @@ class CandidateGenerationBatch:
     rejected: tuple[ProposalRejection, ...] = ()
 
     def __post_init__(self) -> None:
+        if not isinstance(self.design_space, DesignSpace):
+            raise InvalidScientificProblem("D2 batch requires concrete DesignSpace")
         if not isinstance(self.plan, CandidateGenerationPlan):
             raise InvalidScientificProblem(
                 "D2 batch requires CandidateGenerationPlan"
             )
         if not isinstance(self.population, DesignPopulation):
             raise InvalidScientificProblem("D2 batch requires DesignPopulation")
+        if self.design_space.reference.key != self.plan.design_space.key:
+            raise InvalidScientificProblem(
+                "D2 batch concrete DesignSpace does not match generation plan"
+            )
+
+        # A D2 batch must be backed by a design space that D2 itself can search.
+        MixedVariableSampler(self.design_space)
 
         proposals = tuple(self.proposals)
         candidates = tuple(self.candidates)
@@ -574,8 +590,15 @@ class CandidateGenerationBatch:
             candidate.candidate_id: candidate for candidate in candidates
         }
         twin_by_key = {twin.reference.key: twin for twin in twins}
+        sequence_stop = self.plan.sequence_start + self.plan.attempt_budget
 
         for candidate_id, proposal in proposal_by_id.items():
+            if not self.plan.sequence_start <= proposal.sequence_index < sequence_stop:
+                raise InvalidScientificProblem(
+                    "D2 batch proposal sequence index lies outside generation plan "
+                    "attempt window"
+                )
+            proposal.validate_against(self.design_space)
             if proposal.design_space.key != self.plan.design_space.key:
                 raise InvalidScientificProblem(
                     "D2 batch proposal design-space identity does not match plan"
@@ -592,6 +615,7 @@ class CandidateGenerationBatch:
                 )
 
             candidate = candidate_by_id[candidate_id]
+            candidate.validate_against(self.design_space)
             twin = twin_by_key.get(candidate.twin.key)
             if twin is None:
                 raise InvalidScientificProblem(
@@ -750,6 +774,7 @@ def generate_initial_population(
     population.validate_candidates(tuple(candidates))
 
     return CandidateGenerationBatch(
+        design_space=design_space,
         plan=plan,
         population=population,
         proposals=tuple(proposals),
