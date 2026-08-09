@@ -10,13 +10,21 @@ from src.engcore.uq import (
 )
 
 
+def _safe_log_weights(weights: tuple[float, ...]) -> np.ndarray:
+    values = np.asarray(weights, dtype=np.float64)
+    result = np.full(values.shape, -np.inf, dtype=np.float64)
+    positive = values > 0.0
+    result[positive] = np.log(values[positive])
+    return result
+
+
 def _posterior(weights=(0.7, 0.2, 0.1), *, dataset_id="p") -> PosteriorGrid:
     points = np.asarray([[0.0], [1.0], [2.0]], dtype=np.float64)
     return PosteriorGrid(
         parameter_names=("x",),
         points=points,
         weights=np.asarray(weights, dtype=np.float64),
-        log_likelihood=np.log(np.asarray(weights, dtype=np.float64)),
+        log_likelihood=_safe_log_weights(tuple(weights)),
         admissible_mask=np.asarray([True, True, True]),
         dataset_id=dataset_id,
     )
@@ -66,6 +74,30 @@ def test_small_nonzero_mass_is_conditioned_and_audited() -> None:
     assert result.audit.conditioning_factor == pytest.approx(1.0 / (1.0 - tiny))
     assert result.audit.conditional_on_predictive_admission is True
     assert result.audit.positive_weight_rejected_point_indices == (2,)
+    assert result.posterior.weights[2] == 0.0
+    assert float(result.posterior.weights.sum()) == pytest.approx(1.0, abs=1.0e-15)
+
+
+def test_float64_supported_sum_one_bit_above_one_is_audited_not_rejected() -> None:
+    # Reproduces the scored weak-C2 shape: normalized float64 weights can sum
+    # one final bit above 1 while rejected mass is positive but far below the
+    # preregistered budget. The audit must preserve those measured values rather
+    # than turning roundoff into a false scientific failure.
+    tiny = 4.1546995154574106e-59
+    posterior = _posterior((0.7, 0.3000000000000002, tiny), dataset_id="roundoff")
+    result = condition_posterior_on_predictive_admission(
+        posterior,
+        _table(),
+        maximum_unsupported_mass=1.0e-12,
+    )
+
+    assert result.audit.unsupported_mass == tiny
+    assert result.audit.supported_mass == 1.0000000000000002
+    assert result.audit.conditioning_factor == 0.9999999999999998
+    assert abs(
+        result.audit.supported_mass + result.audit.unsupported_mass - 1.0
+    ) <= 1.0e-12
+    assert result.audit.conditional_on_predictive_admission is True
     assert result.posterior.weights[2] == 0.0
     assert float(result.posterior.weights.sum()) == pytest.approx(1.0, abs=1.0e-15)
 
