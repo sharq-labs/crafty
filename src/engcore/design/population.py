@@ -8,11 +8,11 @@ those candidates.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 from ..scientific.errors import InvalidScientificProblem
 from ..scientific.serialization import require_schema, schema_string
-from .candidate import DesignCandidateReference
+from .candidate import DesignCandidate, DesignCandidateReference
 from .space import DesignSpaceReference
 
 DESIGN_POPULATION_SCHEMA = schema_string("design_population")
@@ -55,6 +55,47 @@ class DesignPopulation:
             "members",
             tuple(sorted(members, key=lambda member: member.candidate_id)),
         )
+
+    def validate_candidates(
+        self, candidates: Sequence[DesignCandidate]
+    ) -> "DesignPopulation":
+        """Validate declaration coherence when concrete candidates are available.
+
+        References alone cannot prove generation or design-space membership, so
+        this explicit boundary requires the exact concrete candidate universe.
+        """
+        items = tuple(candidates)
+        if not items:
+            raise InvalidScientificProblem(
+                "population validation requires concrete candidates"
+            )
+        if any(not isinstance(item, DesignCandidate) for item in items):
+            raise InvalidScientificProblem(
+                "population validation requires DesignCandidate records"
+            )
+        ids = [item.candidate_id for item in items]
+        if len(ids) != len(set(ids)):
+            raise InvalidScientificProblem(
+                "population validation candidate ids must be unique"
+            )
+
+        expected = tuple(member.candidate_id for member in self.members)
+        actual = tuple(sorted(ids))
+        if actual != expected:
+            raise InvalidScientificProblem(
+                "population concrete candidates do not match declared member references"
+            )
+
+        for candidate in items:
+            if candidate.design_space.key != self.design_space.key:
+                raise InvalidScientificProblem(
+                    "population candidate design-space identity mismatch"
+                )
+            if candidate.generation != self.generation:
+                raise InvalidScientificProblem(
+                    "population candidate generation mismatch"
+                )
+        return self
 
     def to_dict(self) -> dict[str, Any]:
         return {
