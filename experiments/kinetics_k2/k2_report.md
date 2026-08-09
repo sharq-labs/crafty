@@ -1,6 +1,6 @@
 # K2 — Multi-parameter Arrhenius inference final science report
 
-Status: **SCIENCE PASS (A1–A9); FREEZE PENDING FULL REGRESSION**
+Status: **PASS / FROZEN**
 
 Experiment ID: `K2`
 
@@ -9,6 +9,8 @@ Scientific source commit: `eab5879e8c17d5c1cf8f697f0eb2e57816cc99b5`
 Frozen preregistration commit: `824a4167a7ebead813dc3b023b9ace31742e3789`
 
 K1.5 frozen inference-admissibility boundary: `f479777d67295355fbf3fcf7877cd834d30eee99`
+
+Freeze report commit: this document records the post-regression freeze decision on `dev`.
 
 ## Scope
 
@@ -119,9 +121,29 @@ The expensive one-time serial reference completed all `3,721 / 3,721` parameter 
 
 Therefore the accelerated parallel CPU path is accepted for K2 under the frozen parity rule. No scientific threshold, condition, prior, observation, or acceptance rule was changed after observing the result.
 
+## Full regression gate
+
+The report-bearing `dev` head was tested on Windows with a repository-local pytest base temp to avoid an unrelated operating-system permission failure in the default user temp directory.
+
+Command:
+
+```powershell
+py -m pytest -q --basetemp="$PWD\.pytest_tmp"
+```
+
+Result:
+
+```text
+1290 passed, 4 warnings in 193.26s (0:03:13)
+```
+
+The four warnings are the existing scikit-learn Gaussian-process convergence warnings from `tests/test_smoke.py::test_engine_runs`.
+
+The earlier run that reported `1282 passed, 8 errors` did not contain code-test failures: all eight errors occurred during pytest fixture setup because Windows denied access to `C:\Users\dev_kaeem\AppData\Local\Temp\pytest-of-dev_kaeem`. Re-running with an explicit repository-local `--basetemp` completed all tests successfully.
+
 ## Final scored runner status
 
-The runner emitted:
+The scored runner emitted:
 
 ```text
 STATUS: PASS_PENDING_OPTIONAL_GPU_OR_FREEZE_REVIEW
@@ -137,10 +159,14 @@ The large forward cache and local scored artifacts are execution artifacts, not 
 
 ## Freeze decision
 
-**Scientific decision: PASS A1–A9.**
+**K2 is PASS / FROZEN.**
 
-A10 is not a blocker because the K2 GPU path was not enabled.
+Basis:
 
-Before declaring the repository milestone frozen, run the full regression suite on the report-bearing `dev` head. If regression is clean, freeze K2 without changing the frozen preregistration or scored scientific implementation.
+- frozen preregistration remained unchanged;
+- A1 through A9 all passed;
+- A10 was not enabled and is therefore not a blocker under the preregistration;
+- the full repository regression suite completed cleanly with `1290 passed` and no failures/errors;
+- the scientific implementation used for the scored result remains bound to source commit `eab5879e8c17d5c1cf8f697f0eb2e57816cc99b5`.
 
-Post-freeze performance work must be treated as a separate optimization/hardening activity and must preserve frozen K2 scientific outputs and admission semantics.
+Post-freeze performance work is a separate optimization/hardening activity. It must preserve frozen K2 scientific outputs, admissibility semantics, posterior meaning, and declared parity tolerances.
