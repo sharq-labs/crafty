@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import time
 from collections import Counter
 from dataclasses import dataclass, field, replace
@@ -20,6 +21,7 @@ from ....design import (
     CandidateGenerationBatch,
     CandidateGenerationPlan,
     DesignCandidate,
+    DesignSpace,
     DesignEvaluation,
     GenerationStrategy,
     ParetoArchive,
@@ -55,6 +57,15 @@ MVR1_GENERATION = 0
 MVR1_SEQUENCE_START = 1
 MVR1_POPULATION_ID = "mvr0-reference-population"
 MVR1_CANDIDATE_PREFIX = "mvr0"
+MVR1_PHYSICAL_OUTPUT_UNITS = {
+    "total_mass": "kg",
+    "battery_mass": "kg",
+    "total_disk_area": "m^2",
+    "disk_loading": "N/m^2",
+    "ideal_induced_power": "W",
+    "hover_electrical_power": "W",
+    "hover_endurance": "s",
+}
 
 
 def _positive_quantity(value: Quantity, unit: str, field_name: str) -> Quantity:
@@ -336,6 +347,28 @@ def _binding_specification_payload(
     }
 
 
+def _specification_from_binding(
+    binding: MultirotorStudyBinding,
+) -> MultirotorStudySpecification:
+    spec = _binding_specification_payload(binding)
+    operating = spec["operating_conditions"]
+    targets = spec["target_requirements"]
+    return MultirotorStudySpecification(
+        payload_mass=_quantity_from_payload(
+            operating["payload_mass"], context="payload_mass"
+        ),
+        minimum_hover_endurance=_quantity_from_payload(
+            targets["minimum_hover_endurance"], context="minimum_hover_endurance"
+        ),
+        maximum_takeoff_mass=_quantity_from_payload(
+            targets["maximum_takeoff_mass"], context="maximum_takeoff_mass"
+        ),
+        maximum_disk_loading=_quantity_from_payload(
+            targets["maximum_disk_loading"], context="maximum_disk_loading"
+        ),
+    )
+
+
 def _require_study_identity_marker(
     source: Mapping[str, Any],
     expected_study_identity: str,
@@ -518,6 +551,48 @@ def require_study_binding(
     _require_expected_bound_ids(evaluation, expected)
     binding = _require_binding_consistency(evaluation, expected)
     _require_provenance_inputs_match_binding(evaluation, binding)
+    _require_target_margins_match_binding(evaluation, binding)
+    return binding
+
+
+def require_study_physical_consistency(
+    evaluation: DesignEvaluation,
+    expected_study_identity: str,
+    *,
+    candidate: DesignCandidate,
+    twin: ScientificTwin,
+    design_space: DesignSpace,
+) -> MultirotorStudyBinding:
+    """Require MVR1 attribution to match recomputed frozen-reference physics."""
+
+    binding = require_study_binding(evaluation, expected_study_identity)
+    if not isinstance(candidate, DesignCandidate):
+        raise InvalidScientificProblem(
+            "MVR1 physical validation requires DesignCandidate"
+        )
+    if not isinstance(twin, ScientificTwin):
+        raise InvalidScientificProblem("MVR1 physical validation requires ScientificTwin")
+    if not isinstance(design_space, DesignSpace):
+        raise InvalidScientificProblem("MVR1 physical validation requires DesignSpace")
+    candidate.validate_against(design_space)
+    evaluation.validate_candidate(candidate)
+    if twin.reference.key != evaluation.twin.key:
+        raise InvalidScientificProblem("MVR1 physical validation Twin mismatch")
+
+    specification = _specification_from_binding(binding)
+    expected_evaluation, _expected_assessment = evaluate_reference_candidate(
+        candidate=candidate,
+        twin=twin,
+        design_space=design_space,
+        target=specification.to_reference_target(),
+    )
+    for metric, unit in MVR1_PHYSICAL_OUTPUT_UNITS.items():
+        submitted = evaluation.result.value(metric).magnitude_in(unit)
+        expected = expected_evaluation.result.value(metric).magnitude_in(unit)
+        if not math.isclose(submitted, expected, rel_tol=0.0, abs_tol=1e-12):
+            raise InvalidScientificProblem(
+                f"MVR1 physical output {metric} mismatch"
+            )
     _require_target_margins_match_binding(evaluation, binding)
     return binding
 
@@ -717,8 +792,25 @@ class MultirotorStudyRun:
             raise InvalidScientificProblem("MVR1 run evaluation identities mismatch")
         if {item.candidate_id for item in self.assessments} != candidate_ids:
             raise InvalidScientificProblem("MVR1 run assessment identities mismatch")
+        candidates_by_id = {
+            item.candidate_id: item for item in self.batch.candidates
+        }
+        twins_by_key = {item.reference.key: item for item in self.batch.twins}
         for evaluation in self.evaluations:
-            require_study_binding(evaluation, self.study_identity)
+            try:
+                candidate = candidates_by_id[evaluation.candidate.candidate_id]
+                twin = twins_by_key[evaluation.twin.key]
+            except KeyError as exc:
+                raise InvalidScientificProblem(
+                    "MVR1 run is missing concrete candidate/Twin for evaluation"
+                ) from exc
+            require_study_physical_consistency(
+                evaluation,
+                self.study_identity,
+                candidate=candidate,
+                twin=twin,
+                design_space=self.design_space,
+            )
             if evaluation.eligibility is not SelectionEligibility.ELIGIBLE:
                 raise InvalidScientificProblem(
                     "MVR1 successful evaluations must remain D1 eligible"
@@ -906,6 +998,7 @@ __all__ = [
     "evaluate_study_candidate",
     "generate_mvr1_candidate_universe",
     "require_study_binding",
+    "require_study_physical_consistency",
     "run_multirotor_study",
     "study_a_specification",
     "study_b_specification",

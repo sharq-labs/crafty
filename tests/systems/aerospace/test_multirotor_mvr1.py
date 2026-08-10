@@ -21,6 +21,7 @@ from engcore.systems.aerospace.multirotor.study import (
     evaluate_study_candidate,
     generate_mvr1_candidate_universe,
     require_study_binding,
+    require_study_physical_consistency,
     run_multirotor_study,
     study_a_specification,
     study_b_specification,
@@ -192,13 +193,51 @@ def test_study_identity_is_deterministic_unit_normalized_and_field_sensitive() -
 
 
 def test_ordinary_study_a_and_b_bindings_validate() -> None:
-    eval_a, eval_b = _small_study_pair()
+    design_space, batch = generate_mvr1_candidate_universe(count=4, attempt_budget=20)
+    candidate = batch.candidates[0]
+    twin = {item.reference.key: item for item in batch.twins}[candidate.twin.key]
+    eval_a = evaluate_study_candidate(
+        candidate=candidate,
+        twin=twin,
+        design_space=design_space,
+        specification=study_a_specification(),
+        count=4,
+        attempt_budget=20,
+    )
+    eval_b = evaluate_study_candidate(
+        candidate=candidate,
+        twin=twin,
+        design_space=design_space,
+        specification=study_b_specification(),
+        count=4,
+        attempt_budget=20,
+    )
 
     assert require_study_binding(eval_a.evaluation, eval_a.study_identity).study_identity == (
         eval_a.study_identity
     )
     assert require_study_binding(eval_b.evaluation, eval_b.study_identity).study_identity == (
         eval_b.study_identity
+    )
+    assert (
+        require_study_physical_consistency(
+            eval_a.evaluation,
+            eval_a.study_identity,
+            candidate=candidate,
+            twin=twin,
+            design_space=design_space,
+        ).study_identity
+        == eval_a.study_identity
+    )
+    assert (
+        require_study_physical_consistency(
+            eval_b.evaluation,
+            eval_b.study_identity,
+            candidate=candidate,
+            twin=twin,
+            design_space=design_space,
+        ).study_identity
+        == eval_b.study_identity
     )
 
 
@@ -316,6 +355,62 @@ def test_target_margins_inconsistent_with_bound_target_fail_closed() -> None:
         require_study_binding(forged, eval_a.study_identity)
 
 
+def test_fully_rebound_study_a_physics_as_study_b_fails_physical_gate() -> None:
+    design_space, batch = generate_mvr1_candidate_universe(count=4, attempt_budget=20)
+    candidate = batch.candidates[0]
+    twin = {item.reference.key: item for item in batch.twins}[candidate.twin.key]
+    eval_a = evaluate_study_candidate(
+        candidate=candidate,
+        twin=twin,
+        design_space=design_space,
+        specification=study_a_specification(),
+        count=4,
+        attempt_budget=20,
+    )
+    eval_b = evaluate_study_candidate(
+        candidate=candidate,
+        twin=twin,
+        design_space=design_space,
+        specification=study_b_specification(),
+        count=4,
+        attempt_budget=20,
+    )
+
+    forged = _with_mvr1_ids(
+        _with_all_binding_metadata(
+            eval_a.evaluation,
+            eval_b.evaluation.metadata[MULTIROTOR_STUDY_BINDING_METADATA_KEY],
+        ),
+        eval_b.study_identity,
+    )
+    provenance_inputs = dict(forged.result.provenance.inputs)
+    for name in (
+        "payload_mass",
+        "minimum_hover_endurance",
+        "maximum_takeoff_mass",
+        "maximum_disk_loading",
+    ):
+        provenance_inputs[name] = eval_b.evaluation.result.provenance.inputs[name]
+    provenance = replace(forged.result.provenance, inputs=provenance_inputs)
+    forged = replace(forged, result=replace(forged.result, provenance=provenance))
+
+    values = dict(forged.result.values)
+    values["mass_margin"] = Quantity(4.0, "kg") - values["total_mass"]
+    values["endurance_margin"] = values["hover_endurance"] - Quantity(1500.0, "s")
+    values["disk_loading_margin"] = Quantity(120.0, "N/m^2") - values["disk_loading"]
+    forged = replace(forged, result=replace(forged.result, values=values))
+
+    require_study_binding(forged, eval_b.study_identity)
+    with pytest.raises(ScientificCoreError, match="physical output total_mass mismatch"):
+        require_study_physical_consistency(
+            forged,
+            eval_b.study_identity,
+            candidate=candidate,
+            twin=twin,
+            design_space=design_space,
+        )
+
+
 def test_nested_binding_payload_mutation_fails_closed() -> None:
     eval_a, _eval_b = _small_study_pair()
     raw = eval_a.evaluation.metadata[MULTIROTOR_STUDY_BINDING_METADATA_KEY]
@@ -357,7 +452,20 @@ def test_same_candidate_and_twin_can_be_bound_to_distinct_studies() -> None:
         eval_a.evaluation.result.value("total_mass").magnitude_in("kg")
         != eval_b.evaluation.result.value("total_mass").magnitude_in("kg")
     )
-    require_study_binding(eval_a.evaluation, eval_a.study_identity)
+    require_study_physical_consistency(
+        eval_a.evaluation,
+        eval_a.study_identity,
+        candidate=candidate,
+        twin=twin,
+        design_space=design_space,
+    )
+    require_study_physical_consistency(
+        eval_b.evaluation,
+        eval_b.study_identity,
+        candidate=candidate,
+        twin=twin,
+        design_space=design_space,
+    )
     with pytest.raises(ScientificCoreError):
         require_study_binding(eval_a.evaluation, eval_b.study_identity)
     with pytest.raises(ScientificCoreError):
