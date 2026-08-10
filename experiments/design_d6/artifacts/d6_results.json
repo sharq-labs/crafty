@@ -1,0 +1,1042 @@
+{
+  "a1_a23": {
+    "A1": "PASS - D6 added adjacent implementation/tests/evidence only; frozen D0-D5, ScientificTwin and external vertical-slice semantics unchanged",
+    "A10": "PASS - compute cost is positive deterministic normalized units, not runtime",
+    "A11": "PASS - decision reconstructs option set, evidence refs, signals, costs, policy and selected option",
+    "A12": "PASS - executed study context, assignment, model, solver and scope match selected option B",
+    "A13": "PASS - selected execution creates a new ScientificResult with decision provenance after selection",
+    "A14": "PASS - option, decision, execution and result summaries round-trip deterministically",
+    "A15": "PASS - selection, target status, uncertainty, disagreement, novelty and memory provenance do not imply validity, adequacy, safety or truth",
+    "A16": "PASS - PASS - py -m pytest tests/test_design_d6_next_experiment.py -q (7 passed); PASS - py -m pytest --basetemp D:\\engineering-ai-core-k2\\.pytest_tmp_d6_full -q (1445 passed, 4 warnings)",
+    "A17": "PASS - selected B differs from best predicted-performance option A",
+    "A18": "PASS - selected B receives information units from high uncertainty, high disagreement and useful-failure relevance",
+    "A19": "PASS - novelty and useful-failure predicates change option information units and ranking",
+    "A2": "PASS - every D6 option source resolves to frozen D5 Gen0/Gen1 evidence and the declared D6 scope",
+    "A20": "PASS - raw information-units winner E is not selected because B has higher information per compute",
+    "A21": "PASS - selected option local uncertainty/disagreement changed from 0.31/0.20 to 0.00/0.00 after execution",
+    "A22": "PASS - selected execution produced useful new evidence: target FAIL with observed 35.0/33.0/-12.0",
+    "A23": "PASS - D6 produced local abstraction evidence only; Core promotion remains a successor question",
+    "A3": "PASS - all six option identities are digest-derived, stable and cost/evidence/signal sensitive",
+    "A4": "PASS - uncertainty, disagreement, novelty, predicates and information units match the frozen table exactly",
+    "A5": "PASS - adversarial missing, stale, forged, incompatible and non-finite inputs fail closed",
+    "A6": "PASS - D6 rejects mismatched decision scope, evidence universe, model output units and execution scope",
+    "A7": "PASS - decision identity payload contains no selected ScientificResult before execution",
+    "A8": "PASS - option B is selected under the frozen information-per-compute policy",
+    "A9": "PASS - insertion order, process rebuild, serialization and identity tie-breaks preserve the winner"
+  },
+  "adversarial_review": {
+    "P0/P1": [],
+    "P2": [],
+    "P3": [
+      "D6 forced local option, signal, decision, provenance, compute-cost and no-future-result records, but one synthetic decision is insufficient evidence for Core promotion.",
+      "Identity authenticity is deterministic and provenance-sensitive, but still relies on the experiment owning the frozen signal table.",
+      "The local closure proxy resolves only the selected synthetic option; it is not a general uncertainty update mechanism."
+    ]
+  },
+  "architecture_pulled": {
+    "ComputeCostEstimate": "moderate D6-local evidence: cost changed the selected option relative to raw information units.",
+    "DecisionSignal": "strong D6-local evidence: signal validation had to separate decision provenance from scientific truth.",
+    "ExperimentDecisionProvenance": "strong D6-local evidence: selected execution needed to link to the decision without copying a future result into it.",
+    "ExperimentOption": "strong D6-local evidence: option identity needed assignment, evidence refs, signals, model pair, cost and execution semantics.",
+    "NextExperimentDecision": "moderate D6-local evidence: deterministic selection and round-trip identity were useful, but policy remained local.",
+    "no-future-result guard": "strong D6-local evidence: decisions and options had to reject pre-execution ScientificResult references."
+  },
+  "best_predicted_performance_option": "A",
+  "blocking_gates_passed": true,
+  "decision": {
+    "decision_digest": "fbf1a95b4a715675c30444b957ede59a5fd8aec0feb26f644af60f693e4f2416",
+    "decision_identity": "d6-decision:sha256:fbf1a95b4a715675c30444b957ede59a5fd8aec0feb26f644af60f693e4f2416",
+    "identity_payload": {
+      "candidate_option_identities": [
+        "d6-option:sha256:23d4790eedf423cc9f9518d23f6986785f472c61e9edf3aa1d8c688b0e33d4eb",
+        "d6-option:sha256:0e42973a4337334c1ca49ebf3a113ea06bee53e5e291eee13d4f7e06b24c0031",
+        "d6-option:sha256:86d6d993b843a347abceab0a71bee200974ecdb35df262c60e3af9c7a1a54d66",
+        "d6-option:sha256:cc5ac36d0b69c69f1000d8c309d3bf43bb44c8e7819215e24da41c777bd8e3f5",
+        "d6-option:sha256:4201db700a0ea78d55c5a46903a2a6001effb01c3877b790a33b4cbcaeef9405",
+        "d6-option:sha256:92e2a02e2f0c533ca1556e28b3016675d5211c6f8f11217665d654ae35ae0b3b"
+      ],
+      "decision_scope": "d6-next-experiment-intelligence-scope-v0.1",
+      "option_set_id": "d6-next-experiment-option-set-v0.1",
+      "policy_id": "d6-information-per-compute-lexicographic-v0.1",
+      "schema": "d6_next_experiment_decision/1",
+      "selected_option_identity": "d6-option:sha256:0e42973a4337334c1ca49ebf3a113ea06bee53e5e291eee13d4f7e06b24c0031",
+      "selected_option_label": "B",
+      "selection_basis": [
+        "valid options only",
+        "non-redundant options retained for comparison but zero novelty lowers information units",
+        "maximize information_units / compute_cost",
+        "tie-break by information_units",
+        "tie-break by model_disagreement",
+        "tie-break by option identity"
+      ]
+    },
+    "options": [
+      {
+        "alpha_prediction": {
+          "loss_score": 18.0,
+          "stability_score": 66.0,
+          "target_pass": true,
+          "yield_score": 88.0
+        },
+        "beta_prediction": {
+          "loss_score": 20.0,
+          "stability_score": 64.0,
+          "target_pass": true,
+          "yield_score": 84.0
+        },
+        "decision_scope": "d6-next-experiment-intelligence-scope-v0.1",
+        "decision_signals": {
+          "compute_cost": 1,
+          "contradiction": false,
+          "information_per_compute": "1/1",
+          "information_units": 1,
+          "model_disagreement": 0.04,
+          "novelty_distance": 0.2,
+          "partial_success": true,
+          "predicted_loss": 18.0,
+          "predicted_stability": 66.0,
+          "predicted_target_pass": true,
+          "predicted_yield": 88.0,
+          "uncertainty": 0.08,
+          "useful_failure": false
+        },
+        "evidence_universe_id": "d6.frozen.d5.evidence-universe@0.1",
+        "execution_semantics_id": "d6.closed-form.selected-experiment@0.1",
+        "model_pair": [
+          [
+            "d6.synthetic.model-alpha",
+            "0.1"
+          ],
+          [
+            "d6.synthetic.model-beta",
+            "0.1"
+          ]
+        ],
+        "option_digest": "23d4790eedf423cc9f9518d23f6986785f472c61e9edf3aa1d8c688b0e33d4eb",
+        "option_identity": "d6-option:sha256:23d4790eedf423cc9f9518d23f6986785f472c61e9edf3aa1d8c688b0e33d4eb",
+        "option_label": "A",
+        "option_set_id": "d6-next-experiment-option-set-v0.1",
+        "proposed_assignment": {
+          "adapter": "isolated",
+          "component_a": "A_stable",
+          "component_b": "B_filter",
+          "control_level": 2,
+          "guard_enabled": true
+        },
+        "proposed_study_context_id": "d6-study-option-a-performance-confirmation-v0.1",
+        "schema": "d6_experiment_option/1",
+        "signal_table_source_id": "d6.preregistered.signal-table@0.1",
+        "source_evidence_refs": [
+          "d5-g1-result:d5-g1-candidate:sha256:6baab165ea9dd0799e3c370a46bf50a73147fa1ed0bf9dc25e1937ff96cad4ae"
+        ],
+        "uncertainty_source_id": "d6.synthetic.uq@0.1"
+      },
+      {
+        "alpha_prediction": {
+          "loss_score": 22.0,
+          "stability_score": 54.0,
+          "target_pass": false,
+          "yield_score": 52.0
+        },
+        "beta_prediction": {
+          "loss_score": 32.0,
+          "stability_score": 38.0,
+          "target_pass": false,
+          "yield_score": 72.0
+        },
+        "decision_scope": "d6-next-experiment-intelligence-scope-v0.1",
+        "decision_signals": {
+          "compute_cost": 2,
+          "contradiction": false,
+          "information_per_compute": "3/2",
+          "information_units": 3,
+          "model_disagreement": 0.2,
+          "novelty_distance": 0.4,
+          "partial_success": false,
+          "predicted_loss": 22.0,
+          "predicted_stability": 54.0,
+          "predicted_target_pass": false,
+          "predicted_yield": 52.0,
+          "uncertainty": 0.31,
+          "useful_failure": true
+        },
+        "evidence_universe_id": "d6.frozen.d5.evidence-universe@0.1",
+        "execution_semantics_id": "d6.closed-form.selected-experiment@0.1",
+        "model_pair": [
+          [
+            "d6.synthetic.model-alpha",
+            "0.1"
+          ],
+          [
+            "d6.synthetic.model-beta",
+            "0.1"
+          ]
+        ],
+        "option_digest": "0e42973a4337334c1ca49ebf3a113ea06bee53e5e291eee13d4f7e06b24c0031",
+        "option_identity": "d6-option:sha256:0e42973a4337334c1ca49ebf3a113ea06bee53e5e291eee13d4f7e06b24c0031",
+        "option_label": "B",
+        "option_set_id": "d6-next-experiment-option-set-v0.1",
+        "proposed_assignment": {
+          "adapter": "buffered",
+          "component_a": "A_peak",
+          "component_b": "B_filter",
+          "control_level": 1,
+          "guard_enabled": false
+        },
+        "proposed_study_context_id": "d6-study-option-b-uncertainty-disagreement-boundary-v0.1",
+        "schema": "d6_experiment_option/1",
+        "signal_table_source_id": "d6.preregistered.signal-table@0.1",
+        "source_evidence_refs": [
+          "d5-g0-result:d4-parent-a",
+          "d5-g0-result:d4-parent-d",
+          "d5-g1-result:d5-g1-candidate:sha256:368feb9dbff47c0e25ee646b6e07ac6cb3f2cf72b6d10e593c34c304d8c05803"
+        ],
+        "uncertainty_source_id": "d6.synthetic.uq@0.1"
+      },
+      {
+        "alpha_prediction": {
+          "loss_score": 24.0,
+          "stability_score": 62.0,
+          "target_pass": false,
+          "yield_score": 60.0
+        },
+        "beta_prediction": {
+          "loss_score": 29.0,
+          "stability_score": 72.0,
+          "target_pass": false,
+          "yield_score": 50.0
+        },
+        "decision_scope": "d6-next-experiment-intelligence-scope-v0.1",
+        "decision_signals": {
+          "compute_cost": 5,
+          "contradiction": false,
+          "information_per_compute": "1/5",
+          "information_units": 1,
+          "model_disagreement": 0.1,
+          "novelty_distance": 0.6,
+          "partial_success": false,
+          "predicted_loss": 24.0,
+          "predicted_stability": 62.0,
+          "predicted_target_pass": false,
+          "predicted_yield": 60.0,
+          "uncertainty": 0.18,
+          "useful_failure": false
+        },
+        "evidence_universe_id": "d6.frozen.d5.evidence-universe@0.1",
+        "execution_semantics_id": "d6.closed-form.selected-experiment@0.1",
+        "model_pair": [
+          [
+            "d6.synthetic.model-alpha",
+            "0.1"
+          ],
+          [
+            "d6.synthetic.model-beta",
+            "0.1"
+          ]
+        ],
+        "option_digest": "86d6d993b843a347abceab0a71bee200974ecdb35df262c60e3af9c7a1a54d66",
+        "option_identity": "d6-option:sha256:86d6d993b843a347abceab0a71bee200974ecdb35df262c60e3af9c7a1a54d66",
+        "option_label": "C",
+        "option_set_id": "d6-next-experiment-option-set-v0.1",
+        "proposed_assignment": {
+          "adapter": "isolated",
+          "component_a": "A_base",
+          "component_b": "B_base",
+          "control_level": 0,
+          "guard_enabled": true
+        },
+        "proposed_study_context_id": "d6-study-option-c-novel-expensive-region-v0.1",
+        "schema": "d6_experiment_option/1",
+        "signal_table_source_id": "d6.preregistered.signal-table@0.1",
+        "source_evidence_refs": [
+          "d5-g0-baseline-population-v0.1",
+          "d5-g1-derived-population-v0.1"
+        ],
+        "uncertainty_source_id": "d6.synthetic.uq@0.1"
+      },
+      {
+        "alpha_prediction": {
+          "loss_score": 30.0,
+          "stability_score": 9.0,
+          "target_pass": false,
+          "yield_score": 64.0
+        },
+        "beta_prediction": {
+          "loss_score": 30.0,
+          "stability_score": 9.0,
+          "target_pass": false,
+          "yield_score": 64.0
+        },
+        "decision_scope": "d6-next-experiment-intelligence-scope-v0.1",
+        "decision_signals": {
+          "compute_cost": 1,
+          "contradiction": false,
+          "information_per_compute": "0/1",
+          "information_units": 0,
+          "model_disagreement": 0.0,
+          "novelty_distance": 0.0,
+          "partial_success": false,
+          "predicted_loss": 30.0,
+          "predicted_stability": 9.0,
+          "predicted_target_pass": false,
+          "predicted_yield": 64.0,
+          "uncertainty": 0.03,
+          "useful_failure": false
+        },
+        "evidence_universe_id": "d6.frozen.d5.evidence-universe@0.1",
+        "execution_semantics_id": "d6.closed-form.selected-experiment@0.1",
+        "model_pair": [
+          [
+            "d6.synthetic.model-alpha",
+            "0.1"
+          ],
+          [
+            "d6.synthetic.model-beta",
+            "0.1"
+          ]
+        ],
+        "option_digest": "cc5ac36d0b69c69f1000d8c309d3bf43bb44c8e7819215e24da41c777bd8e3f5",
+        "option_identity": "d6-option:sha256:cc5ac36d0b69c69f1000d8c309d3bf43bb44c8e7819215e24da41c777bd8e3f5",
+        "option_label": "D",
+        "option_set_id": "d6-next-experiment-option-set-v0.1",
+        "proposed_assignment": {
+          "adapter": "direct",
+          "component_a": "A_peak",
+          "component_b": "B_base",
+          "control_level": 1,
+          "guard_enabled": true
+        },
+        "proposed_study_context_id": "d6-study-option-d-cheap-redundant-repeat-v0.1",
+        "schema": "d6_experiment_option/1",
+        "signal_table_source_id": "d6.preregistered.signal-table@0.1",
+        "source_evidence_refs": [
+          "d5-g1-result:d5-g1-candidate:sha256:f7cd94af81b7dfc3228e8802cb9b75ca2fa7b8bb44e6f7da60658cb21a003994"
+        ],
+        "uncertainty_source_id": "d6.synthetic.uq@0.1"
+      },
+      {
+        "alpha_prediction": {
+          "loss_score": 22.0,
+          "stability_score": 52.0,
+          "target_pass": true,
+          "yield_score": 82.0
+        },
+        "beta_prediction": {
+          "loss_score": 38.0,
+          "stability_score": 18.0,
+          "target_pass": false,
+          "yield_score": 48.0
+        },
+        "decision_scope": "d6-next-experiment-intelligence-scope-v0.1",
+        "decision_signals": {
+          "compute_cost": 4,
+          "contradiction": true,
+          "information_per_compute": "4/4",
+          "information_units": 4,
+          "model_disagreement": 0.34,
+          "novelty_distance": 0.4,
+          "partial_success": false,
+          "predicted_loss": 22.0,
+          "predicted_stability": 52.0,
+          "predicted_target_pass": true,
+          "predicted_yield": 82.0,
+          "uncertainty": 0.29,
+          "useful_failure": true
+        },
+        "evidence_universe_id": "d6.frozen.d5.evidence-universe@0.1",
+        "execution_semantics_id": "d6.closed-form.selected-experiment@0.1",
+        "model_pair": [
+          [
+            "d6.synthetic.model-alpha",
+            "0.1"
+          ],
+          [
+            "d6.synthetic.model-beta",
+            "0.1"
+          ]
+        ],
+        "option_digest": "4201db700a0ea78d55c5a46903a2a6001effb01c3877b790a33b4cbcaeef9405",
+        "option_identity": "d6-option:sha256:4201db700a0ea78d55c5a46903a2a6001effb01c3877b790a33b4cbcaeef9405",
+        "option_label": "E",
+        "option_set_id": "d6-next-experiment-option-set-v0.1",
+        "proposed_assignment": {
+          "adapter": "direct",
+          "component_a": "A_stable",
+          "component_b": "B_peak",
+          "control_level": 2,
+          "guard_enabled": false
+        },
+        "proposed_study_context_id": "d6-study-option-e-contradiction-useful-failure-v0.1",
+        "schema": "d6_experiment_option/1",
+        "signal_table_source_id": "d6.preregistered.signal-table@0.1",
+        "source_evidence_refs": [
+          "d5-g1-result:d5-g1-candidate:sha256:b8a794291bfcfef1510c35ab21b9ac56506e8ba7d688a1b227c650306366e72d"
+        ],
+        "uncertainty_source_id": "d6.synthetic.uq@0.1"
+      },
+      {
+        "alpha_prediction": {
+          "loss_score": 8.0,
+          "stability_score": 82.0,
+          "target_pass": false,
+          "yield_score": 50.0
+        },
+        "beta_prediction": {
+          "loss_score": 5.0,
+          "stability_score": 76.0,
+          "target_pass": false,
+          "yield_score": 46.0
+        },
+        "decision_scope": "d6-next-experiment-intelligence-scope-v0.1",
+        "decision_signals": {
+          "compute_cost": 2,
+          "contradiction": false,
+          "information_per_compute": "1/2",
+          "information_units": 1,
+          "model_disagreement": 0.06,
+          "novelty_distance": 0.4,
+          "partial_success": true,
+          "predicted_loss": 8.0,
+          "predicted_stability": 82.0,
+          "predicted_target_pass": false,
+          "predicted_yield": 50.0,
+          "uncertainty": 0.16,
+          "useful_failure": false
+        },
+        "evidence_universe_id": "d6.frozen.d5.evidence-universe@0.1",
+        "execution_semantics_id": "d6.closed-form.selected-experiment@0.1",
+        "model_pair": [
+          [
+            "d6.synthetic.model-alpha",
+            "0.1"
+          ],
+          [
+            "d6.synthetic.model-beta",
+            "0.1"
+          ]
+        ],
+        "option_digest": "92e2a02e2f0c533ca1556e28b3016675d5211c6f8f11217665d654ae35ae0b3b",
+        "option_identity": "d6-option:sha256:92e2a02e2f0c533ca1556e28b3016675d5211c6f8f11217665d654ae35ae0b3b",
+        "option_label": "F",
+        "option_set_id": "d6-next-experiment-option-set-v0.1",
+        "proposed_assignment": {
+          "adapter": "isolated",
+          "component_a": "A_stable",
+          "component_b": "B_filter",
+          "control_level": 1,
+          "guard_enabled": true
+        },
+        "proposed_study_context_id": "d6-study-option-f-partial-success-refinement-v0.1",
+        "schema": "d6_experiment_option/1",
+        "signal_table_source_id": "d6.preregistered.signal-table@0.1",
+        "source_evidence_refs": [
+          "d5-g1-result:d5-g1-candidate:sha256:6baab165ea9dd0799e3c370a46bf50a73147fa1ed0bf9dc25e1937ff96cad4ae"
+        ],
+        "uncertainty_source_id": "d6.synthetic.uq@0.1"
+      }
+    ],
+    "schema": "d6_next_experiment_decision_record/1",
+    "selection_order": [
+      "B",
+      "E",
+      "A",
+      "F",
+      "C",
+      "D"
+    ]
+  },
+  "decision_scope": "d6-next-experiment-intelligence-scope-v0.1",
+  "external_frozen_milestones_unchanged": [
+    "MVR0",
+    "MVR1"
+  ],
+  "frozen_preregistration_checkpoint": "23f3d4b916f3b45b813f4fb8b4ebe156005ac8ba",
+  "frozen_semantics_unchanged": [
+    "ScientificTwin",
+    "D0",
+    "D1",
+    "D2",
+    "D3",
+    "D4",
+    "D5",
+    "external vertical-slice milestones"
+  ],
+  "informative_results_recorded": true,
+  "n1_n18": {
+    "N1": {
+      "observed": "missing evidence rejected: InvalidScientificProblem",
+      "status": "PASS"
+    },
+    "N10": {
+      "observed": "altered evidence changed option identity",
+      "status": "PASS"
+    },
+    "N11": {
+      "observed": "zero compute cost rejected: InvalidScientificProblem",
+      "status": "PASS"
+    },
+    "N12": {
+      "observed": "future result copy rejected: InvalidScientificProblem",
+      "status": "PASS"
+    },
+    "N13": {
+      "observed": "permuted option order preserved winner and decision identity",
+      "status": "PASS"
+    },
+    "N14": {
+      "observed": "hidden timestamp rejected: InvalidScientificProblem",
+      "status": "PASS"
+    },
+    "N15": {
+      "observed": "status inflation rejected: InvalidScientificProblem",
+      "status": "PASS"
+    },
+    "N16": {
+      "observed": "incompatible scope comparison rejected: InvalidScientificProblem",
+      "status": "PASS"
+    },
+    "N17": {
+      "observed": "selected execution mismatch rejected: InvalidScientificProblem",
+      "status": "PASS"
+    },
+    "N18": {
+      "observed": "posthoc signal mutation rejected: InvalidScientificProblem",
+      "status": "PASS"
+    },
+    "N2": {
+      "observed": "scope mismatch rejected: InvalidScientificProblem",
+      "status": "PASS"
+    },
+    "N3": {
+      "observed": "stale uncertainty source rejected: InvalidScientificProblem",
+      "status": "PASS"
+    },
+    "N4": {
+      "observed": "non-finite uncertainty rejected: InvalidScientificProblem",
+      "status": "PASS"
+    },
+    "N5": {
+      "observed": "incompatible model outputs rejected: InvalidScientificProblem",
+      "status": "PASS"
+    },
+    "N6": {
+      "observed": "forged model disagreement rejected: InvalidScientificProblem",
+      "status": "PASS"
+    },
+    "N7": {
+      "observed": "invalid novelty universe rejected: InvalidScientificProblem",
+      "status": "PASS"
+    },
+    "N8": {
+      "observed": "duplicate option identity rejected: InvalidScientificProblem",
+      "status": "PASS"
+    },
+    "N9": {
+      "observed": "altered cost changed option identity",
+      "status": "PASS"
+    }
+  },
+  "option_set_id": "d6-next-experiment-option-set-v0.1",
+  "policy_id": "d6-information-per-compute-lexicographic-v0.1",
+  "pre_vs_post_uncertainty_disagreement": {
+    "post_execution_disagreement": 0.0,
+    "post_execution_uncertainty": 0.0,
+    "pre_execution_disagreement": 0.2,
+    "pre_execution_uncertainty": 0.31,
+    "selected_option_label": "B"
+  },
+  "preregistration": "docs/design-d6-next-experiment-intelligence-prereg.md",
+  "raw_information_units_winner": "E",
+  "selected_execution": {
+    "assignment": {
+      "adapter": "buffered",
+      "component_a": "A_peak",
+      "component_b": "B_filter",
+      "control_level": 1,
+      "guard_enabled": false
+    },
+    "decision_identity": "d6-decision:sha256:fbf1a95b4a715675c30444b957ede59a5fd8aec0feb26f644af60f693e4f2416",
+    "execution_model_reference": "d4.synthetic.analytic@0.1",
+    "execution_problem_id": "d4-synthetic-objectives-v0.1",
+    "execution_solver_identity": "d4.closed-form.synthetic@0.1",
+    "post_execution_disagreement": 0.0,
+    "post_execution_uncertainty": 0.0,
+    "pre_execution_disagreement": 0.2,
+    "pre_execution_uncertainty": 0.31,
+    "result": {
+      "artifacts": [],
+      "assumptions": [],
+      "convergence": "not_applicable",
+      "metadata": {},
+      "models": [
+        [
+          "d4.synthetic.analytic",
+          "0.1"
+        ]
+      ],
+      "problem_id": "d4-synthetic-objectives-v0.1",
+      "provenance": {
+        "assumptions": [],
+        "environment": {},
+        "git_commit": null,
+        "inputs": {},
+        "metadata": {
+          "d6_decision_identity": "d6-decision:sha256:fbf1a95b4a715675c30444b957ede59a5fd8aec0feb26f644af60f693e4f2416",
+          "d6_option_identity": "d6-option:sha256:0e42973a4337334c1ca49ebf3a113ea06bee53e5e291eee13d4f7e06b24c0031",
+          "d6_option_label": "B",
+          "d6_study_context_id": "d6-study-option-b-uncertainty-disagreement-boundary-v0.1",
+          "decision_provenance_only": true,
+          "execution_semantics_id": "d6.closed-form.selected-experiment@0.1",
+          "objective_context_reference": "d6-next-experiment-intelligence-scope-v0.1",
+          "result_binding": {
+            "candidate_id": "d6-selected-candidate:sha256:0e42973a4337334c1ca49ebf3a113ea06bee53e5e291eee13d4f7e06b24c0031",
+            "design_space": {
+              "schema": "design_space_reference/1",
+              "space_id": "d4-domain-neutral-synthetic",
+              "version": "0.1"
+            },
+            "evaluation_id": "d6-selected-evaluation:sha256:0e42973a4337334c1ca49ebf3a113ea06bee53e5e291eee13d4f7e06b24c0031",
+            "twin": {
+              "schema": "scientific_twin_reference/1",
+              "twin_id": "d6-selected-twin:sha256:0e42973a4337334c1ca49ebf3a113ea06bee53e5e291eee13d4f7e06b24c0031",
+              "version": "1"
+            }
+          }
+        },
+        "models": [
+          [
+            "d4.synthetic.analytic",
+            "0.1"
+          ]
+        ],
+        "parent_run_id": null,
+        "run_id": "d6-selected-run:sha256:0e42973a4337334c1ca49ebf3a113ea06bee53e5e291eee13d4f7e06b24c0031",
+        "schema": "provenance_record/1",
+        "software_version": "",
+        "solvers": [
+          [
+            "d4.closed-form.synthetic",
+            "0.1"
+          ]
+        ],
+        "timestamp": null,
+        "tolerances": {}
+      },
+      "result_id": "d6-selected-result:sha256:0e42973a4337334c1ca49ebf3a113ea06bee53e5e291eee13d4f7e06b24c0031",
+      "schema": "scientific_result/1",
+      "solver": {
+        "backend": "",
+        "schema": "solver_identity/1",
+        "solver_id": "d4.closed-form.synthetic",
+        "version": "0.1"
+      },
+      "uncertainty": {},
+      "validation": {
+        "attained_levels": [],
+        "checks": [],
+        "notes": "",
+        "schema": "validation_report/1",
+        "status": "not_run"
+      },
+      "values": {
+        "loss_score": {
+          "magnitude": 33.0,
+          "schema": "quantity/1",
+          "units": "dimensionless"
+        },
+        "stability_score": {
+          "magnitude": -12.0,
+          "schema": "quantity/1",
+          "units": "dimensionless"
+        },
+        "yield_score": {
+          "magnitude": 35.0,
+          "schema": "quantity/1",
+          "units": "dimensionless"
+        }
+      },
+      "warnings": []
+    },
+    "schema": "d6_selected_experiment_execution/1",
+    "scientific_result": {
+      "loss_score": 33.0,
+      "stability_score": -12.0,
+      "yield_score": 35.0
+    },
+    "selected_option_identity": "d6-option:sha256:0e42973a4337334c1ca49ebf3a113ea06bee53e5e291eee13d4f7e06b24c0031",
+    "selected_option_label": "B",
+    "study_context_id": "d6-study-option-b-uncertainty-disagreement-boundary-v0.1",
+    "target_pass": false,
+    "twin": {
+      "assumptions": [],
+      "calibration_evidence_refs": [],
+      "declarations": [
+        {
+          "description": "",
+          "name": "adapter",
+          "role": "parameter",
+          "schema": "scientific_twin_datum/1",
+          "value": {
+            "description": "",
+            "schema": "categorical_value/1",
+            "value": "buffered",
+            "vocabulary": [
+              "direct",
+              "buffered",
+              "isolated"
+            ]
+          }
+        },
+        {
+          "description": "",
+          "name": "component_a",
+          "role": "parameter",
+          "schema": "scientific_twin_datum/1",
+          "value": {
+            "description": "",
+            "schema": "categorical_value/1",
+            "value": "A_peak",
+            "vocabulary": [
+              "A_base",
+              "A_peak",
+              "A_stable"
+            ]
+          }
+        },
+        {
+          "description": "",
+          "name": "component_b",
+          "role": "parameter",
+          "schema": "scientific_twin_datum/1",
+          "value": {
+            "description": "",
+            "schema": "categorical_value/1",
+            "value": "B_filter",
+            "vocabulary": [
+              "B_base",
+              "B_peak",
+              "B_filter"
+            ]
+          }
+        },
+        {
+          "description": "",
+          "name": "control_level",
+          "role": "parameter",
+          "schema": "scientific_twin_datum/1",
+          "value": {
+            "description": "",
+            "schema": "integer_value/1",
+            "value": 1
+          }
+        },
+        {
+          "description": "",
+          "name": "guard_enabled",
+          "role": "parameter",
+          "schema": "scientific_twin_datum/1",
+          "value": {
+            "description": "",
+            "schema": "boolean_value/1",
+            "value": false
+          }
+        }
+      ],
+      "description": "",
+      "evidence_refs": [
+        "d5-g0-result:d4-parent-a",
+        "d5-g0-result:d4-parent-d",
+        "d5-g1-result:d5-g1-candidate:sha256:368feb9dbff47c0e25ee646b6e07ac6cb3f2cf72b6d10e593c34c304d8c05803"
+      ],
+      "kind": "candidate",
+      "metadata": {
+        "d6_decision_identity": "d6-decision:sha256:fbf1a95b4a715675c30444b957ede59a5fd8aec0feb26f644af60f693e4f2416",
+        "d6_option_identity": "d6-option:sha256:0e42973a4337334c1ca49ebf3a113ea06bee53e5e291eee13d4f7e06b24c0031",
+        "d6_study_context_id": "d6-study-option-b-uncertainty-disagreement-boundary-v0.1",
+        "execution_semantics_id": "d6.closed-form.selected-experiment@0.1"
+      },
+      "models": [
+        {
+          "model_id": "d4.synthetic.analytic",
+          "schema": "model_reference/1",
+          "version": "0.1"
+        }
+      ],
+      "name": "",
+      "parent": null,
+      "schema": "scientific_twin/1",
+      "twin_id": "d6-selected-twin:sha256:0e42973a4337334c1ca49ebf3a113ea06bee53e5e291eee13d4f7e06b24c0031",
+      "version": "1"
+    }
+  },
+  "selected_option": {
+    "alpha_prediction": {
+      "loss_score": 22.0,
+      "stability_score": 54.0,
+      "target_pass": false,
+      "yield_score": 52.0
+    },
+    "beta_prediction": {
+      "loss_score": 32.0,
+      "stability_score": 38.0,
+      "target_pass": false,
+      "yield_score": 72.0
+    },
+    "decision_scope": "d6-next-experiment-intelligence-scope-v0.1",
+    "decision_signals": {
+      "compute_cost": 2,
+      "contradiction": false,
+      "information_per_compute": "3/2",
+      "information_units": 3,
+      "model_disagreement": 0.2,
+      "novelty_distance": 0.4,
+      "partial_success": false,
+      "predicted_loss": 22.0,
+      "predicted_stability": 54.0,
+      "predicted_target_pass": false,
+      "predicted_yield": 52.0,
+      "uncertainty": 0.31,
+      "useful_failure": true
+    },
+    "evidence_universe_id": "d6.frozen.d5.evidence-universe@0.1",
+    "execution_semantics_id": "d6.closed-form.selected-experiment@0.1",
+    "model_pair": [
+      [
+        "d6.synthetic.model-alpha",
+        "0.1"
+      ],
+      [
+        "d6.synthetic.model-beta",
+        "0.1"
+      ]
+    ],
+    "option_digest": "0e42973a4337334c1ca49ebf3a113ea06bee53e5e291eee13d4f7e06b24c0031",
+    "option_identity": "d6-option:sha256:0e42973a4337334c1ca49ebf3a113ea06bee53e5e291eee13d4f7e06b24c0031",
+    "option_label": "B",
+    "option_set_id": "d6-next-experiment-option-set-v0.1",
+    "proposed_assignment": {
+      "adapter": "buffered",
+      "component_a": "A_peak",
+      "component_b": "B_filter",
+      "control_level": 1,
+      "guard_enabled": false
+    },
+    "proposed_study_context_id": "d6-study-option-b-uncertainty-disagreement-boundary-v0.1",
+    "schema": "d6_experiment_option/1",
+    "signal_table_source_id": "d6.preregistered.signal-table@0.1",
+    "source_evidence_refs": [
+      "d5-g0-result:d4-parent-a",
+      "d5-g0-result:d4-parent-d",
+      "d5-g1-result:d5-g1-candidate:sha256:368feb9dbff47c0e25ee646b6e07ac6cb3f2cf72b6d10e593c34c304d8c05803"
+    ],
+    "uncertainty_source_id": "d6.synthetic.uq@0.1"
+  },
+  "selection_ordering": [
+    {
+      "information_per_compute": "3/2",
+      "information_units": 3,
+      "label": "B",
+      "model_disagreement": 0.2,
+      "option_identity": "d6-option:sha256:0e42973a4337334c1ca49ebf3a113ea06bee53e5e291eee13d4f7e06b24c0031",
+      "rank": 1
+    },
+    {
+      "information_per_compute": "4/4",
+      "information_units": 4,
+      "label": "E",
+      "model_disagreement": 0.34,
+      "option_identity": "d6-option:sha256:4201db700a0ea78d55c5a46903a2a6001effb01c3877b790a33b4cbcaeef9405",
+      "rank": 2
+    },
+    {
+      "information_per_compute": "1/1",
+      "information_units": 1,
+      "label": "A",
+      "model_disagreement": 0.04,
+      "option_identity": "d6-option:sha256:23d4790eedf423cc9f9518d23f6986785f472c61e9edf3aa1d8c688b0e33d4eb",
+      "rank": 3
+    },
+    {
+      "information_per_compute": "1/2",
+      "information_units": 1,
+      "label": "F",
+      "model_disagreement": 0.06,
+      "option_identity": "d6-option:sha256:92e2a02e2f0c533ca1556e28b3016675d5211c6f8f11217665d654ae35ae0b3b",
+      "rank": 4
+    },
+    {
+      "information_per_compute": "1/5",
+      "information_units": 1,
+      "label": "C",
+      "model_disagreement": 0.1,
+      "option_identity": "d6-option:sha256:86d6d993b843a347abceab0a71bee200974ecdb35df262c60e3af9c7a1a54d66",
+      "rank": 5
+    },
+    {
+      "information_per_compute": "0/1",
+      "information_units": 0,
+      "label": "D",
+      "model_disagreement": 0.0,
+      "option_identity": "d6-option:sha256:cc5ac36d0b69c69f1000d8c309d3bf43bb44c8e7819215e24da41c777bd8e3f5",
+      "rank": 6
+    }
+  ],
+  "signal_table": {
+    "A": {
+      "alpha_predicted_loss": 18.0,
+      "alpha_predicted_stability": 66.0,
+      "alpha_predicted_yield": 88.0,
+      "alpha_target_pass": true,
+      "beta_predicted_loss": 20.0,
+      "beta_predicted_stability": 64.0,
+      "beta_predicted_yield": 84.0,
+      "beta_target_pass": true,
+      "compute_cost": 1,
+      "contradiction": false,
+      "information_per_compute": "1/1",
+      "information_units": 1,
+      "model_disagreement": 0.04,
+      "novelty_distance": 0.2,
+      "partial_success": true,
+      "predicted_loss": 18.0,
+      "predicted_stability": 66.0,
+      "predicted_target_pass": true,
+      "predicted_yield": 88.0,
+      "uncertainty": 0.08,
+      "useful_failure": false
+    },
+    "B": {
+      "alpha_predicted_loss": 22.0,
+      "alpha_predicted_stability": 54.0,
+      "alpha_predicted_yield": 52.0,
+      "alpha_target_pass": false,
+      "beta_predicted_loss": 32.0,
+      "beta_predicted_stability": 38.0,
+      "beta_predicted_yield": 72.0,
+      "beta_target_pass": false,
+      "compute_cost": 2,
+      "contradiction": false,
+      "information_per_compute": "3/2",
+      "information_units": 3,
+      "model_disagreement": 0.2,
+      "novelty_distance": 0.4,
+      "partial_success": false,
+      "predicted_loss": 22.0,
+      "predicted_stability": 54.0,
+      "predicted_target_pass": false,
+      "predicted_yield": 52.0,
+      "uncertainty": 0.31,
+      "useful_failure": true
+    },
+    "C": {
+      "alpha_predicted_loss": 24.0,
+      "alpha_predicted_stability": 62.0,
+      "alpha_predicted_yield": 60.0,
+      "alpha_target_pass": false,
+      "beta_predicted_loss": 29.0,
+      "beta_predicted_stability": 72.0,
+      "beta_predicted_yield": 50.0,
+      "beta_target_pass": false,
+      "compute_cost": 5,
+      "contradiction": false,
+      "information_per_compute": "1/5",
+      "information_units": 1,
+      "model_disagreement": 0.1,
+      "novelty_distance": 0.6,
+      "partial_success": false,
+      "predicted_loss": 24.0,
+      "predicted_stability": 62.0,
+      "predicted_target_pass": false,
+      "predicted_yield": 60.0,
+      "uncertainty": 0.18,
+      "useful_failure": false
+    },
+    "D": {
+      "alpha_predicted_loss": 30.0,
+      "alpha_predicted_stability": 9.0,
+      "alpha_predicted_yield": 64.0,
+      "alpha_target_pass": false,
+      "beta_predicted_loss": 30.0,
+      "beta_predicted_stability": 9.0,
+      "beta_predicted_yield": 64.0,
+      "beta_target_pass": false,
+      "compute_cost": 1,
+      "contradiction": false,
+      "information_per_compute": "0/1",
+      "information_units": 0,
+      "model_disagreement": 0.0,
+      "novelty_distance": 0.0,
+      "partial_success": false,
+      "predicted_loss": 30.0,
+      "predicted_stability": 9.0,
+      "predicted_target_pass": false,
+      "predicted_yield": 64.0,
+      "uncertainty": 0.03,
+      "useful_failure": false
+    },
+    "E": {
+      "alpha_predicted_loss": 22.0,
+      "alpha_predicted_stability": 52.0,
+      "alpha_predicted_yield": 82.0,
+      "alpha_target_pass": true,
+      "beta_predicted_loss": 38.0,
+      "beta_predicted_stability": 18.0,
+      "beta_predicted_yield": 48.0,
+      "beta_target_pass": false,
+      "compute_cost": 4,
+      "contradiction": true,
+      "information_per_compute": "4/4",
+      "information_units": 4,
+      "model_disagreement": 0.34,
+      "novelty_distance": 0.4,
+      "partial_success": false,
+      "predicted_loss": 22.0,
+      "predicted_stability": 52.0,
+      "predicted_target_pass": true,
+      "predicted_yield": 82.0,
+      "uncertainty": 0.29,
+      "useful_failure": true
+    },
+    "F": {
+      "alpha_predicted_loss": 8.0,
+      "alpha_predicted_stability": 82.0,
+      "alpha_predicted_yield": 50.0,
+      "alpha_target_pass": false,
+      "beta_predicted_loss": 5.0,
+      "beta_predicted_stability": 76.0,
+      "beta_predicted_yield": 46.0,
+      "beta_target_pass": false,
+      "compute_cost": 2,
+      "contradiction": false,
+      "information_per_compute": "1/2",
+      "information_units": 1,
+      "model_disagreement": 0.06,
+      "novelty_distance": 0.4,
+      "partial_success": true,
+      "predicted_loss": 8.0,
+      "predicted_stability": 82.0,
+      "predicted_target_pass": false,
+      "predicted_yield": 50.0,
+      "uncertainty": 0.16,
+      "useful_failure": false
+    }
+  },
+  "successor_evidence": [
+    "Repeat the option/signal/decision pattern in a non-D4 system before Core promotion.",
+    "Persist multiple next-experiment decisions in a durable evidence store to test identity and replay pressure.",
+    "Replace the local information proxy with a domain-owned estimate only after another preregistered comparison forces it.",
+    "Test whether a generic no-future-result guard is useful outside this synthetic decision boundary.",
+    "Defer any scheduler or repeated-loop semantics to a later milestone."
+  ],
+  "system_owned_remaining": [
+    "signal predicate definitions",
+    "signal ordering and tie-breaks",
+    "novelty definition",
+    "information proxy",
+    "model comparison semantics",
+    "cost model",
+    "scientific question generation",
+    "selected-experiment execution semantics",
+    "local uncertainty/disagreement closure proxy"
+  ]
+}
