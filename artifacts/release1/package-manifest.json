@@ -1,0 +1,102 @@
+{
+  "build": {
+    "backend": "setuptools.build_meta",
+    "backend_version_from_wheel": "84.0.0",
+    "frontend": "python -m build",
+    "frontend_version": "1.5.0",
+    "isolated_build": true,
+    "python": "CPython 3.14.2",
+    "source_layout": "src",
+    "wheel_tag": "py3-none-any"
+  },
+  "build_artifacts": [
+    {
+      "name": "engineering_ai_core-1.0.0-py3-none-any.whl",
+      "sha256": "c6ad097436d6c9a6ab5b24cdefb2fb4e865db88ee24337c3204b11f9238b10ef",
+      "size_bytes": 662808,
+      "type": "wheel"
+    },
+    {
+      "name": "engineering_ai_core-1.0.0.tar.gz",
+      "sha256": "6578025a690ac3306ceb6fc142f2be118b59d1585fe99ac68be4761ecda30d1c",
+      "size_bytes": 767049,
+      "type": "sdist"
+    }
+  ],
+  "distribution": {
+    "authoritative_version_source": "src/engcore/_version.py",
+    "description": "Typed scientific computation and bounded discovery platform",
+    "name": "engineering-ai-core",
+    "requires_python": ">=3.11",
+    "status": "release-1-preparation",
+    "version": "1.0.0"
+  },
+  "excluded_experiment_only_public_concepts": [
+    "D4-D7 fixture policies and synthetic constants",
+    "D4-D7 runners and historical experiment helpers",
+    "D7 LoopPhysicsScope",
+    "D7 LoopAssessmentContext",
+    "D7 LoopDecisionEvidenceBinding",
+    "D7 option and decision records",
+    "D7 checkpoint envelope",
+    "D7 no-inheritance validator"
+  ],
+  "installed_wheel_evidence": {
+    "dependencies": {
+      "numpy": "2.5.2",
+      "pint": "0.25.3",
+      "scikit-learn": "1.9.0",
+      "scipy": "1.18.0"
+    },
+    "isolated_environment": true,
+    "public_symbol_count": 275,
+    "result": "PASS",
+    "source_tree_fallback": false
+  },
+  "package_module_inventory": {
+    "canonical_json_sha256": "b915fdacc077a16e76ccc66b984fd2b9bc931a50a2dcb8874fb9edafb3410e37",
+    "count": 225,
+    "inclusion_rule": "all Python modules in setuptools packages matching engcore* under src",
+    "source": "wheel RECORD",
+    "wheel_non_package_entries": [
+      "engineering_ai_core-1.0.0.dist-info/METADATA",
+      "engineering_ai_core-1.0.0.dist-info/RECORD",
+      "engineering_ai_core-1.0.0.dist-info/WHEEL",
+      "engineering_ai_core-1.0.0.dist-info/top_level.txt"
+    ]
+  },
+  "preregistration_commit": "d4280c59e5298e53f4aefa771b758ae321eeb5a7",
+  "public_api": {
+    "canonical_json_sha256": "f4bd71ced1cc6e68d074dbd10a1c074ac78a112be8a9ad0b6250eb1571715163",
+    "manifest": "engcore.release1_api.PUBLIC_V1_MANIFEST",
+    "manifest_schema": "engcore.public_v1_manifest/1",
+    "manifest_source_sha256": "1b8c7ead7c9cf06736e1bc25141518b4ad61012f5f6108ee7a7b85228e0d1438",
+    "namespaces": [
+      "engcore",
+      "engcore.release1_api",
+      "engcore.scientific",
+      "engcore.design",
+      "engcore.domains.electrical.dc",
+      "engcore.domains.thermal.conduction1d",
+      "engcore.domains.kinetics.cstr",
+      "engcore.domains.fluids.aerodynamics",
+      "engcore.systems.aerospace.multirotor"
+    ],
+    "symbol_count": 275
+  },
+  "schema": "engcore.release1.package_manifest/1",
+  "verification": {
+    "full_regression": "PASS - 1465 tests, 4 legacy optimizer convergence warnings",
+    "installed_wheel_public_api": "PASS - 275 symbols, no source-tree fallback",
+    "package_api": "PASS - 5 tests",
+    "release_tag_created": false,
+    "targeted_frozen_surfaces": "PASS - 512 tests, 4 legacy optimizer convergence warnings"
+  },
+  "wheel_excludes": [
+    "artifacts",
+    "benchmarks",
+    "docs",
+    "experiments",
+    "repository test and scratch directories"
+  ]
+}

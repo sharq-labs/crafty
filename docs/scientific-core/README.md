@@ -10,10 +10,12 @@ no unit, no model identity, no validity statement and no provenance.
 
 ## Status
 
-**V0 foundation — contracts only.** No physical domain is implemented: no
-Ohm's law, no Newtonian mechanics, no thermal or chemical model, no CFD, no
-FEA, no mesh, no multiphysics coupling. The next phase (Domain Validation)
-adds Electrical DC and Motion/ODE **through these same contracts**.
+**Stable Release 1 contract surface.** The Core remains domain-neutral: no
+electrical network, thermal mesh, chemical mechanism, or fluid region is
+encoded in these contracts. The repository now also contains proven electrical
+DC, normalized 1D conduction, CSTR kinetics, rotor-hover, and multirotor
+adapters under `engcore.domains` and `engcore.systems`. Those adapters obey this
+typed lifecycle without making their domain semantics part of Core.
 
 ## Purpose
 

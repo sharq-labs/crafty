@@ -1,7 +1,12 @@
+[build-system]
+requires = ["setuptools>=69", "wheel>=0.43"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "engineering-ai-core"
-version = "0.1.0"
-description = "Smart experiment engine proof of concept"
+dynamic = ["version"]
+description = "Typed scientific computation and bounded discovery platform"
+readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
   "numpy>=1.26",
@@ -14,8 +19,20 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+  "build>=1.2",
   "pytest>=8.0"
 ]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+include-package-data = false
+
+[tool.setuptools.dynamic]
+version = {attr = "engcore._version.__version__"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["engcore*"]
 
 [tool.pytest.ini_options]
 # The project uses a src/ layout. Tests must resolve engcore from the checked-out

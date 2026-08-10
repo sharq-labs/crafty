@@ -20,7 +20,9 @@ Nothing here imports an LLM provider, a web framework, a database, or a
 visualization layer — and nothing may. If every AI provider disappeared, the
 Scientific Core would remain fully usable.
 
-Status: **V0 foundation.** Contracts only; no physical domain is implemented.
+Status: **stable Release 1 contract surface.** This package remains
+domain-neutral; proven physical adapters live under :mod:`engcore.domains` and
+system references live under :mod:`engcore.systems`.
 """
 
 from __future__ import annotations
