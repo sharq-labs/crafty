@@ -1,0 +1,522 @@
+{
+  "a1_a20": {
+    "A1": "PASS - D0/D1/D2/D3, ScientificTwin, K-series, MVR0 and MVR1 files were not modified by D4 implementation",
+    "A10": "PASS - child candidates, Twins and results do not inherit parent scientific result, evidence, target, Pareto, validation, UQ or adequacy claims",
+    "A11": "PASS - child outputs exist only through new D1 child evaluations with child ResultBinding",
+    "A12": "PASS - D4 compatibility/derivation/candidate/Twin records serialize deterministically and round-trip",
+    "A13": "PASS - parent/source ordering permutations do not change event identity",
+    "A14": "PASS - strong components were insufficient: Case A is incompatible and Case B is compatible but poor",
+    "A15": "PASS - Case B materialized and underperformed a relevant parent on preregistered objectives",
+    "A16": "PASS - compatibility, recombination and retention metadata do not assert feasibility, safety, adequacy, validation, target pass or success",
+    "A17": "PASS - PASS - tests/test_design_d4_recombination.py: 8 passed; PASS - py -3 -m pytest -q --basetemp .pytest_tmp_d4_full: 1428 passed, 4 warnings",
+    "A18": "PASS - Case C improved at least one preregistered objective relative to both source parents",
+    "A19": "PASS - Case D received a valid child result and failed the overall target",
+    "A2": "PASS - D4 added a domain-neutral local design module, tests, and experiment harness only",
+    "A20": "PASS - Q8 architecture evidence is reported from D4 execution",
+    "A3": "PASS - selected slots resolve to exact parent candidate, Twin, evaluation, and D3 memory entry; adversarial mismatch tests fail closed",
+    "A4": "PASS - compatibility is typed, deterministic, performance-independent, and executed before materialization",
+    "A5": "PASS - Case A/N1 is INCOMPATIBLE and creates no child, Twin, or result",
+    "A6": "PASS - recombination identity is deterministic across parent/source/input ordering and serialization",
+    "A7": "PASS - derivation record round-trips child, sources, parents, parent Twins, D3 entries, compatibility and materialization semantics",
+    "A8": "PASS - compatible children have candidate ids distinct from all parents",
+    "A9": "PASS - compatible children have Derived Twin references distinct from all parent Twins"
+  },
+  "adversarial_review": {
+    "P0/P1": [],
+    "P2": [],
+    "P3": [
+      "D4 still inherits the repository's non-cryptographic object identity debt; it validates cheap scientific/compositional content at the boundary but does not prove global authenticity.",
+      "The experiment forced an authoritative local multi-parent derivation record, but one synthetic experiment is not enough evidence to redesign ScientificTwin.parent.",
+      "Compatibility rules, component meaning, interaction equations, and materialization constraints remain system-pack semantics."
+    ]
+  },
+  "architecture_pulled": {
+    "compatibility_assessment_result": "A small typed local state/result object was forced; generic compatibility semantics were not.",
+    "derivation_lineage": "A structured D4-local derivation record was forced; generic Core lineage remains successor evidence, not proven.",
+    "derived_candidate_relationship": "Existing DesignCandidate generation/parents/operator fields were sufficient when paired with the D4 record.",
+    "multi_parent_lineage": "Authoritative multi-parent lineage was forced beside ScientificTwin; the frozen single Twin parent was not changed.",
+    "recombination_identity": "A deterministic D4 event digest was forced for this experiment; generic recombination identity remains unproven."
+  },
+  "blocking_gates_passed": true,
+  "cases": {
+    "A": {
+      "case": "A",
+      "child_candidate_identity": null,
+      "child_created": false,
+      "child_scientific_outputs": null,
+      "child_target_result": null,
+      "child_twin_identity": null,
+      "compatibility_reason": "A_peak plus B_peak is a preregistered incompatible pair",
+      "compatibility_state": "INCOMPATIBLE",
+      "d3_source_memory_identities": [
+        "72a8f47006961ccc9f3ccccca0f14c63dcfc558503cad2955e1fe73a498e5cc6",
+        "ff337c35df23d1f9af9e0d7e05cba74ac5fd2d8788aa8dcedaf168d2260d8e72"
+      ],
+      "exact_comparison_against_relevant_parent_outcomes": null,
+      "new_child_evaluation_identity": null,
+      "parent_candidate_identities": [
+        "d4-parent-a",
+        "d4-parent-b"
+      ],
+      "parent_twin_references": [
+        "{\"schema\": \"scientific_twin_reference/1\", \"twin_id\": \"d4-twin:d4-parent-a\", \"version\": \"1\"}",
+        "{\"schema\": \"scientific_twin_reference/1\", \"twin_id\": \"d4-twin:d4-parent-b\", \"version\": \"1\"}"
+      ],
+      "recombination_event_identity": "d4-event:sha256:9294390ab8d08fa2b0ca720f2c1adbce749d8f86eea25470c886a59caa265839",
+      "selected_component_source": [
+        {
+          "d3_entry_digest": "dbd9d35ec352178def97429a0aa9ee00ac709bccf74ea755165ff8671bf563ec",
+          "d3_entry_identity": "72a8f47006961ccc9f3ccccca0f14c63dcfc558503cad2955e1fe73a498e5cc6",
+          "parent_candidate": "d4-parent-a",
+          "parent_evaluation": "d4-eval:parent:d4-parent-a",
+          "parent_twin": {
+            "schema": "scientific_twin_reference/1",
+            "twin_id": "d4-twin:d4-parent-a",
+            "version": "1"
+          },
+          "slot": "component_a",
+          "value": "A_peak"
+        },
+        {
+          "d3_entry_digest": "93f705e9fc1fd4196828889f3dd1c8b93a5702436bc84a045c116e4502c339e9",
+          "d3_entry_identity": "ff337c35df23d1f9af9e0d7e05cba74ac5fd2d8788aa8dcedaf168d2260d8e72",
+          "parent_candidate": "d4-parent-b",
+          "parent_evaluation": "d4-eval:parent:d4-parent-b",
+          "parent_twin": {
+            "schema": "scientific_twin_reference/1",
+            "twin_id": "d4-twin:d4-parent-b",
+            "version": "1"
+          },
+          "slot": "component_b",
+          "value": "B_peak"
+        },
+        {
+          "d3_entry_digest": "dbd9d35ec352178def97429a0aa9ee00ac709bccf74ea755165ff8671bf563ec",
+          "d3_entry_identity": "72a8f47006961ccc9f3ccccca0f14c63dcfc558503cad2955e1fe73a498e5cc6",
+          "parent_candidate": "d4-parent-a",
+          "parent_evaluation": "d4-eval:parent:d4-parent-a",
+          "parent_twin": {
+            "schema": "scientific_twin_reference/1",
+            "twin_id": "d4-twin:d4-parent-a",
+            "version": "1"
+          },
+          "slot": "adapter",
+          "value": "buffered"
+        },
+        {
+          "d3_entry_digest": "dbd9d35ec352178def97429a0aa9ee00ac709bccf74ea755165ff8671bf563ec",
+          "d3_entry_identity": "72a8f47006961ccc9f3ccccca0f14c63dcfc558503cad2955e1fe73a498e5cc6",
+          "parent_candidate": "d4-parent-a",
+          "parent_evaluation": "d4-eval:parent:d4-parent-a",
+          "parent_twin": {
+            "schema": "scientific_twin_reference/1",
+            "twin_id": "d4-twin:d4-parent-a",
+            "version": "1"
+          },
+          "slot": "control_level",
+          "value": 2
+        },
+        {
+          "d3_entry_digest": "dbd9d35ec352178def97429a0aa9ee00ac709bccf74ea755165ff8671bf563ec",
+          "d3_entry_identity": "72a8f47006961ccc9f3ccccca0f14c63dcfc558503cad2955e1fe73a498e5cc6",
+          "parent_candidate": "d4-parent-a",
+          "parent_evaluation": "d4-eval:parent:d4-parent-a",
+          "parent_twin": {
+            "schema": "scientific_twin_reference/1",
+            "twin_id": "d4-twin:d4-parent-a",
+            "version": "1"
+          },
+          "slot": "guard_enabled",
+          "value": false
+        }
+      ]
+    },
+    "B": {
+      "case": "B",
+      "child_candidate_identity": "d4-child:sha256:52fcda9c82d587cbe4fd2c38ce3950d690a545da48ef6d5935f34b45b8152166",
+      "child_created": true,
+      "child_scientific_outputs": {
+        "loss_score": 39.0,
+        "stability_score": 1.0,
+        "yield_score": 34.0
+      },
+      "child_target_result": false,
+      "child_twin_identity": {
+        "schema": "scientific_twin_reference/1",
+        "twin_id": "d4-derived-twin:sha256:52fcda9c82d587cbe4fd2c38ce3950d690a545da48ef6d5935f34b45b8152166",
+        "version": "1"
+      },
+      "compatibility_reason": "all D4 structural, attribution, pair, adapter and type checks passed",
+      "compatibility_state": "COMPATIBLE",
+      "d3_source_memory_identities": [
+        "72a8f47006961ccc9f3ccccca0f14c63dcfc558503cad2955e1fe73a498e5cc6",
+        "df956d1ad15f3821ea8564c25719962e7f6a4e436e700c1bd959d1e9a2780cc9"
+      ],
+      "exact_comparison_against_relevant_parent_outcomes": {
+        "against_parents": {
+          "d4-parent-a": {
+            "loss_score_delta": 9.0,
+            "stability_score_delta": -8.0,
+            "yield_score_delta": -30.0
+          },
+          "d4-parent-d": {
+            "loss_score_delta": 33.0,
+            "stability_score_delta": -50.0,
+            "yield_score_delta": 5.0
+          }
+        },
+        "improved_objectives_relative_to_all_relevant_parents": [],
+        "underperformed_at_least_one_relevant_parent": true
+      },
+      "new_child_evaluation_identity": "d4-eval:child:d4-child:sha256:52fcda9c82d587cbe4fd2c38ce3950d690a545da48ef6d5935f34b45b8152166",
+      "parent_candidate_identities": [
+        "d4-parent-a",
+        "d4-parent-d"
+      ],
+      "parent_twin_references": [
+        "{\"schema\": \"scientific_twin_reference/1\", \"twin_id\": \"d4-twin:d4-parent-a\", \"version\": \"1\"}",
+        "{\"schema\": \"scientific_twin_reference/1\", \"twin_id\": \"d4-twin:d4-parent-d\", \"version\": \"1\"}"
+      ],
+      "recombination_event_identity": "d4-event:sha256:52fcda9c82d587cbe4fd2c38ce3950d690a545da48ef6d5935f34b45b8152166",
+      "selected_component_source": [
+        {
+          "d3_entry_digest": "dbd9d35ec352178def97429a0aa9ee00ac709bccf74ea755165ff8671bf563ec",
+          "d3_entry_identity": "72a8f47006961ccc9f3ccccca0f14c63dcfc558503cad2955e1fe73a498e5cc6",
+          "parent_candidate": "d4-parent-a",
+          "parent_evaluation": "d4-eval:parent:d4-parent-a",
+          "parent_twin": {
+            "schema": "scientific_twin_reference/1",
+            "twin_id": "d4-twin:d4-parent-a",
+            "version": "1"
+          },
+          "slot": "component_a",
+          "value": "A_peak"
+        },
+        {
+          "d3_entry_digest": "6f2a84b97a787cd57b24280c068cadf4c728aec9fc2d84beff71d445a95229a5",
+          "d3_entry_identity": "df956d1ad15f3821ea8564c25719962e7f6a4e436e700c1bd959d1e9a2780cc9",
+          "parent_candidate": "d4-parent-d",
+          "parent_evaluation": "d4-eval:parent:d4-parent-d",
+          "parent_twin": {
+            "schema": "scientific_twin_reference/1",
+            "twin_id": "d4-twin:d4-parent-d",
+            "version": "1"
+          },
+          "slot": "component_b",
+          "value": "B_filter"
+        },
+        {
+          "d3_entry_digest": "6f2a84b97a787cd57b24280c068cadf4c728aec9fc2d84beff71d445a95229a5",
+          "d3_entry_identity": "df956d1ad15f3821ea8564c25719962e7f6a4e436e700c1bd959d1e9a2780cc9",
+          "parent_candidate": "d4-parent-d",
+          "parent_evaluation": "d4-eval:parent:d4-parent-d",
+          "parent_twin": {
+            "schema": "scientific_twin_reference/1",
+            "twin_id": "d4-twin:d4-parent-d",
+            "version": "1"
+          },
+          "slot": "adapter",
+          "value": "buffered"
+        },
+        {
+          "d3_entry_digest": "6f2a84b97a787cd57b24280c068cadf4c728aec9fc2d84beff71d445a95229a5",
+          "d3_entry_identity": "df956d1ad15f3821ea8564c25719962e7f6a4e436e700c1bd959d1e9a2780cc9",
+          "parent_candidate": "d4-parent-d",
+          "parent_evaluation": "d4-eval:parent:d4-parent-d",
+          "parent_twin": {
+            "schema": "scientific_twin_reference/1",
+            "twin_id": "d4-twin:d4-parent-d",
+            "version": "1"
+          },
+          "slot": "control_level",
+          "value": 2
+        },
+        {
+          "d3_entry_digest": "6f2a84b97a787cd57b24280c068cadf4c728aec9fc2d84beff71d445a95229a5",
+          "d3_entry_identity": "df956d1ad15f3821ea8564c25719962e7f6a4e436e700c1bd959d1e9a2780cc9",
+          "parent_candidate": "d4-parent-d",
+          "parent_evaluation": "d4-eval:parent:d4-parent-d",
+          "parent_twin": {
+            "schema": "scientific_twin_reference/1",
+            "twin_id": "d4-twin:d4-parent-d",
+            "version": "1"
+          },
+          "slot": "guard_enabled",
+          "value": true
+        }
+      ]
+    },
+    "C": {
+      "case": "C",
+      "child_candidate_identity": "d4-child:sha256:034709b4d3f0abddd4d63a1312ddccdf47389e21ee571c78d7a458cd05e4bc10",
+      "child_created": true,
+      "child_scientific_outputs": {
+        "loss_score": 5.0,
+        "stability_score": 76.0,
+        "yield_score": 46.0
+      },
+      "child_target_result": false,
+      "child_twin_identity": {
+        "schema": "scientific_twin_reference/1",
+        "twin_id": "d4-derived-twin:sha256:034709b4d3f0abddd4d63a1312ddccdf47389e21ee571c78d7a458cd05e4bc10",
+        "version": "1"
+      },
+      "compatibility_reason": "all D4 structural, attribution, pair, adapter and type checks passed",
+      "compatibility_state": "COMPATIBLE",
+      "d3_source_memory_identities": [
+        "6879b6dcb90952d49df58b029a222eb004ae1b568f0397002c344a3c1215cb7d",
+        "df956d1ad15f3821ea8564c25719962e7f6a4e436e700c1bd959d1e9a2780cc9"
+      ],
+      "exact_comparison_against_relevant_parent_outcomes": {
+        "against_parents": {
+          "d4-parent-c": {
+            "loss_score_delta": -13.0,
+            "stability_score_delta": 32.0,
+            "yield_score_delta": 7.0
+          },
+          "d4-parent-d": {
+            "loss_score_delta": -1.0,
+            "stability_score_delta": 25.0,
+            "yield_score_delta": 17.0
+          }
+        },
+        "improved_objectives_relative_to_all_relevant_parents": [
+          "yield_score",
+          "loss_score",
+          "stability_score"
+        ],
+        "underperformed_at_least_one_relevant_parent": false
+      },
+      "new_child_evaluation_identity": "d4-eval:child:d4-child:sha256:034709b4d3f0abddd4d63a1312ddccdf47389e21ee571c78d7a458cd05e4bc10",
+      "parent_candidate_identities": [
+        "d4-parent-c",
+        "d4-parent-d"
+      ],
+      "parent_twin_references": [
+        "{\"schema\": \"scientific_twin_reference/1\", \"twin_id\": \"d4-twin:d4-parent-c\", \"version\": \"1\"}",
+        "{\"schema\": \"scientific_twin_reference/1\", \"twin_id\": \"d4-twin:d4-parent-d\", \"version\": \"1\"}"
+      ],
+      "recombination_event_identity": "d4-event:sha256:034709b4d3f0abddd4d63a1312ddccdf47389e21ee571c78d7a458cd05e4bc10",
+      "selected_component_source": [
+        {
+          "d3_entry_digest": "c00ad7176e2e48715558177ffc1e0afc1ae6dfbfedcf93fcf0100ec800080701",
+          "d3_entry_identity": "6879b6dcb90952d49df58b029a222eb004ae1b568f0397002c344a3c1215cb7d",
+          "parent_candidate": "d4-parent-c",
+          "parent_evaluation": "d4-eval:parent:d4-parent-c",
+          "parent_twin": {
+            "schema": "scientific_twin_reference/1",
+            "twin_id": "d4-twin:d4-parent-c",
+            "version": "1"
+          },
+          "slot": "component_a",
+          "value": "A_stable"
+        },
+        {
+          "d3_entry_digest": "c00ad7176e2e48715558177ffc1e0afc1ae6dfbfedcf93fcf0100ec800080701",
+          "d3_entry_identity": "6879b6dcb90952d49df58b029a222eb004ae1b568f0397002c344a3c1215cb7d",
+          "parent_candidate": "d4-parent-c",
+          "parent_evaluation": "d4-eval:parent:d4-parent-c",
+          "parent_twin": {
+            "schema": "scientific_twin_reference/1",
+            "twin_id": "d4-twin:d4-parent-c",
+            "version": "1"
+          },
+          "slot": "guard_enabled",
+          "value": true
+        },
+        {
+          "d3_entry_digest": "6f2a84b97a787cd57b24280c068cadf4c728aec9fc2d84beff71d445a95229a5",
+          "d3_entry_identity": "df956d1ad15f3821ea8564c25719962e7f6a4e436e700c1bd959d1e9a2780cc9",
+          "parent_candidate": "d4-parent-d",
+          "parent_evaluation": "d4-eval:parent:d4-parent-d",
+          "parent_twin": {
+            "schema": "scientific_twin_reference/1",
+            "twin_id": "d4-twin:d4-parent-d",
+            "version": "1"
+          },
+          "slot": "component_b",
+          "value": "B_filter"
+        },
+        {
+          "d3_entry_digest": "6f2a84b97a787cd57b24280c068cadf4c728aec9fc2d84beff71d445a95229a5",
+          "d3_entry_identity": "df956d1ad15f3821ea8564c25719962e7f6a4e436e700c1bd959d1e9a2780cc9",
+          "parent_candidate": "d4-parent-d",
+          "parent_evaluation": "d4-eval:parent:d4-parent-d",
+          "parent_twin": {
+            "schema": "scientific_twin_reference/1",
+            "twin_id": "d4-twin:d4-parent-d",
+            "version": "1"
+          },
+          "slot": "adapter",
+          "value": "buffered"
+        },
+        {
+          "d3_entry_digest": "6f2a84b97a787cd57b24280c068cadf4c728aec9fc2d84beff71d445a95229a5",
+          "d3_entry_identity": "df956d1ad15f3821ea8564c25719962e7f6a4e436e700c1bd959d1e9a2780cc9",
+          "parent_candidate": "d4-parent-d",
+          "parent_evaluation": "d4-eval:parent:d4-parent-d",
+          "parent_twin": {
+            "schema": "scientific_twin_reference/1",
+            "twin_id": "d4-twin:d4-parent-d",
+            "version": "1"
+          },
+          "slot": "control_level",
+          "value": 2
+        }
+      ]
+    },
+    "D": {
+      "case": "D",
+      "child_candidate_identity": "d4-child:sha256:3d9c7eb20d49b597710213bbdd2acfb8678db6a89366d2ea00e3a41f58578c92",
+      "child_created": true,
+      "child_scientific_outputs": {
+        "loss_score": 39.0,
+        "stability_score": 13.0,
+        "yield_score": 80.0
+      },
+      "child_target_result": false,
+      "child_twin_identity": {
+        "schema": "scientific_twin_reference/1",
+        "twin_id": "d4-derived-twin:sha256:3d9c7eb20d49b597710213bbdd2acfb8678db6a89366d2ea00e3a41f58578c92",
+        "version": "1"
+      },
+      "compatibility_reason": "all D4 structural, attribution, pair, adapter and type checks passed",
+      "compatibility_state": "COMPATIBLE",
+      "d3_source_memory_identities": [
+        "6879b6dcb90952d49df58b029a222eb004ae1b568f0397002c344a3c1215cb7d",
+        "ff337c35df23d1f9af9e0d7e05cba74ac5fd2d8788aa8dcedaf168d2260d8e72"
+      ],
+      "exact_comparison_against_relevant_parent_outcomes": {
+        "against_parents": {
+          "d4-parent-b": {
+            "loss_score_delta": 19.0,
+            "stability_score_delta": 20.0,
+            "yield_score_delta": 22.0
+          },
+          "d4-parent-c": {
+            "loss_score_delta": 21.0,
+            "stability_score_delta": -31.0,
+            "yield_score_delta": 41.0
+          }
+        },
+        "improved_objectives_relative_to_all_relevant_parents": [
+          "yield_score"
+        ],
+        "underperformed_at_least_one_relevant_parent": true
+      },
+      "new_child_evaluation_identity": "d4-eval:child:d4-child:sha256:3d9c7eb20d49b597710213bbdd2acfb8678db6a89366d2ea00e3a41f58578c92",
+      "parent_candidate_identities": [
+        "d4-parent-b",
+        "d4-parent-c"
+      ],
+      "parent_twin_references": [
+        "{\"schema\": \"scientific_twin_reference/1\", \"twin_id\": \"d4-twin:d4-parent-b\", \"version\": \"1\"}",
+        "{\"schema\": \"scientific_twin_reference/1\", \"twin_id\": \"d4-twin:d4-parent-c\", \"version\": \"1\"}"
+      ],
+      "recombination_event_identity": "d4-event:sha256:3d9c7eb20d49b597710213bbdd2acfb8678db6a89366d2ea00e3a41f58578c92",
+      "selected_component_source": [
+        {
+          "d3_entry_digest": "c00ad7176e2e48715558177ffc1e0afc1ae6dfbfedcf93fcf0100ec800080701",
+          "d3_entry_identity": "6879b6dcb90952d49df58b029a222eb004ae1b568f0397002c344a3c1215cb7d",
+          "parent_candidate": "d4-parent-c",
+          "parent_evaluation": "d4-eval:parent:d4-parent-c",
+          "parent_twin": {
+            "schema": "scientific_twin_reference/1",
+            "twin_id": "d4-twin:d4-parent-c",
+            "version": "1"
+          },
+          "slot": "component_a",
+          "value": "A_stable"
+        },
+        {
+          "d3_entry_digest": "c00ad7176e2e48715558177ffc1e0afc1ae6dfbfedcf93fcf0100ec800080701",
+          "d3_entry_identity": "6879b6dcb90952d49df58b029a222eb004ae1b568f0397002c344a3c1215cb7d",
+          "parent_candidate": "d4-parent-c",
+          "parent_evaluation": "d4-eval:parent:d4-parent-c",
+          "parent_twin": {
+            "schema": "scientific_twin_reference/1",
+            "twin_id": "d4-twin:d4-parent-c",
+            "version": "1"
+          },
+          "slot": "guard_enabled",
+          "value": true
+        },
+        {
+          "d3_entry_digest": "c00ad7176e2e48715558177ffc1e0afc1ae6dfbfedcf93fcf0100ec800080701",
+          "d3_entry_identity": "6879b6dcb90952d49df58b029a222eb004ae1b568f0397002c344a3c1215cb7d",
+          "parent_candidate": "d4-parent-c",
+          "parent_evaluation": "d4-eval:parent:d4-parent-c",
+          "parent_twin": {
+            "schema": "scientific_twin_reference/1",
+            "twin_id": "d4-twin:d4-parent-c",
+            "version": "1"
+          },
+          "slot": "control_level",
+          "value": 1
+        },
+        {
+          "d3_entry_digest": "93f705e9fc1fd4196828889f3dd1c8b93a5702436bc84a045c116e4502c339e9",
+          "d3_entry_identity": "ff337c35df23d1f9af9e0d7e05cba74ac5fd2d8788aa8dcedaf168d2260d8e72",
+          "parent_candidate": "d4-parent-b",
+          "parent_evaluation": "d4-eval:parent:d4-parent-b",
+          "parent_twin": {
+            "schema": "scientific_twin_reference/1",
+            "twin_id": "d4-twin:d4-parent-b",
+            "version": "1"
+          },
+          "slot": "component_b",
+          "value": "B_peak"
+        },
+        {
+          "d3_entry_digest": "93f705e9fc1fd4196828889f3dd1c8b93a5702436bc84a045c116e4502c339e9",
+          "d3_entry_identity": "ff337c35df23d1f9af9e0d7e05cba74ac5fd2d8788aa8dcedaf168d2260d8e72",
+          "parent_candidate": "d4-parent-b",
+          "parent_evaluation": "d4-eval:parent:d4-parent-b",
+          "parent_twin": {
+            "schema": "scientific_twin_reference/1",
+            "twin_id": "d4-twin:d4-parent-b",
+            "version": "1"
+          },
+          "slot": "adapter",
+          "value": "direct"
+        }
+      ]
+    }
+  },
+  "experiment_counts": {
+    "child_improved_preregistered_objective_count": 2,
+    "child_underperformed_relevant_parent_count": 2,
+    "compatible_but_target_failing_count": 3,
+    "compatible_count": 3,
+    "incompatible_count": 1,
+    "invalid_count": 0,
+    "materialized_count": 3,
+    "proposed_recombinations": 4,
+    "scientifically_evaluated_count": 3
+  },
+  "frozen_semantics_unchanged": [
+    "ScientificTwin",
+    "D0",
+    "D1",
+    "D2",
+    "D3",
+    "MVR0",
+    "MVR1"
+  ],
+  "preregistration": "docs/design-d4-compatibility-recombination-prereg.md",
+  "successor_evidence": [
+    "Core may need a generic derivation-lineage record after another non-D4 system repeats the same lineage need.",
+    "ScientificTwin may need true multi-parent lineage only if successor experiments require it as scientific context, not just provenance.",
+    "Inherited Core identity/authenticity debt remains outside D4; this experiment only validates cheap boundary content.",
+    "A generic compatibility result could be considered if multiple system packs converge on the same state/record shape."
+  ],
+  "system_domain_specific": [
+    "compatibility rules and pair matrix",
+    "component slot meaning",
+    "adapter requirements",
+    "synthetic interaction equations",
+    "target thresholds",
+    "child materialization semantics",
+    "system constraints and future admissibility policy"
+  ]
+}
