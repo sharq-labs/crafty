@@ -1,0 +1,768 @@
+{
+  "a1_a23": {
+    "A1": "PASS - D7 added only bounded experiment implementation/tests/artifacts; frozen semantics were not edited",
+    "A10": "PASS - D6-style inputs are complete typed evidence bindings",
+    "A11": "PASS - novelty is rederived from the complete typed evaluated universe",
+    "A12": "PASS - full predictions/evidence/scope/Study/cost/signals affect option identity",
+    "A13": "PASS - reload validates stored full options and reruns selection without fixture rebuilding",
+    "A14": "PASS - decision/Study/Candidate/Twin/run/result graph is exact before execution",
+    "A15": "PASS - ResultBinding d7-result-binding:sha256:6893beb6b45ce16b53851b13cf175bcd437aa287941d7bd62bb84d3894131ad3 / 6893beb6b45ce16b53851b13cf175bcd437aa287941d7bd62bb84d3894131ad3",
+    "A16": "PASS - eligible D1 evaluation d7-returned-evaluation:sha256:18065f064abd489c07e2618bd8d2d912de39256fd49fb2e02379bfccfcb03cd4; target FAIL did not affect eligibility",
+    "A17": "PASS - returned D3 entry 714b5c0e69c38b4b8bdecd93204909076837c8ee20a598852114794336e276f4 built only by DesignMemoryEntry.from_evaluation",
+    "A18": "PASS - next-cycle D4 source d7-d4-source:sha256:5fcf3c38282145593ebdc8de639b757217419d44fb08f3377671560711385bc9",
+    "A19": "PASS - real checkpoint save/discard/reload/continue and trace replay succeeded",
+    "A2": "PASS - every comparable object and execution carries the exact typed physics scope",
+    "A20": "PASS - exact source/options and byte reload are order/replay invariant",
+    "A21": "PASS - N1-N24 matched frozen outcomes",
+    "A22": "PASS - compatibility, target, retention, generation, prediction and selection never inflate scientific status",
+    "A23": "PASS - PASS - 15 passed in 4.14s; PASS - 1460 passed, 4 warnings in 581.62s",
+    "A3": "PASS - separately typed assessment changes preserve physics evidence",
+    "A4": "PASS - mixed D4 source physics fails before authoritative materialization",
+    "A5": "PASS - D3 selection uses exact candidate/evaluation plus entry identity/digest",
+    "A6": "PASS - D4 event/derivation identities cover sources, assignment, compatibility, scope and materialization",
+    "A7": "PASS - successor member is byte-identical to authoritative D4 Candidate/Twin",
+    "A8": "PASS - every unevaluated D4/selected Twin starts with empty evidence fields",
+    "A9": "PASS - one D7-local full-vocabulary no-inheritance validator covers D4/D5/selected execution"
+  },
+  "adversarial_cases_passed": true,
+  "adversarial_review": {
+    "P0/P1": [],
+    "P2": [],
+    "P3": [
+      "A generic physics-scope contract may become useful only after another domain forces the same fields.",
+      "The D7-local derivation, evidence graph, decision and checkpoint records are evidence for future reuse, not Core promotion.",
+      "The checkpoint proves deterministic semantic replay, not malicious-writer authenticity or production durability."
+    ],
+    "Resolved during review": [
+      "Removed an accidental Generation 2 label from the selected Study materialization; D7 now creates no Generation 2 object or execution.",
+      "Strengthened result scope-payload checks and checkpoint graph validation for exact D4 lineage, successor execution, and typed evidence bindings."
+    ]
+  },
+  "adversarial_review_has_p0_p1": false,
+  "architecture_actually_pulled": {
+    "AuthoritativeD4": "D7-local full event and derivation wrapper over frozen D4 compatibility.",
+    "D7Checkpoint": "D7-local canonical decision-boundary save/reload envelope.",
+    "LoopAssessmentContext": "D7-local target/report/decision context kept physics-neutral.",
+    "LoopDecisionEvidenceBinding": "D7-local full evidence graph replacing result-id membership.",
+    "LoopExperimentOption/NextExperimentDecision": "D7-local typed option identity and deterministic policy replay.",
+    "LoopPhysicsScope": "D7-local exact physical comparability and execution boundary.",
+    "SuccessorGeneration": "D7-local variable-cardinality generation with literal D4 child admission.",
+    "no-inheritance validator": "One D7-local recursive conformance validator across new Twins."
+  },
+  "assessment_context": {
+    "assessment_context_id": "d7-loop-target-context-v0.1",
+    "assessment_context_identity": "059fd8c568f93b384d868d603dc41d170435016d5ede2d967b2642386500e63a",
+    "classification_labels": [
+      "PASS",
+      "FAIL"
+    ],
+    "combination_rule": "AND",
+    "decision_context_id": "d7-which-next-experiment-v0.1",
+    "reporting_context_id": "d7-integrated-loop-report-v0.1",
+    "schema": "d7_loop_assessment_context/1",
+    "study_question_id": "d7-close-return-arrow-v0.1",
+    "threshold_predicates": [
+      {
+        "objective": "yield_score",
+        "operator": ">=",
+        "threshold": 70.0,
+        "unit": "dimensionless"
+      },
+      {
+        "objective": "loss_score",
+        "operator": "<=",
+        "threshold": 25.0,
+        "unit": "dimensionless"
+      },
+      {
+        "objective": "stability_score",
+        "operator": ">=",
+        "threshold": 50.0,
+        "unit": "dimensionless"
+      }
+    ]
+  },
+  "blocking_gates_passed": true,
+  "checkpoint": {
+    "identity": "f6689958a51160cb4276ed7e3a6ffe0da5e54795a084ede9fe1289f86e9579ce",
+    "real_reload_from_serialized_bytes": true,
+    "replay_byte_identical_trace": true,
+    "schema": "d7_integrated_loop_checkpoint/1"
+  },
+  "d3_memory_and_source_selection": {
+    "entries": [
+      {
+        "candidate_id": "d4-parent-a",
+        "digest": "b58c79338cec2b0fec4018b81408f29913881950e0a54df6278715d3a18f6cfa",
+        "evaluation_id": "d7-g0-evaluation:d4-parent-a:primary",
+        "identity": "32f68f80a4932b31e48655e1c59ace9b11a978f902432598fb713bc7159bcf51"
+      },
+      {
+        "candidate_id": "d4-parent-b",
+        "digest": "7a095b5dafe086e519afb1d1cded0db33bc44f813f5ee9e66e75edd1012d317f",
+        "evaluation_id": "d7-g0-evaluation:d4-parent-b:primary",
+        "identity": "5b556fe01c1c1e4bb0bb366b1aa5e13967aac24433cf1cf0d1d2f1cde07fc9e7"
+      },
+      {
+        "candidate_id": "d4-parent-c",
+        "digest": "9e22a2fc04f2db0f74ff7b830c422379f89e3e7e580e0fafb237ab849efc6fb4",
+        "evaluation_id": "d7-g0-evaluation:d4-parent-c:primary",
+        "identity": "76a4d28d2ec9d404031bd0f9226fcd183ec47d060dd8f52e5a825780435e6c47"
+      },
+      {
+        "candidate_id": "d4-parent-c",
+        "digest": "866e7fe5e826e5d054c52e09221ae22dd37d7f25a1af8633e0f7110b9a9e76a3",
+        "evaluation_id": "d7-g0-evaluation:d4-parent-c:replicate",
+        "identity": "b30508200105256f492bd22adaf52be0723392a072ffb2ad6e935d66d8d8a3bd"
+      },
+      {
+        "candidate_id": "d4-parent-d",
+        "digest": "f68075573586b9e482f7f760c5913eec5237a8f77177affe6ffd73d38c6b956b",
+        "evaluation_id": "d7-g0-evaluation:d4-parent-d:primary",
+        "identity": "41fd9e9fd91962bbfea6c66ded11bedd8523c5894cbe16134c578044bb115ed5"
+      }
+    ],
+    "layer_a_entry_count": 5,
+    "lookup_key": [
+      "candidate_id",
+      "evaluation_id"
+    ],
+    "replicate_substituted": false,
+    "selected_evaluation_ids": [
+      "d7-g0-evaluation:d4-parent-c:primary",
+      "d7-g0-evaluation:d4-parent-d:primary"
+    ],
+    "source_rule": "any exact attributable Layer A entry in the exact physics scope"
+  },
+  "d4": {
+    "assignment": {
+      "adapter": "buffered",
+      "component_a": "A_stable",
+      "component_b": "B_filter",
+      "control_level": 2,
+      "guard_enabled": true
+    },
+    "child_candidate_identity": "d7-d4-child:sha256:244b232fba2c6accbf6acbb328335532e18d2651e5e241b4a4b8d149ab7160fa",
+    "child_twin_identity": "d7-d4-derived-twin:sha256:244b232fba2c6accbf6acbb328335532e18d2651e5e241b4a4b8d149ab7160fa@1",
+    "compatibility": "COMPATIBLE",
+    "derivation_identity": "d7-d4-derivation:sha256:7a14b21ad0f617f6f29fa5fca35fcddf04231293a9e57b473edf27ed4d7ccc0a",
+    "event_identity": "d7-d4-event:sha256:244b232fba2c6accbf6acbb328335532e18d2651e5e241b4a4b8d149ab7160fa"
+  },
+  "d4_child_equals_d5_member": {
+    "candidate": true,
+    "membership_role": "AUTHORITATIVE_D4_MATERIALIZATION",
+    "twin": true
+  },
+  "decision_evidence_bindings": [
+    {
+      "candidate_id": "d7-d4-child:sha256:244b232fba2c6accbf6acbb328335532e18d2651e5e241b4a4b8d149ab7160fa",
+      "d4_derivation_identity": "d7-d4-derivation:sha256:7a14b21ad0f617f6f29fa5fca35fcddf04231293a9e57b473edf27ed4d7ccc0a",
+      "d4_event_identity": "d7-d4-event:sha256:244b232fba2c6accbf6acbb328335532e18d2651e5e241b4a4b8d149ab7160fa",
+      "digest": "1e198e779e494284f0140041ea34dc375af9987d83873defcd0dece8ce55b6e7",
+      "evaluation_id": "d7-successor-evaluation:sha256:8bf0697d6c109f54092ade8b9bfd36dd80e1b7df351126bbfcb67238cb92e9b4",
+      "generation_lineage_identity": "d7-generation-lineage:sha256:52a82c8c87515dbf9d97124f1d0a00eb8a5331ef40af881d830239d55f224bf4",
+      "generation_member_identity": "d7-generation-member:sha256:4def5ca0d48c95c1b5a5060875f171c07979c4a2ca927e375137d3fb89212acb",
+      "identity": "d7-decision-evidence:sha256:1e198e779e494284f0140041ea34dc375af9987d83873defcd0dece8ce55b6e7",
+      "result_id": "d7-successor-result:sha256:434a5f4404fedc323f246890071c34fffa55bf83bca7656cb5da81060a15b8f6",
+      "run_id": "d7-successor-run:sha256:9a48263a6e9a14b06f54dece645b3b7b16ff61d85cf9922d45509a31c11ad91f"
+    },
+    {
+      "candidate_id": "d4-parent-a",
+      "d4_derivation_identity": null,
+      "d4_event_identity": null,
+      "digest": "3c556b586ce23d5d58d973aefd2da8a4afa63e6a6ff21fbbb7321abce3b693ed",
+      "evaluation_id": "d7-g0-evaluation:d4-parent-a:primary",
+      "generation_lineage_identity": "d7-g0-lineage:sha256:9c4ca581388c04ec6c31f10dfc1b53cd76fc69a46926c190c83bab231873acf8",
+      "generation_member_identity": "d7-g0-member:sha256:2e443cddfbb25058864015c4c114e09474e7db4bca89c14d790a179a69532fde",
+      "identity": "d7-decision-evidence:sha256:3c556b586ce23d5d58d973aefd2da8a4afa63e6a6ff21fbbb7321abce3b693ed",
+      "result_id": "d7-g0-result:d4-parent-a:primary",
+      "run_id": "d7-g0-run:d4-parent-a:primary"
+    },
+    {
+      "candidate_id": "d4-parent-c",
+      "d4_derivation_identity": null,
+      "d4_event_identity": null,
+      "digest": "54ebe5075d4a1683e0db96975885855c23d9157251ab7e0d37efd44a427838f4",
+      "evaluation_id": "d7-g0-evaluation:d4-parent-c:primary",
+      "generation_lineage_identity": "d7-g0-lineage:sha256:e4a4e85a72675421f967e276283e7ea0c69d49e026ac9d2149159b081ee8e78e",
+      "generation_member_identity": "d7-g0-member:sha256:9894f71bc3688ec86a878fdf6f7e819c26ecc9d1c2ccee932fb9ff4869595743",
+      "identity": "d7-decision-evidence:sha256:54ebe5075d4a1683e0db96975885855c23d9157251ab7e0d37efd44a427838f4",
+      "result_id": "d7-g0-result:d4-parent-c:primary",
+      "run_id": "d7-g0-run:d4-parent-c:primary"
+    },
+    {
+      "candidate_id": "d4-parent-c",
+      "d4_derivation_identity": null,
+      "d4_event_identity": null,
+      "digest": "885342a2ce6af2ad1449a44879a24ace64a00eaa29d717e66741540989d56e44",
+      "evaluation_id": "d7-g0-evaluation:d4-parent-c:replicate",
+      "generation_lineage_identity": "d7-g0-lineage:sha256:75cea96e04d50c6df4b141da2c350a3bd065f50722dd3e3795ab714baca1f50e",
+      "generation_member_identity": "d7-g0-member:sha256:542648a83e7ab2eec35b62ceac679ebe6fc513deb44c1a96e7d08c04536c640d",
+      "identity": "d7-decision-evidence:sha256:885342a2ce6af2ad1449a44879a24ace64a00eaa29d717e66741540989d56e44",
+      "result_id": "d7-g0-result:d4-parent-c:replicate",
+      "run_id": "d7-g0-run:d4-parent-c:replicate"
+    },
+    {
+      "candidate_id": "d4-parent-b",
+      "d4_derivation_identity": null,
+      "d4_event_identity": null,
+      "digest": "c650f3095b454d3e125b004cbb2b1693fe35c26a72da11ad0866312be74f9d55",
+      "evaluation_id": "d7-g0-evaluation:d4-parent-b:primary",
+      "generation_lineage_identity": "d7-g0-lineage:sha256:f61cd1c1ecb39ff640eefb399bd6818949b85823d3316eaa017a492b4f31fcbd",
+      "generation_member_identity": "d7-g0-member:sha256:87d4d7001598ad087cacaf1eb7397b81d1026027c332bc4dfa05e6da1af4bf9c",
+      "identity": "d7-decision-evidence:sha256:c650f3095b454d3e125b004cbb2b1693fe35c26a72da11ad0866312be74f9d55",
+      "result_id": "d7-g0-result:d4-parent-b:primary",
+      "run_id": "d7-g0-run:d4-parent-b:primary"
+    },
+    {
+      "candidate_id": "d4-parent-d",
+      "d4_derivation_identity": null,
+      "d4_event_identity": null,
+      "digest": "e6b45c982536a820981219fd9a7f7f989c1d3604a3f5111c94f13bc72fed09da",
+      "evaluation_id": "d7-g0-evaluation:d4-parent-d:primary",
+      "generation_lineage_identity": "d7-g0-lineage:sha256:86a2929726fe95e54bb0712403b947d3102b6fb176a8a4250ce70a8e3ed2429f",
+      "generation_member_identity": "d7-g0-member:sha256:84053dde7e5bebd0dbb68043baaf4ff8c10ec9d4dba4e88e9c2481640746fd25",
+      "identity": "d7-decision-evidence:sha256:e6b45c982536a820981219fd9a7f7f989c1d3604a3f5111c94f13bc72fed09da",
+      "result_id": "d7-g0-result:d4-parent-d:primary",
+      "run_id": "d7-g0-run:d4-parent-d:primary"
+    }
+  ],
+  "decision_identity": "d7-decision:sha256:6d1dcb675cf44bb57419c4038a32effac87bd7d793c734bd870ee8e88616ee4a",
+  "frozen_preregistration_checkpoint": "86f8b4879a7e3da4839d53b209f51f09e55a742b",
+  "frozen_semantics_unchanged": [
+    "D0",
+    "D1",
+    "D2",
+    "D3",
+    "D4",
+    "D5",
+    "D6",
+    "ScientificTwin",
+    "MVR0",
+    "MVR1",
+    "previously frozen K-series semantics"
+  ],
+  "generation0_results": {
+    "d7-g0-evaluation:d4-parent-a:primary": {
+      "candidate_id": "d4-parent-a",
+      "result_id": "d7-g0-result:d4-parent-a:primary",
+      "run_id": "d7-g0-run:d4-parent-a:primary",
+      "target": "FAIL",
+      "twin": {
+        "schema": "scientific_twin_reference/1",
+        "twin_id": "d4-twin:d4-parent-a",
+        "version": "1"
+      },
+      "values": {
+        "loss_score": 30.0,
+        "stability_score": 9.0,
+        "yield_score": 64.0
+      }
+    },
+    "d7-g0-evaluation:d4-parent-b:primary": {
+      "candidate_id": "d4-parent-b",
+      "result_id": "d7-g0-result:d4-parent-b:primary",
+      "run_id": "d7-g0-run:d4-parent-b:primary",
+      "target": "FAIL",
+      "twin": {
+        "schema": "scientific_twin_reference/1",
+        "twin_id": "d4-twin:d4-parent-b",
+        "version": "1"
+      },
+      "values": {
+        "loss_score": 20.0,
+        "stability_score": -7.0,
+        "yield_score": 58.0
+      }
+    },
+    "d7-g0-evaluation:d4-parent-c:primary": {
+      "candidate_id": "d4-parent-c",
+      "result_id": "d7-g0-result:d4-parent-c:primary",
+      "run_id": "d7-g0-run:d4-parent-c:primary",
+      "target": "FAIL",
+      "twin": {
+        "schema": "scientific_twin_reference/1",
+        "twin_id": "d4-twin:d4-parent-c",
+        "version": "1"
+      },
+      "values": {
+        "loss_score": 18.0,
+        "stability_score": 44.0,
+        "yield_score": 39.0
+      }
+    },
+    "d7-g0-evaluation:d4-parent-c:replicate": {
+      "candidate_id": "d4-parent-c",
+      "result_id": "d7-g0-result:d4-parent-c:replicate",
+      "run_id": "d7-g0-run:d4-parent-c:replicate",
+      "target": "FAIL",
+      "twin": {
+        "schema": "scientific_twin_reference/1",
+        "twin_id": "d4-twin:d4-parent-c",
+        "version": "1"
+      },
+      "values": {
+        "loss_score": 18.0,
+        "stability_score": 44.0,
+        "yield_score": 39.0
+      }
+    },
+    "d7-g0-evaluation:d4-parent-d:primary": {
+      "candidate_id": "d4-parent-d",
+      "result_id": "d7-g0-result:d4-parent-d:primary",
+      "run_id": "d7-g0-run:d4-parent-d:primary",
+      "target": "FAIL",
+      "twin": {
+        "schema": "scientific_twin_reference/1",
+        "twin_id": "d4-twin:d4-parent-d",
+        "version": "1"
+      },
+      "values": {
+        "loss_score": 6.0,
+        "stability_score": 51.0,
+        "yield_score": 29.0
+      }
+    }
+  },
+  "generation_2_executed": false,
+  "informative_i1_i7": {
+    "I1": "Attributable Layer A source selection worked independently of retained-only membership; retention reasons remained provenance.",
+    "I2": "The integrated path needed a D7-local authoritative derivation identity, but one synthetic case is insufficient for Core promotion.",
+    "I3": "One combined no-inheritance validator closed D4/D5/selected seams; broader reuse remains unproven.",
+    "I4": "Typed physics scope was necessary locally; a generic Core scope contract remains unresolved.",
+    "I5": "Explicit lineage made literal child/evidence checks possible; generic provenance infrastructure is not yet justified.",
+    "I6": "Typed options and decisions were required for deterministic reload; general next-experiment abstractions remain future evidence.",
+    "I7": "D7 did not require reuse or modification of D2 proposal/materialization contracts."
+  },
+  "milestone": "D7 - Integrated Scientific Discovery Loop / Cross-Milestone Object-Trace Conformance V0.1",
+  "n1_n24": {
+    "N1": {
+      "observed": "mixed physics scope rejected before materialization: InvalidScientificProblem",
+      "status": "PASS"
+    },
+    "N10": {
+      "observed": "combined forbidden status vocabulary rejected: InvalidScientificProblem",
+      "status": "PASS"
+    },
+    "N11": {
+      "observed": "correct result id with wrong binding rejected: InvalidScientificProblem",
+      "status": "PASS"
+    },
+    "N12": {
+      "observed": "changed prediction with reused option identity rejected: InvalidScientificProblem",
+      "status": "PASS"
+    },
+    "N13": {
+      "observed": "mutated serialized option rejected after valid outer digest: InvalidScientificProblem",
+      "status": "PASS"
+    },
+    "N14": {
+      "observed": "wrong selected assignment rejected before solver: InvalidScientificProblem",
+      "status": "PASS"
+    },
+    "N15": {
+      "observed": "wrong selected Twin rejected before solver: InvalidScientificProblem",
+      "status": "PASS"
+    },
+    "N16": {
+      "observed": "invalid ResultBinding rejected by D1: InvalidScientificProblem",
+      "status": "PASS"
+    },
+    "N17": {
+      "observed": "inconsistent execution graph rejected: InvalidScientificProblem",
+      "status": "PASS"
+    },
+    "N18": {
+      "observed": "D3 admission without eligible D1 evaluation rejected: InvalidScientificProblem",
+      "status": "PASS"
+    },
+    "N19": {
+      "observed": "duplicate identity rejected: InvalidScientificProblem",
+      "status": "PASS"
+    },
+    "N2": {
+      "observed": "assessment-only change preserved physics identity, Layer A and results",
+      "status": "PASS"
+    },
+    "N20": {
+      "observed": "both offer orders selected the exact primary evaluation",
+      "status": "PASS"
+    },
+    "N21": {
+      "observed": "mutated checkpoint bytes rejected: InvalidScientificProblem",
+      "status": "PASS"
+    },
+    "N22": {
+      "observed": "incomplete checkpoint rejected: InvalidScientificProblem",
+      "status": "PASS"
+    },
+    "N23": {
+      "observed": "decision provenance in Twin evidence rejected: InvalidScientificProblem",
+      "status": "PASS"
+    },
+    "N24": {
+      "observed": "returned D3 entry unusable as exact next-cycle source made D7 fail: InvalidScientificProblem",
+      "status": "PASS"
+    },
+    "N3": {
+      "observed": "changed model required new physics and old-scope source failed: InvalidScientificProblem",
+      "status": "PASS"
+    },
+    "N4": {
+      "observed": "correct candidate with replicate substituted for primary rejected: InvalidScientificProblem",
+      "status": "PASS"
+    },
+    "N5": {
+      "observed": "wrong Twin for correct result rejected: InvalidScientificProblem",
+      "status": "PASS"
+    },
+    "N6": {
+      "observed": "assignment substitution with reused D4 identities rejected: InvalidScientificProblem",
+      "status": "PASS"
+    },
+    "N7": {
+      "observed": "replacement D5 Candidate/Twin rejected: InvalidScientificProblem",
+      "status": "PASS"
+    },
+    "N8": {
+      "observed": "parent evidence on derived Twin rejected: InvalidScientificProblem",
+      "status": "PASS"
+    },
+    "N9": {
+      "observed": "parent ScientificResult inheritance rejected: InvalidScientificProblem",
+      "status": "PASS"
+    }
+  },
+  "next_cycle_d4_source_identity": "d7-d4-source:sha256:5fcf3c38282145593ebdc8de639b757217419d44fb08f3377671560711385bc9",
+  "object_trace": {
+    "checkpoint_identity": "f6689958a51160cb4276ed7e3a6ffe0da5e54795a084ede9fe1289f86e9579ce",
+    "d4_derivation_identity": "d7-d4-derivation:sha256:7a14b21ad0f617f6f29fa5fca35fcddf04231293a9e57b473edf27ed4d7ccc0a",
+    "d4_event_identity": "d7-d4-event:sha256:244b232fba2c6accbf6acbb328335532e18d2651e5e241b4a4b8d149ab7160fa",
+    "d4_materialized_child_identity": "d7-d4-child:sha256:244b232fba2c6accbf6acbb328335532e18d2651e5e241b4a4b8d149ab7160fa",
+    "d4_materialized_twin_identity": "d7-d4-derived-twin:sha256:244b232fba2c6accbf6acbb328335532e18d2651e5e241b4a4b8d149ab7160fa@1",
+    "d4_source_evaluation_ids": [
+      "d7-g0-evaluation:d4-parent-c:primary",
+      "d7-g0-evaluation:d4-parent-d:primary"
+    ],
+    "decision_evidence_binding_digests": [
+      "1e198e779e494284f0140041ea34dc375af9987d83873defcd0dece8ce55b6e7",
+      "3c556b586ce23d5d58d973aefd2da8a4afa63e6a6ff21fbbb7321abce3b693ed",
+      "54ebe5075d4a1683e0db96975885855c23d9157251ab7e0d37efd44a427838f4",
+      "885342a2ce6af2ad1449a44879a24ace64a00eaa29d717e66741540989d56e44",
+      "c650f3095b454d3e125b004cbb2b1693fe35c26a72da11ad0866312be74f9d55",
+      "e6b45c982536a820981219fd9a7f7f989c1d3604a3f5111c94f13bc72fed09da"
+    ],
+    "decision_evidence_binding_ids": [
+      "d7-decision-evidence:sha256:1e198e779e494284f0140041ea34dc375af9987d83873defcd0dece8ce55b6e7",
+      "d7-decision-evidence:sha256:3c556b586ce23d5d58d973aefd2da8a4afa63e6a6ff21fbbb7321abce3b693ed",
+      "d7-decision-evidence:sha256:54ebe5075d4a1683e0db96975885855c23d9157251ab7e0d37efd44a427838f4",
+      "d7-decision-evidence:sha256:885342a2ce6af2ad1449a44879a24ace64a00eaa29d717e66741540989d56e44",
+      "d7-decision-evidence:sha256:c650f3095b454d3e125b004cbb2b1693fe35c26a72da11ad0866312be74f9d55",
+      "d7-decision-evidence:sha256:e6b45c982536a820981219fd9a7f7f989c1d3604a3f5111c94f13bc72fed09da"
+    ],
+    "decision_identity": "d7-decision:sha256:6d1dcb675cf44bb57419c4038a32effac87bd7d793c734bd870ee8e88616ee4a",
+    "experiment_option_identities": [
+      "d7-option:sha256:43c0172f0ce3383db4d4a39fe1bf970dade3ddecadad5f77c675b580a4d8405b",
+      "d7-option:sha256:2d6446678f3db03d6955ab50bcaffd81681129b4c77594784dc90920912cc2a9",
+      "d7-option:sha256:fc9e0ef52eacea9b6ce87df3519f3a3fe47f86793e4b45edcc76ff7deb509fd0"
+    ],
+    "final_trace_identity": "180a6762b6c1c0c289491c90ab7247e495041fc3aefaa603920fcb06436c651a",
+    "generation0_candidate_ids": [
+      "d4-parent-a",
+      "d4-parent-b",
+      "d4-parent-c",
+      "d4-parent-d"
+    ],
+    "generation0_evaluation_ids": [
+      "d7-g0-evaluation:d4-parent-a:primary",
+      "d7-g0-evaluation:d4-parent-b:primary",
+      "d7-g0-evaluation:d4-parent-c:primary",
+      "d7-g0-evaluation:d4-parent-c:replicate",
+      "d7-g0-evaluation:d4-parent-d:primary"
+    ],
+    "generation0_result_ids": [
+      "d7-g0-result:d4-parent-a:primary",
+      "d7-g0-result:d4-parent-b:primary",
+      "d7-g0-result:d4-parent-c:primary",
+      "d7-g0-result:d4-parent-c:replicate",
+      "d7-g0-result:d4-parent-d:primary"
+    ],
+    "generation0_run_ids": [
+      "d7-g0-run:d4-parent-a:primary",
+      "d7-g0-run:d4-parent-b:primary",
+      "d7-g0-run:d4-parent-c:primary",
+      "d7-g0-run:d4-parent-c:replicate",
+      "d7-g0-run:d4-parent-d:primary"
+    ],
+    "generation0_twin_ids": [
+      "d4-twin:d4-parent-a@1",
+      "d4-twin:d4-parent-b@1",
+      "d4-twin:d4-parent-c@1",
+      "d4-twin:d4-parent-d@1"
+    ],
+    "generation_lineage_identity": "d7-generation-lineage:sha256:52a82c8c87515dbf9d97124f1d0a00eb8a5331ef40af881d830239d55f224bf4",
+    "generation_member_identity": "d7-generation-member:sha256:4def5ca0d48c95c1b5a5060875f171c07979c4a2ca927e375137d3fb89212acb",
+    "initial_candidate_id": "d4-parent-c",
+    "initial_evaluation_id": "d7-g0-evaluation:d4-parent-c:primary",
+    "initial_result_id": "d7-g0-result:d4-parent-c:primary",
+    "initial_run_id": "d7-g0-run:d4-parent-c:primary",
+    "initial_twin_id": "d4-twin:d4-parent-c@1",
+    "memory_entry_digest": "9e22a2fc04f2db0f74ff7b830c422379f89e3e7e580e0fafb237ab849efc6fb4",
+    "memory_entry_identity": "76a4d28d2ec9d404031bd0f9226fcd183ec47d060dd8f52e5a825780435e6c47",
+    "memory_scope_identity": "f4a288c4ccbe27332ca50331578a649e153b8ae3ac2f1d8dc8a0a8b7cc6f0b55",
+    "next_cycle_d4_source_identity": "d7-d4-source:sha256:5fcf3c38282145593ebdc8de639b757217419d44fb08f3377671560711385bc9",
+    "returned_memory_entry_digest": "4bca7985bb87cf6a23c3f820f35d1b07949989e292c5a1110d629cacac689f94",
+    "returned_memory_entry_identity": "714b5c0e69c38b4b8bdecd93204909076837c8ee20a598852114794336e276f4",
+    "returned_memory_scope_identity": "f4a288c4ccbe27332ca50331578a649e153b8ae3ac2f1d8dc8a0a8b7cc6f0b55",
+    "schema": "d7_integrated_object_trace/1",
+    "selected_candidate_identity": "d7-selected-candidate:sha256:f7182f903d14c2875e3ad3ba6d01469d2e7b2a5cc1d8eef14b4bac7e50b4b1a6",
+    "selected_evaluation_identity": "d7-returned-evaluation:sha256:18065f064abd489c07e2618bd8d2d912de39256fd49fb2e02379bfccfcb03cd4",
+    "selected_option_identity": "d7-option:sha256:2d6446678f3db03d6955ab50bcaffd81681129b4c77594784dc90920912cc2a9",
+    "selected_result_binding_digest": "6893beb6b45ce16b53851b13cf175bcd437aa287941d7bd62bb84d3894131ad3",
+    "selected_result_binding_identity": "d7-result-binding:sha256:6893beb6b45ce16b53851b13cf175bcd437aa287941d7bd62bb84d3894131ad3",
+    "selected_result_identity": "d7-selected-result:sha256:05772db87dac7b2f7a18ebc79645ebf85aea7e48a2ef3160354d216c109331b7",
+    "selected_run_identity": "d7-selected-run:sha256:61fc74aa0a55d0d3041b17faa08e5f2453f26e34534b86c9621fb5c915512de1",
+    "selected_study_identity": "d7-study:sha256:8f4bc3f739d7e8302a8e98c77a5766ef2ff87608877768cedb41ce2295b83206",
+    "selected_twin_identity": "d7-selected-twin:sha256:f7182f903d14c2875e3ad3ba6d01469d2e7b2a5cc1d8eef14b4bac7e50b4b1a6@1",
+    "successor_evaluation_id": "d7-successor-evaluation:sha256:8bf0697d6c109f54092ade8b9bfd36dd80e1b7df351126bbfcb67238cb92e9b4",
+    "successor_generation_identity": "d7-successor-generation:sha256:bd0466ddb0dc1eeef5863aef82e24400bc3458ab264ded2aeb048949655b71d9",
+    "successor_result_id": "d7-successor-result:sha256:434a5f4404fedc323f246890071c34fffa55bf83bca7656cb5da81060a15b8f6",
+    "successor_run_id": "d7-successor-run:sha256:9a48263a6e9a14b06f54dece645b3b7b16ff61d85cf9922d45509a31c11ad91f"
+  },
+  "physics_scope": {
+    "design_space_reference": "d4-domain-neutral-synthetic@0.1",
+    "execution_model_reference": [
+      "d4.synthetic.analytic",
+      "0.1"
+    ],
+    "execution_semantics_identity": "d7.d4-closed-form-integrated-execution@0.1",
+    "fidelity": {
+      "kind": "NONE",
+      "reason": "closed-form analytic execution has no fidelity ladder"
+    },
+    "objective_projection": [
+      {
+        "canonical_unit": "dimensionless",
+        "direction": "maximize",
+        "metric": "yield_score",
+        "name": "yield_score"
+      },
+      {
+        "canonical_unit": "dimensionless",
+        "direction": "minimize",
+        "metric": "loss_score",
+        "name": "loss_score"
+      },
+      {
+        "canonical_unit": "dimensionless",
+        "direction": "maximize",
+        "metric": "stability_score",
+        "name": "stability_score"
+      }
+    ],
+    "operating_conditions": {
+      "synthetic_environment": {
+        "type": "categorical",
+        "value": "nominal"
+      }
+    },
+    "physics_scope_identity": "de2455680c741a85362d58db9b7f3c39a3c769a13a646debdbf60d80204f1601",
+    "problem_system_identity": "d4-synthetic-objectives-v0.1",
+    "schema": "d7_loop_physics_scope/1",
+    "solver_identity": [
+      "d4.closed-form.synthetic",
+      "0.1"
+    ]
+  },
+  "preregistration": "docs/design-d7-integrated-discovery-loop-prereg.md",
+  "returned_d1_evaluation": {
+    "identity": "d7-returned-evaluation:sha256:18065f064abd489c07e2618bd8d2d912de39256fd49fb2e02379bfccfcb03cd4",
+    "reason": "preregistered D7 selected synthetic execution completed with finite projected objectives and exact Candidate/Twin/Study/result binding",
+    "status": "eligible"
+  },
+  "returned_d3_memory": {
+    "digest": "4bca7985bb87cf6a23c3f820f35d1b07949989e292c5a1110d629cacac689f94",
+    "identity": "714b5c0e69c38b4b8bdecd93204909076837c8ee20a598852114794336e276f4",
+    "scope_identity": "f4a288c4ccbe27332ca50331578a649e153b8ae3ac2f1d8dc8a0a8b7cc6f0b55"
+  },
+  "schema": "d7_integrated_experiment_results/1",
+  "selected_identities": {
+    "candidate": "d7-selected-candidate:sha256:f7182f903d14c2875e3ad3ba6d01469d2e7b2a5cc1d8eef14b4bac7e50b4b1a6",
+    "execution_request": "d7-execution-request:sha256:61fc74aa0a55d0d3041b17faa08e5f2453f26e34534b86c9621fb5c915512de1",
+    "run": "d7-selected-run:sha256:61fc74aa0a55d0d3041b17faa08e5f2453f26e34534b86c9621fb5c915512de1",
+    "study": "d7-study:sha256:8f4bc3f739d7e8302a8e98c77a5766ef2ff87608877768cedb41ce2295b83206",
+    "twin": "d7-selected-twin:sha256:f7182f903d14c2875e3ad3ba6d01469d2e7b2a5cc1d8eef14b4bac7e50b4b1a6@1"
+  },
+  "selected_option": "B",
+  "selected_result": {
+    "model": [
+      "d4.synthetic.analytic",
+      "0.1"
+    ],
+    "problem_id": "d4-synthetic-objectives-v0.1",
+    "result_id": "d7-selected-result:sha256:05772db87dac7b2f7a18ebc79645ebf85aea7e48a2ef3160354d216c109331b7",
+    "solver": [
+      "d4.closed-form.synthetic",
+      "0.1"
+    ],
+    "target": "FAIL",
+    "values": {
+      "loss_score": 33.0,
+      "stability_score": -12.0,
+      "yield_score": 35.0
+    }
+  },
+  "selected_result_binding": {
+    "digest": "6893beb6b45ce16b53851b13cf175bcd437aa287941d7bd62bb84d3894131ad3",
+    "identity": "d7-result-binding:sha256:6893beb6b45ce16b53851b13cf175bcd437aa287941d7bd62bb84d3894131ad3",
+    "payload": {
+      "candidate": {
+        "candidate_id": "d7-selected-candidate:sha256:f7182f903d14c2875e3ad3ba6d01469d2e7b2a5cc1d8eef14b4bac7e50b4b1a6",
+        "schema": "design_candidate_reference/1"
+      },
+      "design_space": {
+        "schema": "design_space_reference/1",
+        "space_id": "d4-domain-neutral-synthetic",
+        "version": "0.1"
+      },
+      "schema": "design_result_binding/1",
+      "twin": {
+        "schema": "scientific_twin_reference/1",
+        "twin_id": "d7-selected-twin:sha256:f7182f903d14c2875e3ad3ba6d01469d2e7b2a5cc1d8eef14b4bac7e50b4b1a6",
+        "version": "1"
+      }
+    }
+  },
+  "selection_ordering": [
+    {
+      "information_per_compute": "2/2",
+      "information_units": 2,
+      "label": "B",
+      "model_disagreement": 0.2,
+      "option_identity": "d7-option:sha256:2d6446678f3db03d6955ab50bcaffd81681129b4c77594784dc90920912cc2a9",
+      "rank": 1
+    },
+    {
+      "information_per_compute": "1/1",
+      "information_units": 1,
+      "label": "A",
+      "model_disagreement": 0.04,
+      "option_identity": "d7-option:sha256:43c0172f0ce3383db4d4a39fe1bf970dade3ddecadad5f77c675b580a4d8405b",
+      "rank": 2
+    },
+    {
+      "information_per_compute": "1/5",
+      "information_units": 1,
+      "label": "C",
+      "model_disagreement": 0.1,
+      "option_identity": "d7-option:sha256:fc9e0ef52eacea9b6ce87df3519f3a3fe47f86793e4b45edcc76ff7deb509fd0",
+      "rank": 3
+    }
+  ],
+  "signal_table": {
+    "A": {
+      "alpha": {
+        "loss_score": 18.0,
+        "stability_score": 66.0,
+        "yield_score": 88.0
+      },
+      "beta": {
+        "loss_score": 20.0,
+        "stability_score": 64.0,
+        "yield_score": 84.0
+      },
+      "compute_cost": 1,
+      "contradiction": false,
+      "declared_uncertainty": 0.08,
+      "derivation_semantics": {
+        "contradiction": "d7-assessment-classification-disagreement@0.1",
+        "disagreement": "d7-normalized-max-model-disagreement@0.1",
+        "information_proxy": "d7-six-predicate-count@0.1",
+        "novelty": "d7-min-typed-hamming@0.1"
+      },
+      "high_disagreement": false,
+      "high_novelty": false,
+      "high_uncertainty": false,
+      "information_per_compute": "1/1",
+      "information_proxy_units": 1,
+      "model_disagreement": 0.04,
+      "novelty": 0.2,
+      "partial_success_relevance": true,
+      "uncertainty_kind": "DECLARED",
+      "useful_failure_relevance": false
+    },
+    "B": {
+      "alpha": {
+        "loss_score": 22.0,
+        "stability_score": 54.0,
+        "yield_score": 52.0
+      },
+      "beta": {
+        "loss_score": 32.0,
+        "stability_score": 38.0,
+        "yield_score": 72.0
+      },
+      "compute_cost": 2,
+      "contradiction": false,
+      "declared_uncertainty": 0.31,
+      "derivation_semantics": {
+        "contradiction": "d7-assessment-classification-disagreement@0.1",
+        "disagreement": "d7-normalized-max-model-disagreement@0.1",
+        "information_proxy": "d7-six-predicate-count@0.1",
+        "novelty": "d7-min-typed-hamming@0.1"
+      },
+      "high_disagreement": true,
+      "high_novelty": false,
+      "high_uncertainty": true,
+      "information_per_compute": "2/2",
+      "information_proxy_units": 2,
+      "model_disagreement": 0.2,
+      "novelty": 0.4,
+      "partial_success_relevance": false,
+      "uncertainty_kind": "DECLARED",
+      "useful_failure_relevance": false
+    },
+    "C": {
+      "alpha": {
+        "loss_score": 24.0,
+        "stability_score": 62.0,
+        "yield_score": 60.0
+      },
+      "beta": {
+        "loss_score": 29.0,
+        "stability_score": 72.0,
+        "yield_score": 50.0
+      },
+      "compute_cost": 5,
+      "contradiction": false,
+      "declared_uncertainty": 0.18,
+      "derivation_semantics": {
+        "contradiction": "d7-assessment-classification-disagreement@0.1",
+        "disagreement": "d7-normalized-max-model-disagreement@0.1",
+        "information_proxy": "d7-six-predicate-count@0.1",
+        "novelty": "d7-min-typed-hamming@0.1"
+      },
+      "high_disagreement": false,
+      "high_novelty": true,
+      "high_uncertainty": false,
+      "information_per_compute": "1/5",
+      "information_proxy_units": 1,
+      "model_disagreement": 0.1,
+      "novelty": 0.6,
+      "partial_success_relevance": false,
+      "uncertainty_kind": "DECLARED",
+      "useful_failure_relevance": false
+    }
+  },
+  "successor_evaluation": {
+    "evaluation_id": "d7-successor-evaluation:sha256:8bf0697d6c109f54092ade8b9bfd36dd80e1b7df351126bbfcb67238cb92e9b4",
+    "result_id": "d7-successor-result:sha256:434a5f4404fedc323f246890071c34fffa55bf83bca7656cb5da81060a15b8f6",
+    "run_id": "d7-successor-run:sha256:9a48263a6e9a14b06f54dece645b3b7b16ff61d85cf9922d45509a31c11ad91f",
+    "target": "FAIL",
+    "values": {
+      "loss_score": 5.0,
+      "stability_score": 76.0,
+      "yield_score": 46.0
+    }
+  }
+}
