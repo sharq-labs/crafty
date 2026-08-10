@@ -75,6 +75,52 @@ def _canonical_json(payload: Mapping[str, Any]) -> str:
     return json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
 
 
+def _study_digest_prefix(study_identity_value: str) -> str:
+    study_id = str(study_identity_value).strip()
+    if not study_id.startswith(MULTIROTOR_STUDY_ID_PREFIX):
+        raise InvalidScientificProblem("malformed MVR1 study identity")
+    digest = study_id.removeprefix(MULTIROTOR_STUDY_ID_PREFIX)
+    if len(digest) != 64 or any(char not in "0123456789abcdef" for char in digest):
+        raise InvalidScientificProblem("malformed MVR1 study identity digest")
+    return digest[:16]
+
+
+def _study_bound_evaluation_id(candidate_id: str, study_identity_value: str) -> str:
+    return f"mvr1-eval:{candidate_id}:{_study_digest_prefix(study_identity_value)}"
+
+
+def _study_bound_result_id(candidate_id: str, study_identity_value: str) -> str:
+    return f"mvr1-result:{candidate_id}:{_study_digest_prefix(study_identity_value)}"
+
+
+def _study_bound_run_id(candidate_id: str, study_identity_value: str) -> str:
+    return f"mvr1:{study_identity_value}:{candidate_id}"
+
+
+def _quantity_from_payload(payload: Mapping[str, Any], *, context: str) -> Quantity:
+    try:
+        magnitude = payload["magnitude"]
+        units = payload["units"]
+    except KeyError as exc:
+        raise InvalidScientificProblem(
+            f"malformed MVR1 study quantity in {context}"
+        ) from exc
+    return Quantity(magnitude, units)
+
+
+def _require_quantity_equal(
+    actual: Quantity,
+    expected: Quantity,
+    unit: str,
+    *,
+    context: str,
+) -> None:
+    if not isinstance(actual, Quantity):
+        raise InvalidScientificProblem(f"{context} must be a Quantity")
+    if actual.magnitude_in(unit) != expected.magnitude_in(unit):
+        raise InvalidScientificProblem(f"MVR1 {context} mismatch")
+
+
 @dataclass(frozen=True)
 class MultirotorStudySpecification:
     """Typed MVR1 study specification.
@@ -220,7 +266,10 @@ class MultirotorStudyBinding:
         study_id = str(self.study_identity).strip()
         if not study_id.startswith(MULTIROTOR_STUDY_ID_PREFIX):
             raise InvalidScientificProblem("malformed MVR1 study identity")
-        payload = dict(self.study_payload)
+        try:
+            payload = json.loads(_canonical_json(self.study_payload))
+        except TypeError as exc:
+            raise InvalidScientificProblem("malformed MVR1 study binding payload") from exc
         expected = f"{MULTIROTOR_STUDY_ID_PREFIX}{hashlib.sha256(_canonical_json(payload).encode('utf-8')).hexdigest()}"
         if expected != study_id:
             raise InvalidScientificProblem("MVR1 study binding digest mismatch")
@@ -232,13 +281,17 @@ class MultirotorStudyBinding:
             "schema": "multirotor_study_binding",
             "schema_version": MULTIROTOR_STUDY_VERSION,
             "study_identity": self.study_identity,
-            "study_payload": self.study_payload,
+            "study_payload": json.loads(_canonical_json(self.study_payload)),
         }
 
     @classmethod
     def from_dict(cls, payload: Mapping[str, Any]) -> "MultirotorStudyBinding":
         if payload.get("schema") != "multirotor_study_binding":
             raise InvalidScientificProblem("malformed MVR1 study binding schema")
+        if payload.get("schema_version") != MULTIROTOR_STUDY_VERSION:
+            raise InvalidScientificProblem("malformed MVR1 study binding version")
+        if "study_identity" not in payload or "study_payload" not in payload:
+            raise InvalidScientificProblem("malformed MVR1 study binding payload")
         return cls(
             study_identity=payload["study_identity"],
             study_payload=payload["study_payload"],
@@ -262,6 +315,194 @@ def _binding_for(
     )
 
 
+def _binding_specification_payload(
+    binding: MultirotorStudyBinding,
+) -> Mapping[str, Mapping[str, Mapping[str, Any]]]:
+    try:
+        spec = binding.study_payload["study_specification"]
+        operating = spec["operating_conditions"]
+        targets = spec["target_requirements"]
+    except KeyError as exc:
+        raise InvalidScientificProblem("malformed MVR1 study identity payload") from exc
+    if spec.get("schema") != MULTIROTOR_STUDY_SCHEMA:
+        raise InvalidScientificProblem("malformed MVR1 study specification schema")
+    if spec.get("schema_version") != MULTIROTOR_STUDY_VERSION:
+        raise InvalidScientificProblem("malformed MVR1 study specification version")
+    if not isinstance(operating, Mapping) or not isinstance(targets, Mapping):
+        raise InvalidScientificProblem("malformed MVR1 study specification payload")
+    return {
+        "operating_conditions": operating,
+        "target_requirements": targets,
+    }
+
+
+def _require_study_identity_marker(
+    source: Mapping[str, Any],
+    expected_study_identity: str,
+    *,
+    context: str,
+) -> None:
+    if source.get("study_identity") != expected_study_identity:
+        raise InvalidScientificProblem(f"MVR1 {context} study identity marker mismatch")
+
+
+def _require_expected_bound_ids(
+    evaluation: DesignEvaluation,
+    expected_study_identity: str,
+) -> None:
+    candidate_id = evaluation.candidate.candidate_id
+    if evaluation.evaluation_id != _study_bound_evaluation_id(
+        candidate_id, expected_study_identity
+    ):
+        raise InvalidScientificProblem("MVR1 evaluation_id study binding mismatch")
+    if evaluation.result.result_id != _study_bound_result_id(
+        candidate_id, expected_study_identity
+    ):
+        raise InvalidScientificProblem("MVR1 result_id study binding mismatch")
+    if evaluation.result.provenance.run_id != _study_bound_run_id(
+        candidate_id, expected_study_identity
+    ):
+        raise InvalidScientificProblem("MVR1 provenance run_id study binding mismatch")
+
+
+def _require_binding_consistency(
+    evaluation: DesignEvaluation,
+    expected_study_identity: str,
+) -> MultirotorStudyBinding:
+    raw_sources = (
+        ("evaluation metadata", evaluation.metadata),
+        ("result metadata", evaluation.result.metadata),
+        ("provenance metadata", evaluation.result.provenance.metadata),
+    )
+    bindings: list[MultirotorStudyBinding] = []
+    canonical_raw: str | None = None
+    for source_name, source in raw_sources:
+        _require_study_identity_marker(
+            source, expected_study_identity, context=source_name
+        )
+        raw = source.get(MULTIROTOR_STUDY_BINDING_METADATA_KEY)
+        if not isinstance(raw, Mapping):
+            raise InvalidScientificProblem(f"MVR1 {source_name} is missing study binding")
+        binding = MultirotorStudyBinding.from_dict(raw)
+        if binding.study_identity != expected_study_identity:
+            raise InvalidScientificProblem(f"MVR1 {source_name} study binding mismatch")
+        raw_json = _canonical_json(binding.to_dict())
+        if canonical_raw is None:
+            canonical_raw = raw_json
+        elif raw_json != canonical_raw:
+            raise InvalidScientificProblem(
+                f"MVR1 {source_name} study binding payload mismatch"
+            )
+        bindings.append(binding)
+    return bindings[0]
+
+
+def _require_provenance_inputs_match_binding(
+    evaluation: DesignEvaluation,
+    binding: MultirotorStudyBinding,
+) -> None:
+    spec = _binding_specification_payload(binding)
+    provenance_inputs = evaluation.result.provenance.inputs
+    required = (
+        (
+            "payload_mass",
+            "kg",
+            spec["operating_conditions"],
+        ),
+        (
+            "minimum_hover_endurance",
+            "s",
+            spec["target_requirements"],
+        ),
+        (
+            "maximum_takeoff_mass",
+            "kg",
+            spec["target_requirements"],
+        ),
+        (
+            "maximum_disk_loading",
+            "N/m^2",
+            spec["target_requirements"],
+        ),
+    )
+    for name, unit, source in required:
+        if name not in source:
+            raise InvalidScientificProblem(
+                f"MVR1 study binding is missing {name}"
+            )
+        if name not in provenance_inputs:
+            raise InvalidScientificProblem(
+                f"MVR1 provenance inputs are missing {name}"
+            )
+        expected = _quantity_from_payload(source[name], context=name)
+        _require_quantity_equal(
+            provenance_inputs[name],
+            expected,
+            unit,
+            context=f"provenance input {name}",
+        )
+
+
+def _require_target_margins_match_binding(
+    evaluation: DesignEvaluation,
+    binding: MultirotorStudyBinding,
+) -> None:
+    spec = _binding_specification_payload(binding)
+    targets = spec["target_requirements"]
+    maximum_takeoff_mass = _quantity_from_payload(
+        targets["maximum_takeoff_mass"], context="maximum_takeoff_mass"
+    )
+    minimum_hover_endurance = _quantity_from_payload(
+        targets["minimum_hover_endurance"], context="minimum_hover_endurance"
+    )
+    maximum_disk_loading = _quantity_from_payload(
+        targets["maximum_disk_loading"], context="maximum_disk_loading"
+    )
+    result = evaluation.result
+    _require_quantity_equal(
+        result.value("mass_margin"),
+        maximum_takeoff_mass - result.value("total_mass"),
+        "kg",
+        context="mass_margin",
+    )
+    _require_quantity_equal(
+        result.value("endurance_margin"),
+        result.value("hover_endurance") - minimum_hover_endurance,
+        "s",
+        context="endurance_margin",
+    )
+    _require_quantity_equal(
+        result.value("disk_loading_margin"),
+        maximum_disk_loading - result.value("disk_loading"),
+        "N/m^2",
+        context="disk_loading_margin",
+    )
+
+
+def _require_assessment_matches_evaluation(
+    assessment: "MultirotorStudyTargetAssessment",
+    evaluation: DesignEvaluation,
+) -> None:
+    _require_quantity_equal(
+        assessment.mass_margin,
+        evaluation.result.value("mass_margin"),
+        "kg",
+        context="target assessment mass_margin",
+    )
+    _require_quantity_equal(
+        assessment.endurance_margin,
+        evaluation.result.value("endurance_margin"),
+        "s",
+        context="target assessment endurance_margin",
+    )
+    _require_quantity_equal(
+        assessment.disk_loading_margin,
+        evaluation.result.value("disk_loading_margin"),
+        "N/m^2",
+        context="target assessment disk_loading_margin",
+    )
+
+
 def require_study_binding(
     evaluation: DesignEvaluation,
     expected_study_identity: str,
@@ -273,29 +514,11 @@ def require_study_binding(
     expected = str(expected_study_identity).strip()
     if not expected:
         raise InvalidScientificProblem("expected MVR1 study identity is required")
-    raw = evaluation.metadata.get(MULTIROTOR_STUDY_BINDING_METADATA_KEY)
-    if raw is None:
-        raw = evaluation.result.metadata.get(MULTIROTOR_STUDY_BINDING_METADATA_KEY)
-    if raw is None:
-        raw = evaluation.result.provenance.metadata.get(
-            MULTIROTOR_STUDY_BINDING_METADATA_KEY
-        )
-    if not isinstance(raw, Mapping):
-        raise InvalidScientificProblem("MVR1 evaluation is missing study binding")
-    binding = MultirotorStudyBinding.from_dict(raw)
-    if binding.study_identity != expected:
-        raise InvalidScientificProblem("MVR1 evaluation study identity mismatch")
-
-    for source_name, source in (
-        ("result metadata", evaluation.result.metadata),
-        ("provenance metadata", evaluation.result.provenance.metadata),
-    ):
-        source_raw = source.get(MULTIROTOR_STUDY_BINDING_METADATA_KEY)
-        if not isinstance(source_raw, Mapping):
-            raise InvalidScientificProblem(f"MVR1 {source_name} is missing study binding")
-        source_binding = MultirotorStudyBinding.from_dict(source_raw)
-        if source_binding.study_identity != binding.study_identity:
-            raise InvalidScientificProblem(f"MVR1 {source_name} study binding mismatch")
+    _study_digest_prefix(expected)
+    _require_expected_bound_ids(evaluation, expected)
+    binding = _require_binding_consistency(evaluation, expected)
+    _require_provenance_inputs_match_binding(evaluation, binding)
+    _require_target_margins_match_binding(evaluation, binding)
     return binding
 
 
@@ -360,6 +583,7 @@ class MultirotorStudyEvaluation:
         if self.assessment.study_identity != self.study_identity:
             raise InvalidScientificProblem("MVR1 assessment/evaluation study mismatch")
         require_study_binding(self.evaluation, self.study_identity)
+        _require_assessment_matches_evaluation(self.assessment, self.evaluation)
 
 
 def _study_bound_result(
@@ -373,7 +597,7 @@ def _study_bound_result(
     provenance_metadata[MULTIROTOR_STUDY_BINDING_METADATA_KEY] = binding.to_dict()
     provenance_metadata["study_identity"] = binding.study_identity
     provenance = ProvenanceRecord(
-        run_id=f"mvr1:{binding.study_identity}:{candidate_id}",
+        run_id=_study_bound_run_id(candidate_id, binding.study_identity),
         software_version="mvr1-v0.1",
         git_commit=str(source_revision).strip() or base.provenance.git_commit,
         models=base.provenance.models,
@@ -391,7 +615,7 @@ def _study_bound_result(
     metadata["study_identity"] = binding.study_identity
     return replace(
         base,
-        result_id=f"mvr1-result:{candidate_id}:{binding.study_identity.removeprefix(MULTIROTOR_STUDY_ID_PREFIX)[:16]}",
+        result_id=_study_bound_result_id(candidate_id, binding.study_identity),
         problem_id="mvr1-study-bound-reference-hover",
         provenance=provenance,
         metadata=metadata,
@@ -429,7 +653,9 @@ def evaluate_study_candidate(
     metadata[MULTIROTOR_STUDY_BINDING_METADATA_KEY] = binding.to_dict()
     metadata["study_identity"] = binding.study_identity
     evaluation = DesignEvaluation(
-        evaluation_id=f"mvr1-eval:{candidate.candidate_id}:{binding.study_identity.removeprefix(MULTIROTOR_STUDY_ID_PREFIX)[:16]}",
+        evaluation_id=_study_bound_evaluation_id(
+            candidate.candidate_id, binding.study_identity
+        ),
         candidate=base_evaluation.candidate,
         twin=base_evaluation.twin,
         design_space=base_evaluation.design_space,

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-import json
+from copy import deepcopy
+from dataclasses import replace
 import os
 import subprocess
 import sys
@@ -13,6 +14,8 @@ from engcore.scientific.errors import ScientificCoreError
 from engcore.scientific.units.quantity import Quantity
 from engcore.systems.aerospace.multirotor.study import (
     MULTIROTOR_STUDY_BINDING_METADATA_KEY,
+    MULTIROTOR_STUDY_ID_PREFIX,
+    MultirotorStudyBinding,
     MultirotorStudyEvaluation,
     MultirotorStudySpecification,
     evaluate_study_candidate,
@@ -22,7 +25,94 @@ from engcore.systems.aerospace.multirotor.study import (
     study_a_specification,
     study_b_specification,
     study_identity,
+    study_identity_payload,
 )
+
+
+EXPECTED_STUDY_A_ID = (
+    "multirotor-study-v0.1:sha256:"
+    "591616a4da0649b0894fa816c2dbe1d3741dd8ee3f02b73330d3a607a3e92279"
+)
+EXPECTED_STUDY_B_ID = (
+    "multirotor-study-v0.1:sha256:"
+    "11493992e8da46864897d570759b91b181b748902da7a6773cd6a2be1f69c2e7"
+)
+
+
+def _small_study_pair() -> tuple[MultirotorStudyEvaluation, MultirotorStudyEvaluation]:
+    design_space, batch = generate_mvr1_candidate_universe(count=4, attempt_budget=20)
+    candidate = batch.candidates[0]
+    twin = {item.reference.key: item for item in batch.twins}[candidate.twin.key]
+    return (
+        evaluate_study_candidate(
+            candidate=candidate,
+            twin=twin,
+            design_space=design_space,
+            specification=study_a_specification(),
+            count=4,
+            attempt_budget=20,
+        ),
+        evaluate_study_candidate(
+            candidate=candidate,
+            twin=twin,
+            design_space=design_space,
+            specification=study_b_specification(),
+            count=4,
+            attempt_budget=20,
+        ),
+    )
+
+
+def _digest_prefix(study_id: str) -> str:
+    return study_id.removeprefix(MULTIROTOR_STUDY_ID_PREFIX)[:16]
+
+
+def _with_all_binding_metadata(evaluation, binding_payload):
+    metadata = dict(evaluation.metadata)
+    result_metadata = dict(evaluation.result.metadata)
+    provenance_metadata = dict(evaluation.result.provenance.metadata)
+    for target in (metadata, result_metadata, provenance_metadata):
+        target[MULTIROTOR_STUDY_BINDING_METADATA_KEY] = deepcopy(binding_payload)
+        target["study_identity"] = binding_payload["study_identity"]
+    provenance = replace(evaluation.result.provenance, metadata=provenance_metadata)
+    result = replace(evaluation.result, metadata=result_metadata, provenance=provenance)
+    return replace(evaluation, metadata=metadata, result=result)
+
+
+def _with_mvr1_ids(evaluation, study_id: str):
+    candidate_id = evaluation.candidate.candidate_id
+    digest = _digest_prefix(study_id)
+    provenance = replace(
+        evaluation.result.provenance,
+        run_id=f"mvr1:{study_id}:{candidate_id}",
+    )
+    result = replace(
+        evaluation.result,
+        result_id=f"mvr1-result:{candidate_id}:{digest}",
+        provenance=provenance,
+    )
+    return replace(
+        evaluation,
+        evaluation_id=f"mvr1-eval:{candidate_id}:{digest}",
+        result=result,
+    )
+
+
+def _binding_for_spec(
+    specification: MultirotorStudySpecification,
+    *,
+    count: int = 4,
+    attempt_budget: int = 20,
+) -> dict:
+    payload = study_identity_payload(
+        specification, count=count, attempt_budget=attempt_budget
+    )
+    return MultirotorStudyBinding(
+        study_identity=study_identity(
+            specification, count=count, attempt_budget=attempt_budget
+        ),
+        study_payload=payload,
+    ).to_dict()
 
 
 def test_study_specification_is_unit_safe_and_semantically_separated() -> None:
@@ -97,6 +187,144 @@ def test_study_identity_is_deterministic_unit_normalized_and_field_sensitive() -
     assert study_identity(canonical) == study_identity(canonical)
     assert study_identity(canonical) != study_identity(changed)
     assert study_identity(study_a_specification()) != study_identity(study_b_specification())
+    assert study_identity(study_a_specification()) == EXPECTED_STUDY_A_ID
+    assert study_identity(study_b_specification()) == EXPECTED_STUDY_B_ID
+
+
+def test_ordinary_study_a_and_b_bindings_validate() -> None:
+    eval_a, eval_b = _small_study_pair()
+
+    assert require_study_binding(eval_a.evaluation, eval_a.study_identity).study_identity == (
+        eval_a.study_identity
+    )
+    assert require_study_binding(eval_b.evaluation, eval_b.study_identity).study_identity == (
+        eval_b.study_identity
+    )
+
+
+def test_cross_study_validation_and_coherent_rebind_fail_closed() -> None:
+    eval_a, eval_b = _small_study_pair()
+
+    with pytest.raises(ScientificCoreError):
+        require_study_binding(eval_a.evaluation, eval_b.study_identity)
+
+    forged = _with_all_binding_metadata(
+        eval_a.evaluation,
+        eval_b.evaluation.metadata[MULTIROTOR_STUDY_BINDING_METADATA_KEY],
+    )
+    with pytest.raises(ScientificCoreError):
+        require_study_binding(forged, eval_b.study_identity)
+
+
+@pytest.mark.parametrize(
+    "mutator",
+    (
+        lambda evaluation: replace(evaluation, evaluation_id="mvr1-eval:forged"),
+        lambda evaluation: replace(
+            evaluation,
+            result=replace(evaluation.result, result_id="mvr1-result:forged"),
+        ),
+        lambda evaluation: replace(
+            evaluation,
+            result=replace(
+                evaluation.result,
+                provenance=replace(
+                    evaluation.result.provenance,
+                    run_id="mvr1:forged",
+                ),
+            ),
+        ),
+    ),
+)
+def test_forged_bound_identifiers_fail_closed(mutator) -> None:
+    eval_a, _eval_b = _small_study_pair()
+
+    with pytest.raises(ScientificCoreError):
+        require_study_binding(mutator(eval_a.evaluation), eval_a.study_identity)
+
+
+def test_missing_binding_location_and_mismatching_study_marker_fail_closed() -> None:
+    eval_a, _eval_b = _small_study_pair()
+
+    result_metadata = dict(eval_a.evaluation.result.metadata)
+    result_metadata.pop(MULTIROTOR_STUDY_BINDING_METADATA_KEY)
+    missing_result = replace(
+        eval_a.evaluation,
+        result=replace(eval_a.evaluation.result, metadata=result_metadata),
+    )
+    with pytest.raises(ScientificCoreError):
+        require_study_binding(missing_result, eval_a.study_identity)
+
+    provenance_metadata = dict(eval_a.evaluation.result.provenance.metadata)
+    provenance_metadata["study_identity"] = "not-the-bound-study"
+    mismatched_marker = replace(
+        eval_a.evaluation,
+        result=replace(
+            eval_a.evaluation.result,
+            provenance=replace(
+                eval_a.evaluation.result.provenance,
+                metadata=provenance_metadata,
+            ),
+        ),
+    )
+    with pytest.raises(ScientificCoreError):
+        require_study_binding(mismatched_marker, eval_a.study_identity)
+
+
+def test_study_b_payload_with_study_a_provenance_inputs_fails_closed() -> None:
+    eval_a, eval_b = _small_study_pair()
+    forged = _with_mvr1_ids(
+        _with_all_binding_metadata(
+            eval_a.evaluation,
+            eval_b.evaluation.metadata[MULTIROTOR_STUDY_BINDING_METADATA_KEY],
+        ),
+        eval_b.study_identity,
+    )
+
+    with pytest.raises(ScientificCoreError):
+        require_study_binding(forged, eval_b.study_identity)
+
+
+def test_altered_target_thresholds_inconsistent_with_provenance_fail_closed() -> None:
+    eval_a, _eval_b = _small_study_pair()
+    altered_spec = MultirotorStudySpecification(
+        payload_mass=Quantity(0.5, "kg"),
+        minimum_hover_endurance=Quantity(25.0, "min"),
+        maximum_takeoff_mass=Quantity(3.0, "kg"),
+        maximum_disk_loading=Quantity(120.0, "N/m^2"),
+    )
+    altered_binding = _binding_for_spec(altered_spec)
+    forged = _with_mvr1_ids(
+        _with_all_binding_metadata(eval_a.evaluation, altered_binding),
+        altered_binding["study_identity"],
+    )
+
+    with pytest.raises(ScientificCoreError):
+        require_study_binding(forged, altered_binding["study_identity"])
+
+
+def test_target_margins_inconsistent_with_bound_target_fail_closed() -> None:
+    eval_a, _eval_b = _small_study_pair()
+    values = dict(eval_a.evaluation.result.values)
+    values["mass_margin"] = Quantity(999.0, "kg")
+    forged = replace(
+        eval_a.evaluation,
+        result=replace(eval_a.evaluation.result, values=values),
+    )
+
+    with pytest.raises(ScientificCoreError):
+        require_study_binding(forged, eval_a.study_identity)
+
+
+def test_nested_binding_payload_mutation_fails_closed() -> None:
+    eval_a, _eval_b = _small_study_pair()
+    raw = eval_a.evaluation.metadata[MULTIROTOR_STUDY_BINDING_METADATA_KEY]
+    raw["study_payload"]["study_specification"]["operating_conditions"][
+        "payload_mass"
+    ]["magnitude"] = 0.75
+
+    with pytest.raises(ScientificCoreError):
+        require_study_binding(eval_a.evaluation, eval_a.study_identity)
 
 
 def test_same_candidate_and_twin_can_be_bound_to_distinct_studies() -> None:
@@ -213,13 +441,18 @@ def test_full_studies_a_and_b_use_same_universe_and_a_reproduces_mvr0() -> None:
     study_a = run_multirotor_study(study_a_specification())
     study_b = run_multirotor_study(study_b_specification())
     summary_a = study_a.summary()
+    summary_b = study_b.summary()
 
     assert summary_a["generated_candidates"] == 1000
     assert summary_a["rejected_proposals"] == 671
     assert summary_a["reference_target_pass_count"] == 93
     assert summary_a["pareto_member_count"] == 26
     assert summary_a["rotor_count_counts"] == {4: 335, 6: 333, 8: 332}
-    assert study_b.summary()["generated_candidates"] == 1000
+    assert summary_b["generated_candidates"] == 1000
+    assert summary_b["rejected_proposals"] == 671
+    assert summary_b["reference_target_pass_count"] == 163
+    assert summary_b["pareto_member_count"] == 28
+    assert summary_b["rotor_count_counts"] == {4: 335, 6: 333, 8: 332}
     assert study_b.study_identity != study_a.study_identity
     assert [item.candidate_id for item in study_a.batch.candidates] == [
         item.candidate_id for item in study_b.batch.candidates
@@ -272,7 +505,7 @@ def test_no_mvr1_logic_leaks_into_frozen_general_design_layer() -> None:
     assert MULTIROTOR_STUDY_BINDING_METADATA_KEY.lower() not in source
 
 
-def test_cli_converts_raw_inputs_at_boundary_and_uses_non_validation_language() -> None:
+def test_cli_exposes_only_study_fields_and_uses_non_validation_language() -> None:
     root = Path(__file__).resolve().parents[3]
     env = dict(os.environ)
     env["PYTHONPATH"] = f"{root / 'src'}{os.pathsep}{root}"
@@ -281,18 +514,7 @@ def test_cli_converts_raw_inputs_at_boundary_and_uses_non_validation_language() 
             sys.executable,
             "-m",
             "experiments.multirotor_mvr1.run",
-            "--payload-kg",
-            "0.5",
-            "--min-endurance-min",
-            "15",
-            "--max-mass-kg",
-            "3",
-            "--max-disk-loading",
-            "120",
-            "--count",
-            "8",
-            "--attempt-budget",
-            "40",
+            "--help",
         ],
         cwd=root,
         env=env,
@@ -300,14 +522,12 @@ def test_cli_converts_raw_inputs_at_boundary_and_uses_non_validation_language() 
         capture_output=True,
         text=True,
     )
-    payload = json.loads(completed.stdout)
-    assert payload["study_specification"]["operating_conditions"]["payload_mass"] == {
-        "magnitude": 0.5,
-        "units": "kg",
-    }
-    assert payload["study_specification"]["target_requirements"][
-        "minimum_hover_endurance"
-    ] == {"magnitude": 900.0, "units": "s"}
+    assert "--payload-kg" in completed.stdout
+    assert "--min-endurance-min" in completed.stdout
+    assert "--max-mass-kg" in completed.stdout
+    assert "--max-disk-loading" in completed.stdout
+    assert "--count" not in completed.stdout
+    assert "--attempt-budget" not in completed.stdout
 
     lowered = completed.stdout.lower()
     forbidden = (

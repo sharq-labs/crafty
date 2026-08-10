@@ -18,8 +18,6 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--min-endurance-min", type=float, required=True)
     parser.add_argument("--max-mass-kg", type=float, required=True)
     parser.add_argument("--max-disk-loading", type=float, required=True)
-    parser.add_argument("--count", type=int, default=1000)
-    parser.add_argument("--attempt-budget", type=int, default=3000)
     return parser
 
 
@@ -31,11 +29,7 @@ def main() -> None:
         maximum_takeoff_mass=Quantity(args.max_mass_kg, "kg"),
         maximum_disk_loading=Quantity(args.max_disk_loading, "N/m^2"),
     )
-    run = run_multirotor_study(
-        specification,
-        count=args.count,
-        attempt_budget=args.attempt_budget,
-    )
+    run = run_multirotor_study(specification)
     print(json.dumps(run.summary(), indent=2, sort_keys=True))
 
 
