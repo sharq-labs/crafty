@@ -1,89 +1,87 @@
-# Scientific Discovery Platform - Release 1 preparation
+# Scientific Discovery Platform — Release 1
 
-Status: **PRE-RELEASE 1 - not yet shipped or tagged**
+Status: **PRE-RELEASE 1 — final authorization and tag pending**
 
-Target distribution: `engineering-ai-core` `1.0.0`
+Target distribution: `engineering-ai-core` `1.0.0` (Python `>=3.11`)
 
-The repository packages the already demonstrated system as:
+Scientific Discovery Platform — Release 1 comprises:
 
-```text
-Lab V1
-+ Mind V1
-+ Stable Scientific Core
-+ Closed Scientific Discovery Loop V0.1
+- Lab V1
+- Mind V1
+- Stable Scientific Core
+- Closed Scientific Discovery Loop V0.1
+
+One deterministic, attributable, replayable, bounded scientific-discovery
+cycle has been demonstrated through typed Study, `ScientificResult`,
+`ResultBinding`, `DesignEvaluation`, Design Memory, next-experiment selection,
+execution, and evidence return.
+
+That demonstrated cycle uses the frozen D4/D7 synthetic analytic reference
+system. It is real typed software execution, but it is **not physical-world
+validation** and not evidence of autonomous or repeated discovery.
+
+## What is scientifically executed
+
+Lab V1 executes domain-owned models through typed scientific contracts. The
+proven numerical/scientific paths in Release 1 are:
+
+- Electrical DC;
+- Thermal `conduction1d`;
+- Kinetics CSTR;
+- rotor-hover reference physics;
+- the multirotor reference system.
+
+Each path is supported only within its documented assumptions and validation
+envelope. Additional domains require their own numerical verification and
+real-world validation.
+
+The bounded closed-loop reference uses D4/D5/D6/D7 synthetic fixtures and
+policies. It must not be interpreted as experimentally validated physics or
+real-world discovery.
+
+## Smallest Lab run
+
+Build or obtain the wheel, create a clean environment, and install it:
+
+```powershell
+py -3.11 -m venv .venv-release1
+.\.venv-release1\Scripts\python -m pip install --upgrade pip
+.\.venv-release1\Scripts\python -m pip install dist\engineering_ai_core-1.0.0-py3-none-any.whl
+.\.venv-release1\Scripts\python -c "import engcore; print(engcore.__version__)"
 ```
 
-Release 1 preparation is product, integration, stability, documentation, and
-packaging work over frozen scientific behavior. It is not a new discovery
-milestone.
+Then run the real Electrical DC tutorial from the Release 1 bundle:
 
-## Current capability
-
-### Stable Scientific Core
-
-The domain-neutral Core provides typed units and values, scientific problems,
-model and validity contracts, solver protocols and registries, validation,
-uncertainty representation, provenance, ScientificResult, ScientificTwin,
-Study/evaluation records, and deterministic schema-bearing serialization.
-
-The Core does not invent numerical methods. Proven adapters bind established
-numerical libraries and explicit domain semantics to those contracts.
-
-### Lab V1
-
-Lab V1 declares and executes bounded scientific studies and produces
-attributable results and evaluations. Its supported surface includes:
-
-- ScientificTwin, ScientificProblem, and ScientificExperiment;
-- typed design spaces, candidates, generation and populations;
-- scientific models, solver execution, validation and provenance;
-- ScientificResult, ResultBinding and DesignEvaluation;
-- honest UNKNOWN/STANDARD/INTERVAL uncertainty records;
-- unit-checked objective projection and declared fidelity selection;
-- proven electrical DC, normalized 1D conduction, non-isothermal CSTR,
-  rotor-hover, and multirotor reference adapters within their documented
-  envelopes.
-
-### Mind V1
-
-Mind V1 is a conservative capability demonstrated by the frozen D3-D7 work:
-
-- attributable, scope-bound scientific design memory;
-- controlled compatibility/recombination in the synthetic reference;
-- deterministic successor generation and exact lineage;
-- deterministic next-experiment selection, including one fixture-local
-  information-per-compute example;
-- closed return of a new result, binding, evaluation and memory observation;
-- deterministic semantic checkpoint replay.
-
-This is one bounded Generation 0 to Generation 1 demonstration. It is not a
-general Mind engine or an autonomous repeated loop.
-
-### Closed Scientific Discovery Loop V0.1
-
-The frozen D7 evidence demonstrates this exact finite path:
-
-```text
-scientific evidence
--> attributable memory
--> compatibility/recombination
--> successor generation
--> next-experiment decision
--> selected scientific execution
--> new ScientificResult and DesignEvaluation
--> attributable memory return
--> STOP
+```powershell
+.\.venv-release1\Scripts\python examples\release1\01_lab_dc.py
 ```
 
-Release 1 does not execute Generation 2.
+It constructs typed quantities and a circuit/problem, executes
+`ElectricalDCSolver`, and prints selected values, validation, uncertainty, and
+provenance from the resulting `ScientificResult`. See the complete
+[Quick Start](docs/release1/quick-start.md), including POSIX commands and the
+explicit release-reference cycle.
+
+## Four executable examples
+
+1. [`01_lab_dc.py`](examples/release1/01_lab_dc.py) — actual Electrical DC Lab
+   execution; no Mind.
+2. [`02_twin_attributable_evaluation.py`](examples/release1/02_twin_attributable_evaluation.py)
+   — exact Candidate/Twin/result/binding/evaluation attribution and a caught
+   fail-closed mismatch.
+3. [`03_mind_reference.py`](examples/release1/03_mind_reference.py) — Public V1
+   D3 attributable memory, classification/retention, and scope separation.
+4. [`04_closed_loop.py`](examples/release1/04_closed_loop.py) — the explicit
+   release-internal D7-derived synthetic reference seam, two byte-identical
+   runs, reload/revalidation, and a stop before Generation 2.
+
+Examples print concise structured summaries and write only Example 04 output
+to a caller-controlled directory. They never overwrite frozen D0–D7 artifacts.
 
 ## Public V1 API
 
-The machine-inspectable support contract is
-`engcore.release1_api.PUBLIC_V1_MANIFEST`. It partitions supported symbols into
-Scientific Core, Lab V1, Mind V1, and proven domain/system namespaces.
-
-Canonical typed imports are namespaced:
+The only support allowlist is
+`engcore.release1_api.PUBLIC_V1_MANIFEST`. Canonical imports remain namespaced:
 
 ```python
 from engcore.scientific import Quantity, ScientificProblem, ScientificResult
@@ -91,69 +89,54 @@ from engcore.design import DesignSpace, DesignCandidate, DesignEvaluation
 from engcore.domains.electrical.dc import DCCircuit, solve_circuit
 ```
 
-The package root intentionally does not export `DesignSpace`. The historical
-untyped optimizer representation remains internally available from
-`engcore.models`, while the only supported V1 meaning is
-`engcore.design.DesignSpace`.
+The package root intentionally does not export `DesignSpace`; the supported V1
+meaning is `engcore.design.DesignSpace`. Importability elsewhere is not a
+support promise. D4–D7 runners, policies, constants, and checkpoint records are
+experiment-only; `engcore.release1_cycle` is a documented release-reference
+seam, not Public V1.
 
-D4-D7 policies, signal tables, synthetic constants, runners, checkpoint
-envelopes, and loop-local objects are experiment-only. Importability of an
-internal module is not a Public V1 support promise.
+The manifest identity is
+`f4bd71ced1cc6e68d074dbd10a1c074ac78a112be8a9ad0b6250eb1571715163`.
+See [Public API](docs/release1/public-api.md).
 
-## Build and installation
+## Scientific meaning
 
-Release candidates are built from the repository root:
+Release 1 keeps Candidate, Twin, Model, Solver, Study, Result, Evaluation,
+target status, eligibility, memory, prediction, evidence, and decision
+provenance distinct. Numerical verification is not physical validation;
+physical validation is not safety certification; synthetic closed-loop
+execution is not real-world discovery. The load-bearing definitions are in
+[Scientific Semantics](docs/release1/scientific-semantics.md).
 
-```powershell
-python -m pip install build
-python -m build
-python -m pip install dist/engineering_ai_core-1.0.0-py3-none-any.whl
-```
+## Authoritative Release 1 documentation
 
-The package requires Python `>=3.11` and the runtime dependencies declared in
-`pyproject.toml`. Release acceptance uses a fresh isolated environment and the
-built wheel, with the checkout excluded from import resolution.
+- [Architecture](docs/release1/architecture.md)
+- [Quick Start](docs/release1/quick-start.md)
+- [Closed Loop](docs/release1/closed-loop.md)
+- [Scientific Semantics](docs/release1/scientific-semantics.md)
+- [Public API](docs/release1/public-api.md)
+- [Configuration Inventory](docs/release1/configuration.md)
+- [Reproducibility](docs/release1/reproducibility.md)
+- [Limitations](docs/release1/limitations.md)
+- [Release Checklist](docs/release1/release-checklist.md)
 
-## Scientific semantics
+Historical preregistrations and freeze reports remain evidence; they are not
+the current product guide.
 
-The public contracts preserve these distinctions:
+## Explicit limits
 
-- Candidate is not ScientificTwin;
-- ScientificTwin is not Study;
-- Study is not ScientificResult;
-- ScientificResult is not memory;
-- prediction is not evidence;
-- decision is not truth;
-- target `FAIL` is not scientific invalidity;
-- compatibility is not scientific validity;
-- reported uncertainty is not computed uncertainty;
-- selected is not automatically valid, feasible, safe, optimal, or true.
+Release 1 has no general physical validation, production Twin registry,
+database/object store/cache services, distributed or cloud runtime, CFD, FEA,
+general multi-fidelity execution, real/general UQ, BoTorch or Bayesian
+optimization, autonomous repeated discovery, Generation 2+, hypothesis
+intelligence, LLM/AI orchestration, UI/web service, medical/clinical
+validation, or safety/certification claim. See the exhaustive
+[Limitations](docs/release1/limitations.md).
 
-Invalid objects, schemas, scopes, result bindings, and evaluation attribution
-fail closed through the existing typed errors. Packaging does not introduce
-silent fallback behavior.
+## Release state
 
-## Explicit Release 1 limits
-
-Release 1 does **not** claim or introduce:
-
-- autonomous or general scientific discovery;
-- repeated-loop convergence or Generation 2+;
-- general scientific intelligence or general optimization;
-- a general/real UQ framework, Bayesian optimization, BoTorch, or surrogate
-  optimization;
-- CFD, FEA, new physics domains, or broad multi-fidelity execution;
-- PostgreSQL, S3, Redis, queues, distributed workers, or cloud deployment;
-- an LLM/AI provider, agentic interface, UI, or web API.
-
-Repository-local deterministic artifacts are sufficient for this release.
-Future persistence, orchestration, service, and AI architecture remains
-deliberately unresolved.
-
-## Release status and evidence
-
-The closed preparation plan is
-[`docs/release-1-preparation-prereg.md`](docs/release-1-preparation-prereg.md).
-Frozen D0-D7 documents and artifacts remain the scientific evidence basis.
-The `v1.0.0` tag must not be created until every registered Release 1 gate has
-passed on the exact release commit.
+The release-owned reference artifact is
+`artifacts/release1/reference/release1-cycle.json`; the deterministic package
+and content inventory is `artifacts/release1/package-manifest.json`. Tag
+creation remains **PENDING FINAL AUTHORIZATION**. This preparation does not
+create `v1.0.0` and does not move `main`.

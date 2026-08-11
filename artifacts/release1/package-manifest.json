@@ -6,20 +6,21 @@
     "frontend_version": "1.5.0",
     "isolated_build": true,
     "python": "CPython 3.14.2",
+    "source_date_epoch": 1786407858,
     "source_layout": "src",
     "wheel_tag": "py3-none-any"
   },
   "build_artifacts": [
     {
       "name": "engineering_ai_core-1.0.0-py3-none-any.whl",
-      "sha256": "5dc657e0d1e8fc851c8a53fa29717a9f74ed1991950e23c964bdf6fb143592d4",
-      "size_bytes": 670375,
+      "sha256": "f6863e60d4922c665fd5c76def354d4a64e9bb5a4e2a85572083c74b302c5c5d",
+      "size_bytes": 670474,
       "type": "wheel"
     },
     {
       "name": "engineering_ai_core-1.0.0.tar.gz",
-      "sha256": "71f897f0f642cefacf4d3800c23df27aec5ccd2683f12a14b146f85f97caa50b",
-      "size_bytes": 776670,
+      "sha256": "8728a98328b2716de17805fa03228268b14dded47f4fdc0a1ef3365110f5d99c",
+      "size_bytes": 779875,
       "type": "sdist"
     }
   ],
@@ -43,7 +44,7 @@
   ],
   "installed_wheel_evidence": {
     "bounded_release1_cycle": {
-      "artifact_sha256": "aee9fedeaa79091ac3577a5c64042f3599c92dd3d7416994ed6e7b1173f062f0",
+      "artifact_sha256": "b8b86048d00a63d7977849f31f6202f29c0d06a99463aef7506211c5109335b6",
       "cycle_identity": "release1-cycle:sha256:b34c6ec57cadbb8362c33bc5ee4b62417c7857328399564f029ed0eb54630dc8",
       "deterministic_fresh_process_comparison": true,
       "generation_2_executed": false,
@@ -52,12 +53,19 @@
       "returned_memory_entry": "714b5c0e69c38b4b8bdecd93204909076837c8ee20a598852114794336e276f4"
     },
     "dependencies": {
-      "numpy": "2.5.2",
+      "numpy": "2.4.6",
       "pint": "0.25.3",
       "scikit-learn": "1.9.0",
-      "scipy": "1.18.0"
+      "scipy": "1.17.1"
+    },
+    "examples": {
+      "01_lab_dc.py": "PASS",
+      "02_twin_attributable_evaluation.py": "PASS",
+      "03_mind_reference.py": "PASS",
+      "04_closed_loop.py": "PASS"
     },
     "isolated_environment": true,
+    "python": "CPython 3.11.15",
     "public_symbol_count": 275,
     "result": "PASS",
     "source_tree_fallback": false
@@ -101,16 +109,112 @@
     ],
     "symbol_count": 275
   },
+  "release_owned_content": [
+    {
+      "path": "README.md",
+      "sha256": "4c00f2ce9bc10328361a49a6c3a70d6b4427aeff050f4c49f930841209a6b2e6",
+      "size_bytes": 5878
+    },
+    {
+      "path": "docs/release1/architecture.md",
+      "sha256": "484452321efaf3982cf683357ac7d356700d88ec998bbb8edc5977f2353aa023",
+      "size_bytes": 3666
+    },
+    {
+      "path": "docs/release1/closed-loop.md",
+      "sha256": "5de5a90c30ffbbf263234bbdd3d96553fa9dd10903a4149de40e39fa81f829f5",
+      "size_bytes": 3192
+    },
+    {
+      "path": "docs/release1/configuration.md",
+      "sha256": "cc2a97f242fa4619d5e19b6895733e2a1b2187b64ed6a3274d1d6b4b6fd48af8",
+      "size_bytes": 5948
+    },
+    {
+      "path": "docs/release1/limitations.md",
+      "sha256": "6c0cdb3377b4f4c1a280d6dcd2f18169a27de76f6c71590fd3ba92a3a8fb2b47",
+      "size_bytes": 1655
+    },
+    {
+      "path": "docs/release1/public-api.md",
+      "sha256": "1f8ede511219edd40a7083c60f4f4ea67e1aa2edbc65663a554e104e1f535531",
+      "size_bytes": 3867
+    },
+    {
+      "path": "docs/release1/quick-start.md",
+      "sha256": "d1cb8d6c1631c47c8c8e26adf670ee101212f6e8799ba273d56f37d873573d1e",
+      "size_bytes": 4175
+    },
+    {
+      "path": "docs/release1/release-checklist.md",
+      "sha256": "3b03a12e10e02c146dfdbfe528e25b2a0f75ea8d416d66587b114629cee0635b",
+      "size_bytes": 8750
+    },
+    {
+      "path": "docs/release1/reproducibility.md",
+      "sha256": "6ac6a45e550f4ddcde3c42693aea66cf5746cd1fae2aef9c76afe7c82f70ab90",
+      "size_bytes": 3997
+    },
+    {
+      "path": "docs/release1/scientific-semantics.md",
+      "sha256": "895d8a063b9aa7327743376cd9dc714ed99e634c15c51a5a8b34481ac7069ed1",
+      "size_bytes": 2936
+    },
+    {
+      "path": "examples/release1/01_lab_dc.py",
+      "sha256": "42696a3b28b061e0b62d895a78b74ee7f176a2c49b7eacd11915a3828471f66b",
+      "size_bytes": 2528
+    },
+    {
+      "path": "examples/release1/02_twin_attributable_evaluation.py",
+      "sha256": "ebf7c3e4e84f247c732223925355764128f10d78cdaeaaab5ccb4f6c828b1195",
+      "size_bytes": 2772
+    },
+    {
+      "path": "examples/release1/03_mind_reference.py",
+      "sha256": "36357c3334503952a70a12b913008d711419cef11a9b390fdc8665e75e4834ad",
+      "size_bytes": 3375
+    },
+    {
+      "path": "examples/release1/04_closed_loop.py",
+      "sha256": "a156be54788caff15c3ae6e0bf3fbfba3df1221ed3aba5375f86fdc6fbbbc16a",
+      "size_bytes": 4548
+    },
+    {
+      "path": "tests/test_release1_documentation.py",
+      "sha256": "056be0fe4ba4583892b197ca14fa2fcf56e0e7b8dd6dae501738d2abd4788c04",
+      "size_bytes": 11324
+    },
+    {
+      "path": "tests/test_release1_examples.py",
+      "sha256": "6e05fbb5f2d16b8a84917ebe326781296e394c8e2410893490ad05e882d18cce",
+      "size_bytes": 5497
+    },
+    {
+      "path": "tests/release1_installed_examples.py",
+      "sha256": "f7bb4c454d481314c80b37cd35cfd3d7a006bf7fa79f14b46975c40a407ddf83",
+      "size_bytes": 3481
+    },
+    {
+      "path": "artifacts/release1/reference/release1-cycle.json",
+      "sha256": "aee9fedeaa79091ac3577a5c64042f3599c92dd3d7416994ed6e7b1173f062f0",
+      "size_bytes": 48161
+    }
+  ],
   "schema": "engcore.release1.package_manifest/1",
   "verification": {
-    "full_regression": "PASS - 1484 tests, 4 legacy optimizer convergence warnings",
+    "documentation": "PASS - 12 tests",
+    "examples": "PASS - 7 tests plus four installed-wheel entry points",
+    "full_regression": "PASS - 1503 tests, 8 warnings (4 importlib metadata deprecations; 4 legacy scikit-learn convergence warnings)",
     "fresh_process_replay": "PASS - typed reload, deterministic rederivation, and exact graph comparison",
-    "installed_wheel_cycle": "PASS - bounded cycle, explicit read-only D7 reference, no engcore source fallback",
-    "installed_wheel_public_api": "PASS - 275 symbols, no source-tree fallback",
+    "installed_wheel_cycle": "PASS - Python 3.11.15 bounded cycle, explicit read-only D7 reference, no engcore source fallback",
+    "installed_wheel_examples": "PASS - all four curated examples on Python 3.11.15, no source-tree fallback",
+    "installed_wheel_public_api": "PASS - Python 3.11.15, 275 symbols, no source-tree fallback",
     "package_api": "PASS - 5 tests",
+    "package_build": "PASS - isolated wheel and sdist with recorded SHA-256 hashes",
     "release1_cycle_focused": "PASS - 19 tests including requested fail-closed substitutions",
     "release_tag_created": false,
-    "targeted_frozen_surfaces": "PASS - 45 D1/D3/D7/Public V1 tests"
+    "targeted_affected": "PASS - 536 tests on Python 3.11.15"
   },
   "wheel_excludes": [
     "artifacts",
