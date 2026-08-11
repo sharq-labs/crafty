@@ -12,14 +12,14 @@
   "build_artifacts": [
     {
       "name": "engineering_ai_core-1.0.0-py3-none-any.whl",
-      "sha256": "c6ad097436d6c9a6ab5b24cdefb2fb4e865db88ee24337c3204b11f9238b10ef",
-      "size_bytes": 662808,
+      "sha256": "5dc657e0d1e8fc851c8a53fa29717a9f74ed1991950e23c964bdf6fb143592d4",
+      "size_bytes": 670375,
       "type": "wheel"
     },
     {
       "name": "engineering_ai_core-1.0.0.tar.gz",
-      "sha256": "6578025a690ac3306ceb6fc142f2be118b59d1585fe99ac68be4761ecda30d1c",
-      "size_bytes": 767049,
+      "sha256": "71f897f0f642cefacf4d3800c23df27aec5ccd2683f12a14b146f85f97caa50b",
+      "size_bytes": 776670,
       "type": "sdist"
     }
   ],
@@ -42,6 +42,15 @@
     "D7 no-inheritance validator"
   ],
   "installed_wheel_evidence": {
+    "bounded_release1_cycle": {
+      "artifact_sha256": "aee9fedeaa79091ac3577a5c64042f3599c92dd3d7416994ed6e7b1173f062f0",
+      "cycle_identity": "release1-cycle:sha256:b34c6ec57cadbb8362c33bc5ee4b62417c7857328399564f029ed0eb54630dc8",
+      "deterministic_fresh_process_comparison": true,
+      "generation_2_executed": false,
+      "reference_loaded_by_explicit_path": true,
+      "reloaded_and_revalidated": true,
+      "returned_memory_entry": "714b5c0e69c38b4b8bdecd93204909076837c8ee20a598852114794336e276f4"
+    },
     "dependencies": {
       "numpy": "2.5.2",
       "pint": "0.25.3",
@@ -54,8 +63,8 @@
     "source_tree_fallback": false
   },
   "package_module_inventory": {
-    "canonical_json_sha256": "b915fdacc077a16e76ccc66b984fd2b9bc931a50a2dcb8874fb9edafb3410e37",
-    "count": 225,
+    "canonical_json_sha256": "675b55ec418c7e780373f3061bcce99bb6d64b1cfd6dbc646d552fea742f4688",
+    "count": 226,
     "inclusion_rule": "all Python modules in setuptools packages matching engcore* under src",
     "source": "wheel RECORD",
     "wheel_non_package_entries": [
@@ -66,6 +75,14 @@
     ]
   },
   "preregistration_commit": "d4280c59e5298e53f4aefa771b758ae321eeb5a7",
+  "release1_reference_cycle": {
+    "artifact": "artifacts/release1/reference/release1-cycle.json",
+    "artifact_sha256": "aee9fedeaa79091ac3577a5c64042f3599c92dd3d7416994ed6e7b1173f062f0",
+    "cycle_identity": "release1-cycle:sha256:b34c6ec57cadbb8362c33bc5ee4b62417c7857328399564f029ed0eb54630dc8",
+    "reference_module": "experiments/design_d7/loop.py",
+    "reference_module_sha256": "a8a23e2be852b645c4081336b1db2fe1795e3da6c642ec26fbb41ceadf8ef5e4",
+    "schema": "engcore.release1_cycle/1"
+  },
   "public_api": {
     "canonical_json_sha256": "f4bd71ced1cc6e68d074dbd10a1c074ac78a112be8a9ad0b6250eb1571715163",
     "manifest": "engcore.release1_api.PUBLIC_V1_MANIFEST",
@@ -86,11 +103,14 @@
   },
   "schema": "engcore.release1.package_manifest/1",
   "verification": {
-    "full_regression": "PASS - 1465 tests, 4 legacy optimizer convergence warnings",
+    "full_regression": "PASS - 1484 tests, 4 legacy optimizer convergence warnings",
+    "fresh_process_replay": "PASS - typed reload, deterministic rederivation, and exact graph comparison",
+    "installed_wheel_cycle": "PASS - bounded cycle, explicit read-only D7 reference, no engcore source fallback",
     "installed_wheel_public_api": "PASS - 275 symbols, no source-tree fallback",
     "package_api": "PASS - 5 tests",
+    "release1_cycle_focused": "PASS - 19 tests including requested fail-closed substitutions",
     "release_tag_created": false,
-    "targeted_frozen_surfaces": "PASS - 512 tests, 4 legacy optimizer convergence warnings"
+    "targeted_frozen_surfaces": "PASS - 45 D1/D3/D7/Public V1 tests"
   },
   "wheel_excludes": [
     "artifacts",
