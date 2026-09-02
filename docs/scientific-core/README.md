@@ -537,6 +537,95 @@ provider evidence comes later.
 * Preregistration (written before execution): `docs/data-boundary0-prereg.md`
 * Evidence (written after execution): `docs/data-boundary0-evidence.md`
 
+## One quantity supplied by another (MIN-FOUNDATION-ET)
+
+A `ScientificProblem` states what is to be computed. It does not state where its
+externally imposed inputs come from, and for one problem that is right: a
+control is imposed, and by what is not the problem's business.
+
+Composing two problems makes it wrong. Then there is a fact with no home —
+*the quantity named X of problem P supplies the quantity named Y of problem Q*
+— and without a record for it that fact survives only in an orchestration
+function's control flow.
+
+```
+Scientific claim          ScientificModelDefinition   reusable, supplier-free
+        |
+Computation               ModelRealizationDefinition  how the claim is computed
+        |
+System composition        QuantityDependency          what supplies what
+```
+
+`engcore.scientific.composition.QuantityDependency` is a standalone
+`quantity_dependency/1` record naming two endpoints and a dimension. It carries
+no value, state, solver, backend, tolerance, mapping, interpolation,
+relaxation, convergence criterion, schedule or execution order — those belong to
+a coupling *runtime*, and this is a *declaration*. It has no direction flag:
+source and target are the direction.
+
+**It is standalone rather than a field on an existing record, for two reasons.**
+`require_schema` is an exact string match with no migration path, so an inline
+field would make every stored payload unreadable by a pre-milestone reader.
+More importantly it would be *wrong* on `ScientificModelDefinition`: a model is
+a reusable claim, and recording on it that its input comes from some other model
+would make the same claim, fed from a different source in a different system, a
+different model. The supplier is a property of the assembly, never of the
+science. `ProvenanceRecord` fails for a sharper reason — provenance exists only
+*after* a run, and a composition must be inspectable before anything executes.
+
+### Endpoint identity, and the invariant it rests on
+
+An endpoint name resolves into `result.values ∪ problem.variables ∪
+problem.parameters`. `ScientificProblem` guarantees uniqueness across variables
+and parameters; result metrics are a third namespace with no such guarantee, so
+the rule a composing domain must hold is **one name means one thing, across a
+problem's declarations and the metrics of results computed from it** — the rule
+`ScientificResult` already enforces inside its own record, one level out.
+
+It is stated rather than enforced, because enforcing it would require the record
+to hold both sides, which it deliberately does not. Violating it is silently
+harmful when the two meanings share a dimension: a `STATE` variable at the start
+of an interval and an output metric of the same name at the end are both the
+same unit, both check clean, and nothing says which was transported.
+
+Endpoint names are **references into namespaces existing records enumerate**,
+exactly as `InitialCondition.variable` names a variable. Nothing parses a name's
+internal structure. `ScientificResult.data_references` is deliberately *not*
+consulted: it would make a field endpoint check clean while nothing in the record
+can state how a field is transported between supports, and an honest `MISSING`
+beats a clean check implying a transfer semantics no contract provides.
+
+### What absence means
+
+An externally imposed input with **no** dependency record is imposed by the
+environment. `unresolved_inputs` reports every `CONTROL` variable and every
+`STATE` variable no declared condition determines — initial *or* boundary;
+`externally_imposed` reports those a dependency does not supply. Both readers
+are **deliberately incomplete**, and the incompleteness is the finding: a
+quantity a domain models as a configured `ScientificParameter` carries a value,
+so it reads as settled even when a composition supplies it. Nothing in the
+contracts distinguishes *configured* from *computed elsewhere*.
+
+### What was not built
+
+No `ComponentDefinition`, component instance, `SystemDefinition`,
+`SystemInstance`, causal port, physical connector, hierarchy, material entity,
+material state or property hierarchy. Each was tested against *what exact
+information becomes impossible, duplicated, ambiguous or domain-specific
+without it?* and each gave a weak answer for the consumer at hand.
+`ScientificTwin` remains the versioned record for one system instance; a second
+would be a duplicate, not a layer. No fan-in combination rule exists — two
+sources on one target are representable and nothing states how they combine,
+which is recorded as a measured gap rather than filled from one consumer.
+
+**Status:** `PROPOSED`, evidence `L1 EXERCISED` for the record itself and
+**`L0 REASONED` for most of the deferrals** — they were argued, not confronted
+with a case that could have forced them. One consumer, one arity, one direction
+of causality, scalar quantities only.
+
+* Preregistration (written before execution): `docs/min-foundation-electrothermal-prereg.md`
+* Evidence (written after execution): `docs/min-foundation-electrothermal-evidence.md`
+
 ## Deliberately deferred
 
 Symbolic/expression constraints; mixed-variable encoding (integer,
@@ -560,7 +649,18 @@ per-realization calibration record. A realization record carries none of these
 and gains no metadata mapping in which to hide them — a concept that cannot be
 stated cleanly is deferred explicitly, not smuggled in untyped.
 
-The next conceptual milestone identified by the architecture-study synthesis
-is **CAP0** — scientific capability semantics, registry and dependencies. It
-is not implemented, and will be preregistered separately after MODEL0-R is
-frozen.
+Deferred by MIN-FOUNDATION-ET specifically: a coupling runtime of any kind —
+iteration, convergence criteria, relaxation, rollback, scheduling, time
+synchronization, transfer or interpolation; component, port, connector, system
+and hierarchy records; materials, material state and a property hierarchy; a
+fan-in combination rule; field and tensor endpoints; and enforcement (rather
+than statement) of endpoint name uniqueness. `QuantityDependency` carries none
+of these and has no metadata mapping in which to hide them.
+
+**Work packages are pulled by a proof, not pushed by a layer map**
+(master context §54.2). `CAP0`, `MAT0`, `FIELD0`, `SYSTEM0`, `TOPO0` and the
+rest remain the catalogue this draws from; which of them arrives next, and how
+much of it, is decided by what the next proof actually requires. The next
+milestone is the **ELECTRO-THERMAL VERTICAL PROOF**, which executes the coupled
+simulation this foundation only represents. It is not implemented, and requires
+its own preregistration written before any source file is added or edited.

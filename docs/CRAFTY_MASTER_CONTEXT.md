@@ -35,12 +35,15 @@ If a future conversation conflicts with this document, the newer explicit decisi
 >
 > **§54–§62 were added on 2026-09-02** and record the current development
 > strategy, the two-axis decision model, completed milestone status, the
-> current roadmap and the next milestone.
+> current roadmap and the next milestone. **§64 was added later the same day**
+> and records the completion of `MIN-FOUNDATION-ET`; it supersedes §62 as the
+> current position, and the next milestone is the **ELECTRO-THERMAL VERTICAL
+> PROOF**.
 >
 > Sections 1–53 remain valid as vision, architecture, science and commercial
 > context. **Where an earlier section states the current next step or the
-> delivery order, §54–§62 govern.** The affected sections (§30, §41, §42, §43,
-> §45, §53) carry an inline amendment note pointing forward.
+> delivery order, §54–§62 and §64 govern.** The affected sections (§30, §41,
+> §42, §43, §45, §53) carry an inline amendment note pointing forward.
 
 ---
 
@@ -2139,10 +2142,11 @@ Historical scientific milestone reports should remain separate and frozen; this 
 # 53. Current exact next action at consolidation time
 
 > **Superseded 2026-09-02.** This records the next action as of the
-> 2026-09-01 consolidation. MODEL0-R has since been delivered and
-> DATA-BOUNDARY0 completed. **The current next action is §62 —
-> `MODEL0-R DIFFERENTIAL PROOF`.** The instruction below not to begin broad
-> domain implementation still holds.
+> 2026-09-01 consolidation. MODEL0-R, DATA-BOUNDARY0, the MODEL0-R
+> DIFFERENTIAL PROOF and MIN-FOUNDATION-ET have since all completed.
+> **The current next action is the ELECTRO-THERMAL VERTICAL PROOF (§64.3,
+> §61).** The instruction below not to begin broad domain implementation
+> still holds.
 
 **Do not begin broad domain implementation.**
 
@@ -2279,8 +2283,9 @@ not in the tables above, the claim is too strong.
 
 | Decision | Decision status | Evidence |
 |---|---|---|
-| MODEL0-R — Scientific Model / Computational Realization / Solver separation | `DESIGN-FROZEN` | below `L2` — see §58 |
+| MODEL0-R — Scientific Model / Computational Realization / Solver separation | `DESIGN-FROZEN` | `L2 DIFFERENTIATED`, scoped — see §58 and `docs/model0r-differential-evidence.md` §8 |
 | DATA-BOUNDARY0 — scientific data identity vs. storage location | `PROPOSED` | `L1 EXERCISED` — see §56 |
+| MIN-FOUNDATION-ET — system composition: which quantity supplies which | `PROPOSED` | `L1 EXERCISED` for the record; `L0 REASONED` for the deferrals — see §64 |
 
 ---
 
@@ -2537,11 +2542,12 @@ MODEL0-R                              ✅ design foundation exists
         ↓
 DATA-BOUNDARY0                        ✅ PROPOSED / L1 EXERCISED
         ↓
-MODEL0-R DIFFERENTIAL PROOF              <- next (§62)
+MODEL0-R DIFFERENTIAL PROOF           ✅ DESIGN-FROZEN / L2 DIFFERENTIATED (scoped)
         ↓
 MINIMUM FOUNDATION required by the coupled proof
+                                      ✅ MIN-FOUNDATION-ET — PROPOSED / L1 (§64)
         ↓
-ELECTRO-THERMAL VERTICAL PROOF
+ELECTRO-THERMAL VERTICAL PROOF           <- next
         ↓
 HETEROGENEOUS REAL PROVIDER PROOF
         ↓
@@ -2624,3 +2630,97 @@ Agent integration through API/MCP
 The founder's commercial objective is to convert this into **high-value strategic scientific software/IP capable of attracting funding and/or acquisition interest from serious engineering/industrial software companies.**
 
 That objective is part of Crafty's definition and must not be lost when technical work resumes.
+
+---
+
+# 64. MIN-FOUNDATION-ET — completed
+
+```text
+Decision status:        PROPOSED
+Evidence:               L1 EXERCISED (one abstraction) / L0 REASONED (the deferrals)
+Milestone execution:    COMPLETE
+```
+
+**Supersedes §62 as the current position.** Records:
+`docs/min-foundation-electrothermal-prereg.md` (written and committed before
+implementation, immutable) and `docs/min-foundation-electrothermal-evidence.md`
+(written after execution). The contract is documented in
+`docs/scientific-core/README.md`.
+
+## 64.1 The question and the answer
+
+> What is the **minimum** semantic foundation a real two-way electro-thermal
+> consumer *forces*, over and above what Crafty already has?
+
+**Exactly one universal record: `QuantityDependency`** — *the quantity named X
+of problem P supplies the quantity named Y of problem Q*, with a dimension.
+Eleven of twelve candidate FOUNDATION1 abstractions were deferred; three
+designed abstractions were reduced away during implementation and the
+adversarial pass.
+
+The null hypothesis lost **on a measurement, not an argument.** The whole
+consumer was first built with zero new contracts and one open-loop pass run,
+then a records-only reader was asked to recover the wiring:
+
+```text
+target                                 dimensionally admissible sources
+resistance-tcr-R1 :: temperature                                      5
+thermal-lumped-R1 :: heat_input                                       4
+thermal-lumped-R1 :: ambient_temperature                              5
+electrical … :: R:R1              not detectable at all — a configured
+                                  ScientificParameter carrying a value
+```
+
+Had any count been 1, no contract would have been added.
+
+## 64.2 What was demonstrated
+
+Real numbers, one resistor self-heating on a lumped body: `T₀ = 300 K`,
+`R(T₀) = 10.269205 Ω`, `P = 2.434463 W`, `T₁ = 344.272271 K`,
+`R(T₁) = 12.009105 Ω` — **+16.94 %**. One electrical solve, one thermal step,
+**no coupled solve**, and the feedback resistance deliberately not fed back.
+
+* Both directions are in the records: electrical → thermal directly, thermal →
+  electrical **through a material property**, which is the scientifically
+  correct route.
+* `ProvenanceRecord.bindings` at **arity 5** over 3 solvers and 2 realizations —
+  the first multi-solver record in the repository, and the shape
+  `model0r-differential-evidence.md` §9.1 named as untested.
+* `required_capabilities` exercised for the first time — and found to be
+  **asymmetric by physics**: R(T) genuinely requires a temperature, while a
+  lumped balance is satisfied by any heat source, so the capability layer can
+  express one direction and structurally cannot express the other.
+* A domain can require another domain's science **by identifier without
+  importing it**.
+* Two measured findings about existing contracts: the electrical domain folds a
+  resistance into circuit identity, so a temperature-updated resistor is refused
+  as a different system; and `ScientificModelDefinition.check_against` cannot
+  bind a reusable model to a multi-instance problem, which is why the DC domain
+  does not use it.
+
+## 64.3 What it did **not** establish
+
+Recorded prominently because §55.3 makes evidence and design status orthogonal,
+and this milestone's evidence is thinner than its conclusions.
+
+* **The eleven deferrals are `L0 REASONED`, not exercised.** Absence of a class
+  is not evidence the concept was not needed. The component-instance deferral in
+  particular was confronted and then blocked: the system pack's constructor
+  forecloses the 2:1 case, so the fan-in gap is measured at record level instead.
+* **`ScientificTwin` as instance authority gained zero evidence.** The twin here
+  is a derived record that nothing reads. The preregistration overstated this
+  and the evidence document corrects it.
+* **Nothing about arity > 1, fan-in combination, bidirectional flow, acausal
+  composition, fields, tensors, external providers, concurrency or scale.**
+  A directed scalar dependency is strictly weaker than the across/through
+  connector pair that Modelica's own specification records as insufficient for
+  convective transport — the honest limit on the fluid/HVAC direction.
+* **"No domain leakage" is a lexical claim.** The adversarial pass found a
+  structural leak — an initial-value-problem assumption inside a universal core
+  reader — that contained no domain word and no scan could have caught. It was
+  fixed; the lesson is about what the test measures.
+
+`architecture-falsifier` returned **SURVIVES WITH REQUIRED CHANGES**, no
+`BLOCKER`. Its one `BREAKING-RISK` — an endpoint name that denoted two different
+time levels of one quantity — was closed before commit, when it cost a rename
+rather than a schema bump against an exact-match reader.

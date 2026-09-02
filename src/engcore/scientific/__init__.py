@@ -98,6 +98,12 @@ from .models import (
     ValidityDomain,
     ValidityStatus,
 )
+from .composition import (
+    QUANTITY_DEPENDENCY_SCHEMA,
+    QuantityDependency,
+    externally_imposed,
+    unresolved_inputs,
+)
 from .realizations import (
     ImplementationReference,
     ModelFormulation,
@@ -208,6 +214,11 @@ __all__ = [
     "ImplementationReference",
     "RealizationReference",
     "RealizationRegistry",
+    # system composition
+    "QuantityDependency",
+    "QUANTITY_DEPENDENCY_SCHEMA",
+    "unresolved_inputs",
+    "externally_imposed",
     # solvers
     "ScientificSolver",
     "SolverIdentity",
