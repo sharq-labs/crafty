@@ -29,6 +29,25 @@ class ModelValidityError(ScientificCoreError):
     validity could not be established."""
 
 
+class InvalidScientificCapability(ScientificCoreError):
+    """A scientific capability identifier is malformed, or a declared
+    capability set is self-contradictory."""
+
+
+class InvalidModelRealization(ScientificCoreError):
+    """A computational realization record violates its declared invariants."""
+
+
+class RealizationNotFoundError(ScientificCoreError):
+    """No registered computational realization matches the requested identity.
+
+    Deliberately distinct from :class:`ModelNotFoundError` and
+    :class:`SolverNotFoundError`: "the science is unknown to us", "the science
+    is known but nothing implements it" and "something implements it but no
+    solver can run it" are three different answers, and a future planner must
+    be able to tell a user which one it hit."""
+
+
 class SolverNotFoundError(ScientificCoreError):
     """No registered solver can support the problem."""
 

@@ -28,13 +28,21 @@ from __future__ import annotations
 from .errors import (
     AmbiguousSolverError,
     DuplicateRegistrationError,
+    InvalidModelRealization,
+    InvalidScientificCapability,
     InvalidScientificProblem,
     ModelNotFoundError,
+    RealizationNotFoundError,
     ModelValidityError,
     ScientificCoreError,
     ScientificValidationError,
     SolverNotFoundError,
     UnitCompatibilityError,
+)
+from .capabilities import (
+    ScientificCapability,
+    capability_identifiers,
+    scientific_capabilities,
 )
 from .experiments import (
     CandidateCodec,
@@ -90,6 +98,12 @@ from .models import (
     ValidityDomain,
     ValidityStatus,
 )
+from .realizations import (
+    ImplementationReference,
+    ModelFormulation,
+    ModelRealizationDefinition,
+    RealizationRegistry,
+)
 from .results import (
     ProvenanceRecord,
     ScientificResult,
@@ -109,6 +123,7 @@ from .solvers import (
     RawSolverOutput,
     ScientificSolver,
     SolverCapability,
+    SolverCapabilityId,
     SolverIdentity,
     SolverRegistry,
     SolverSettings,
@@ -130,6 +145,9 @@ __all__ = [
     "AmbiguousSolverError",
     "DuplicateRegistrationError",
     "ScientificValidationError",
+    "InvalidScientificCapability",
+    "InvalidModelRealization",
+    "RealizationNotFoundError",
     # units
     "Quantity",
     "coerce_quantity",
@@ -177,11 +195,21 @@ __all__ = [
     "RangeCondition",
     "CategoryCondition",
     "FlagCondition",
+    # scientific capability identity
+    "ScientificCapability",
+    "scientific_capabilities",
+    "capability_identifiers",
+    # computational realizations
+    "ModelRealizationDefinition",
+    "ModelFormulation",
+    "ImplementationReference",
+    "RealizationRegistry",
     # solvers
     "ScientificSolver",
     "SolverIdentity",
     "SolverSettings",
     "SolverCapability",
+    "SolverCapabilityId",
     "CoreCapabilities",
     "SolverRegistry",
     "PreparedSolve",
