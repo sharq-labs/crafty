@@ -102,10 +102,13 @@ from .realizations import (
     ImplementationReference,
     ModelFormulation,
     ModelRealizationDefinition,
+    RealizationReference,
     RealizationRegistry,
 )
 from .results import (
+    ExecutionBinding,
     ProvenanceRecord,
+    ScientificDataReference,
     ScientificResult,
     Uncertainty,
     UncertaintyKind,
@@ -203,6 +206,7 @@ __all__ = [
     "ModelRealizationDefinition",
     "ModelFormulation",
     "ImplementationReference",
+    "RealizationReference",
     "RealizationRegistry",
     # solvers
     "ScientificSolver",
@@ -216,6 +220,7 @@ __all__ = [
     "RawSolverOutput",
     "ConvergenceState",
     # results
+    "ScientificDataReference",
     "ScientificResult",
     "ValidationReport",
     "ValidationCheck",
@@ -225,6 +230,7 @@ __all__ = [
     "Uncertainty",
     "UncertaintyKind",
     "ProvenanceRecord",
+    "ExecutionBinding",
     # twins
     "ScientificTwin",
     "TwinDatum",

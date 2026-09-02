@@ -677,6 +677,9 @@ def _study_bound_result(
         git_commit=str(source_revision).strip() or base.provenance.git_commit,
         models=base.provenance.models,
         solvers=base.provenance.solvers,
+        # Carried like models and solvers. This record is a re-binding of the
+        # same computation to a study, not a different computation.
+        bindings=base.provenance.bindings,
         inputs=base.provenance.inputs,
         assumptions=base.provenance.assumptions,
         tolerances=base.provenance.tolerances,

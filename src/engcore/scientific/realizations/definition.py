@@ -99,6 +99,56 @@ from ..solvers.capability import (
 
 REALIZATION_SCHEMA = schema_string("model_realization_definition")
 IMPLEMENTATION_REFERENCE_SCHEMA = schema_string("implementation_reference")
+REALIZATION_REFERENCE_SCHEMA = schema_string("realization_reference")
+
+
+@dataclass(frozen=True)
+class RealizationReference:
+    """Points at a registered realization without importing it.
+
+    The exact counterpart of
+    :class:`~engcore.scientific.ir.problem.ModelReference`, and it exists for
+    the same reason: a record that needs to name a realization must not embed
+    one. Embedding would fork the record — a provenance entry could carry a
+    stale set of assumptions while the registered realization moved on — and
+    would put the realization's whole contract inside every result that
+    mentions it.
+
+    It carries identity and nothing else. In particular it carries no solver,
+    no backend and no execution detail: a realization is not one execution,
+    and which realization ran must stay separable from what ran it.
+    """
+
+    realization_id: str
+    version: str
+
+    def __post_init__(self) -> None:
+        for label in ("realization_id", "version"):
+            raw = str(getattr(self, label)).strip()
+            if not raw:
+                raise InvalidModelRealization(
+                    f"realization reference requires a non-empty {label}"
+                )
+            object.__setattr__(self, label, raw)
+
+    @property
+    def key(self) -> tuple[str, str]:
+        return (self.realization_id, self.version)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "schema": REALIZATION_REFERENCE_SCHEMA,
+            "realization_id": self.realization_id,
+            "version": self.version,
+        }
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, Any]) -> "RealizationReference":
+        require_schema(payload, REALIZATION_REFERENCE_SCHEMA)
+        return cls(
+            realization_id=payload["realization_id"],
+            version=payload["version"],
+        )
 
 
 class ModelFormulation(str, Enum):
@@ -285,6 +335,14 @@ class ModelRealizationDefinition:
     @property
     def key(self) -> tuple[str, str]:
         return (self.realization_id, self.version)
+
+    def reference(self) -> RealizationReference:
+        """A citable identity for this realization.
+
+        Additive: a method, not a field. The record's serialized shape is
+        unchanged, and nothing about the realization contract moves.
+        """
+        return RealizationReference(self.realization_id, self.version)
 
     @property
     def model_key(self) -> tuple[str, str]:

@@ -11,10 +11,12 @@ Nothing here executes anything, selects anything, or ranks anything.
 
 from .definition import (
     IMPLEMENTATION_REFERENCE_SCHEMA,
+    REALIZATION_REFERENCE_SCHEMA,
     REALIZATION_SCHEMA,
     ImplementationReference,
     ModelFormulation,
     ModelRealizationDefinition,
+    RealizationReference,
 )
 from .registry import RealizationRegistry
 
@@ -22,7 +24,9 @@ __all__ = [
     "ImplementationReference",
     "ModelFormulation",
     "ModelRealizationDefinition",
+    "RealizationReference",
     "RealizationRegistry",
     "REALIZATION_SCHEMA",
+    "REALIZATION_REFERENCE_SCHEMA",
     "IMPLEMENTATION_REFERENCE_SCHEMA",
 ]
