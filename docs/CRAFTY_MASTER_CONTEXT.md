@@ -2287,6 +2287,7 @@ not in the tables above, the claim is too strong.
 | DATA-BOUNDARY0 — scientific data identity vs. storage location | `PROPOSED` | `L1 EXERCISED` — see §56 |
 | MIN-FOUNDATION-ET — system composition: which quantity supplies which | `PROPOSED` | `L1 EXERCISED` for the record; `L0 REASONED` for the deferrals — see §64 |
 | ET-VERTICAL — closed-loop coupling execution: the plan/outcome records | `PROPOSED` | `L1 EXERCISED` for the executed loop; several claims `L0` or zero — see §65 |
+| HETERO-NGSPICE — real external provider substitution: the adapter boundary | `PROPOSED` | `L1 EXERCISED`; the preregistered scoped `L2` was **withdrawn** — see §66 |
 
 ---
 
@@ -2550,9 +2551,9 @@ MINIMUM FOUNDATION required by the coupled proof
         ↓
 ELECTRO-THERMAL VERTICAL PROOF        ✅ ET-VERTICAL — PROPOSED / L1 (§65)
         ↓
-HETEROGENEOUS REAL PROVIDER PROOF        <- next
+HETEROGENEOUS REAL PROVIDER PROOF     ✅ HETERO-NGSPICE — PROPOSED / L1 (§66)
         ↓
-API / MCP v0
+API / MCP v0                             <- next
         ↓
 CROSS-ARCHITECTURE HOSTILE PROOF
         ↓
@@ -2834,3 +2835,99 @@ or measured, including an exported graph reader that reported every edge of a
 cyclic graph as lying on the cycle.
 
 Regression: **FULL 1682 → 1744**, FAST 1187 → 1249. No pre-existing test edited.
+
+---
+
+# 66. HETERO-NGSPICE — completed
+
+```text
+Decision status:        PROPOSED
+Evidence:               L1 EXERCISED (provider boundary); scoped L2 WITHDRAWN
+Milestone execution:    COMPLETE
+```
+
+Full record: `docs/heterogeneous-ngspice-prereg.md` (immutable, committed before
+implementation) and `docs/heterogeneous-ngspice-evidence.md`. **Not a freeze.**
+
+**The first execution path in the repository run by code Crafty did not write.**
+Real `ngspice-42` (Ubuntu `noble/universe`, KLU direct solver), reached as
+`wsl.exe -e ngspice`, substituted for the native MNA solver — standalone and
+inside the electro-thermal coupled loop.
+
+**ngspice was absent from the machine.** Discovery found nothing anywhere, and
+execution **stopped** rather than proceeding with a mock; it was installed only
+with explicit authorization. The alternative would have made every number below
+worthless.
+
+## 66.1 What was demonstrated
+
+* **Standalone equivalence to `2.776e-16`** worst relative difference across all
+  13 metrics — machine epsilon, seven orders inside the preregistered `1e-9`.
+* **Coupled substitution below coupling semantics.** `ET-VERTICAL`'s
+  `run_fixed_point` takes the dispatch table as data, so the substitution is
+  **one dict entry**. `coupled.py` is byte-unchanged; there is no
+  `native_coupling()`/`ngspice_coupling()` pair. CASE A and CASE E agree to
+  `6e-13 K` and `9e-12 K`, with identical iteration counts and identical
+  coupling outcomes.
+* **Crafty's validity authority applied to a foreign answer.**
+  `build_validation_report` is coupled to the native solver's internals, but
+  `assemble` is *"pure assembly, no solving"* — so ngspice's solution is
+  substituted into the MNA system **Crafty assembled itself**, giving a
+  `linear_system_residual` of `1.11e-16`. Verification against the domain's
+  equations, not against the provider's own arithmetic.
+* **Zero universal-core change**, no schema bump, no new model, no
+  `ConvergenceState` member, no provider framework. Core's own docstrings
+  already named ngspice three times as an anticipated adapter target, and
+  `PreparedSolve.payload` already named *"a compiled netlist"* as its home.
+* **Failure taxonomy holds.** Provider failures raise a non-`ScientificCoreError`
+  and synthesise no result; a genuine ngspice exit 1 and a missing requested
+  quantity are both exercised.
+
+## 66.2 Falsified once, and better for it
+
+`architecture-falsifier` returned **FALSIFIED**: one `BLOCKER`, six
+`BREAKING-RISK`, **all closed before commit**.
+
+The `BLOCKER` is the milestone's most valuable finding, and it is a
+**reasoning error in the preregistration**. Prereg §9.3 predicted that ngspice
+returns a complete set of zeros with exit 0 on a singular circuit, and concluded
+that *"every available repair is worse"* — having enumerated two. The
+enumeration was incomplete. The decisive fact it missed: **the zero vector is an
+exact solution of Crafty's own assembled `A x = z`**, so no check over `(A, x)`
+could ever detect it — only `rank(A)` can, and `validate` **already assembles
+`A`**. The repair was sitting in an object the adapter constructed anyway.
+
+The two paths now agree on the **science** and differ only on the **numerics**:
+native reports `FAILED`/`FAIL`, ngspice reports `CONVERGED` (the provider did
+return a complete set) with `validation=FAIL`. A precondition the platform had
+*declared but never checked on either path* is now checked.
+
+Two further findings worth carrying: `resistor_power:` — a declared coupling
+endpoint — was the only provider-sourced metric no check read, and is now
+reconciled against Crafty's own relations; and a shared realization capability
+that none of its three records actually provided was replaced by three truthful
+ones, after `RealizationRegistry.providing()` was identified as a real consumer
+that would have been misled.
+
+## 66.3 What it did **not** establish
+
+* **The scoped `L2` was withdrawn.** The preregistration permitted it for
+  `Realization != Solver`, and it is **not claimed**: the native `solve_circuit`
+  predates `MODEL0-R` and writes no bindings, so the "two solvers, one
+  realization" record exists only inside the test, constructed by the proof.
+  What is earned is real — two materially different solvers, one external,
+  executed the same three realization records and agreed to `2.8e-16` — but no
+  record the *system* produces states it. `MODEL0-R` is not upgraded.
+* **Session-stateful providers are sidestepped, not answered.** Process-per-solve
+  destroys session state; `ET-VERTICAL` §15.6 named this the sharpest edge and
+  it remains open.
+* **One provider, one version, one build, one platform, two circuits.** Nothing
+  about portability, asynchrony, concurrency, remote execution, field-valued
+  output, or a second provider.
+* **`ModelRealizationDefinition` cannot state a joint realization.** One DC
+  analysis invokes three models that MNA discharges together; the record's
+  single `model` field cannot say so. Carried forward as a candidate reopen
+  trigger for a `DESIGN-FROZEN` contract, not repaired.
+
+Regression: **FULL 1744 → 1778**, FAST 1249 → 1262. No pre-existing test edited;
+the one edit to `tests/conftest.py` adds tier labels and changes no assertion.

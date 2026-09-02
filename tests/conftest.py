@@ -115,6 +115,7 @@ EXPENSIVE_MODULES: dict[str, str] = {
     "tests/test_sria_v01_certification_path.py": "rebuilds the V0.1 campaign over the E2/E3 grid inference before routing",
     "tests/test_sria_falsification_transport.py": "runs the falsification-transport policy comparison",
     "tests/domains/kinetics/test_cstr_domain.py": "runs CSTR verification gates and stiffness measurements",
+    "tests/test_heterogeneous_ngspice.py": "launches a real external ngspice process ~30 times",
     "tests/domains/kinetics/test_cstr_solver_work.py": "counts solver work by running verification gates",
     "tests/domains/kinetics/test_cstr_inference_admissibility.py": "solves CSTR regimes to test inference admissibility",
     "tests/domains/kinetics/test_cstr_reference_scan.py": "runs the steady-state reference scan across regimes",
@@ -127,6 +128,26 @@ EXPENSIVE_MODULES: dict[str, str] = {
 #: Tests inside an expensive module that stay in FAST. Each only reads files,
 #: hashes bytes, or parses source — none reaches the memoized experiment.
 STATIC_GUARDS: dict[str, frozenset[str]] = {
+    # HETERO-NGSPICE. The tests that only read source, scan records or check
+    # types launch nothing and stay in FAST; the ones that drive the external
+    # provider do not.
+    "tests/test_heterogeneous_ngspice.py": frozenset(
+        {
+            "test_d_the_coupling_code_is_identical_between_the_two_runs",
+            "test_h_universal_core_gained_nothing_and_knows_no_provider",
+            "test_l_the_adapter_never_branches_on_provider_text",
+            "test_m2_the_realization_records_name_no_solver_and_no_backend",
+            "test_m3_the_grain_limitation_is_visible_rather_than_hidden",
+            "test_j2_the_invocation_is_configuration_and_reads_the_environment",
+            "test_g6_supports_does_not_claim_what_prepare_refuses",
+            "test_r1_the_adapter_is_local_and_no_provider_framework_exists",
+            "test_r2_no_parser_result_wrapper_survived",
+            "test_r3_the_configuration_record_is_more_than_an_argv_tuple",
+            "test_r4_no_execution_result_record_was_created",
+            "test_r5_the_netlist_builder_is_a_function",
+            "test_r6_three_realizations_are_the_minimum_the_contract_permits",
+        }
+    ),
     "tests/test_thermal_t1_fidelity_inference.py": frozenset(
         {
             "test_decision_path_never_imports_the_grader_truth",
