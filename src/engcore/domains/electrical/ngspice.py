@@ -629,10 +629,19 @@ class NgspiceDCSolver:
             element = netlist.resistor_names[cid]
             current = provider(f"@{element}[i]")
             power = provider(f"@{element}[p]")
-            total_dissipation += power
             # Derived from the provider's own node voltages, exactly as the
             # native path derives it from its own solution vector.
             v_ab = voltages[resistor.node_a] - voltages[resistor.node_b]
+            # THE ADMISSION GATE. Nothing downstream may see a power this
+            # relation rejects — see _admit_element_power.
+            self._admit_element_power(
+                component_id=cid,
+                v_drop=v_ab,
+                current=current,
+                power=power,
+                ohms=resistor.resistance.magnitude_in("ohm"),
+            )
+            total_dissipation += power
             metrics[f"resistor_voltage:{cid}"] = Quantity(v_ab, VOLTAGE_UNIT)
             metrics[f"resistor_current:{cid}"] = Quantity(current, CURRENT_UNIT)
             metrics[f"resistor_power:{cid}"] = Quantity(power, POWER_UNIT)
@@ -660,6 +669,105 @@ class NgspiceDCSolver:
                 delivered, POWER_UNIT
             )
         return metrics
+
+    #: Absolute and relative slack for the admission relations below. Both
+    #: sides are computed in double precision from values the provider printed
+    #: to 13 significant digits, so agreement is expected near machine epsilon;
+    #: `1e-9` is the DC domain's own tolerance and is loose against that by
+    #: orders of magnitude, while still catching any convention error — a sign
+    #: flip, a factor of two, absorbed-versus-delivered — by orders more.
+    ADMISSION_ATOL = 1e-9
+    ADMISSION_RTOL = 1e-9
+
+    @classmethod
+    def _admit_element_power(
+        cls, *, component_id: str, v_drop: float, current: float,
+        power: float, ohms: float,
+    ) -> None:
+        """Refuse a provider element power that its own voltage and current deny.
+
+        **Why this raises instead of being reported.** ``resistor_power:<id>``
+        is not an ordinary metric: it is the endpoint the electro-thermal
+        composition transports into ``heat_input``. A wrong value there is not a
+        wrong number in a report — it is wrong physics entering a coupled loop
+        that will converge confidently around it.
+
+        That was measured, not assumed. A provider whose power channel used a
+        different convention produced ``validation_status = FAIL`` on the
+        electrical result **and the coupled loop transported it anyway**,
+        converging to a temperature 18.05 K away from the truth. The loop reads
+        ``result.value(...)``; it does not read validation reports, and it is
+        not its job to. A check whose only effect is a field nothing consults is
+        not a guard.
+
+        So admission happens here, at the boundary the contract describes as
+        where numeric output "re-enters the unit-aware scientific world". A
+        refusal is a :class:`NgspiceExecutionFailure` — the existing category
+        for *the provider ran and did not deliver what was asked* — so no
+        ``ScientificResult`` is synthesised and there is nothing downstream to
+        transport. It is **not** a scientific verdict: Crafty's own
+        ``build_validation_report`` remains the sole authority on whether an
+        admitted answer is physically consistent.
+
+        **The two relations, and why neither is self-comparison.**
+        ngspice reports node potentials, element currents and element powers on
+        three *separate* output channels (``v(...)``, ``@r[i]``, ``@r[p]``), and
+        the resistance is Crafty's own declaration, never the provider's:
+
+        1. ``I ≈ V_drop / R`` — Ohm's law, anchoring the provider's current
+           channel to a quantity **Crafty declared**. Catches a current sign or
+           scale convention error.
+        2. ``P ≈ V_drop · I`` — the definition of power, relating the provider's
+           power channel to its voltage and current channels. Catches a power
+           convention error, including absorbed-versus-delivered.
+
+        Neither compares the power against itself through another
+        representation: relation 2's right-hand side contains no power channel
+        at all, and relation 1's contains neither current nor power.
+
+        **The sign convention, decided explicitly.** ``build_netlist`` emits
+        ``R<i> <node_a> <node_b> <ohms>`` in the Crafty circuit's own terminal
+        order, so the provider's ``@r[i]`` is positive when current flows
+        ``node_a -> node_b`` — the same convention as Crafty's
+        ``resistor_current``, and measured to agree exactly. ``resistor_power``
+        is **absorbed** power, hence non-negative for a passive element with
+        ``R > 0``; a negative value means the provider reports delivered power
+        and its convention is not the one assumed here. That is checked
+        separately, because a sign flip on *both* current and power would
+        satisfy relation 2 while inverting the physics.
+        """
+        expected_current = v_drop / ohms
+        expected_power = v_drop * current
+
+        def disagrees(actual: float, expected: float) -> bool:
+            return abs(actual - expected) > (
+                cls.ADMISSION_ATOL + cls.ADMISSION_RTOL * abs(expected)
+            )
+
+        if disagrees(current, expected_current):
+            raise NgspiceExecutionFailure(
+                f"provider element current for {component_id!r} is "
+                f"{current:.12g} A, but the provider's own node voltages give "
+                f"V_drop/R = {expected_current:.12g} A. The provider's current "
+                f"convention is not the one this adapter emits the netlist in; "
+                f"no result is synthesised rather than transporting it"
+            )
+        if disagrees(power, expected_power):
+            raise NgspiceExecutionFailure(
+                f"provider element power for {component_id!r} is "
+                f"{power:.12g} W, but V_drop * I from the provider's own "
+                f"voltage and current channels gives {expected_power:.12g} W. "
+                f"resistor_power is transported into a thermal coupling, so an "
+                f"unreconciled value is refused rather than admitted"
+            )
+        if power < -cls.ADMISSION_ATOL:
+            raise NgspiceExecutionFailure(
+                f"provider element power for {component_id!r} is negative "
+                f"({power:.12g} W). A passive element absorbs power; a negative "
+                f"value means the provider reports delivered rather than "
+                f"absorbed power, which is a different convention from the one "
+                f"this adapter assumes"
+            )
 
     def validate(
         self, prepared: PreparedSolve, raw: RawSolverOutput
@@ -750,41 +858,32 @@ class NgspiceDCSolver:
 
     @staticmethod
     def _provider_metric_check(circuit, metrics) -> ValidationCheck:
-        """Do the provider's own element currents and powers match Crafty's?
+        """Record, in the report, that the admission relations were satisfied.
 
-        ``resistor_current:`` and ``resistor_power:`` are the **only** metrics
-        taken verbatim from the provider that no other check reads: KCL, the
-        constitutive check and the power balance all recompute branch currents
-        from node voltages, and the linear residual reads only node voltages and
-        source currents. So an element-convention disagreement would reach
-        ``resistor_power:<id>`` unchallenged — and that name is exactly what the
-        electro-thermal composition transports into ``heat_input``. A provider
-        with a different element-power convention would heat the body wrongly,
-        converge to a wrong fixed point, and pass every other check.
+        This is the *reporting* half of :meth:`_admit_element_power`. The gate
+        already refused anything that violates the relations, so by the time a
+        report exists this check can only pass — and that is precisely why it is
+        still here: a reader of a stored result should be able to see **that**
+        the provider's power was reconciled, and against what, without having to
+        know that an exception would have prevented the record existing.
 
-        This compares what the provider *reported* against what Crafty's own
-        relations *require*, at the domain's own tolerances.
+        An earlier form of this milestone had only this check and no gate. It
+        detected a corrupted provider power correctly and changed nothing: the
+        coupling loop reads values, not reports, and converged 18.05 K off.
         """
-        settings = DCValidationSettings()
         worst = 0.0
         for resistor in circuit.resistors:
             cid = resistor.component_id
             ohms = resistor.resistance.magnitude_in("ohm")
             v_ab = metrics[f"resistor_voltage:{cid}"].magnitude_in(VOLTAGE_UNIT)
-            expected_current = v_ab / ohms
-            expected_power = v_ab * expected_current
+            current = metrics[f"resistor_current:{cid}"].magnitude_in(CURRENT_UNIT)
+            power = metrics[f"resistor_power:{cid}"].magnitude_in(POWER_UNIT)
             worst = max(
                 worst,
-                abs(
-                    metrics[f"resistor_current:{cid}"].magnitude_in(CURRENT_UNIT)
-                    - expected_current
-                ),
-                abs(
-                    metrics[f"resistor_power:{cid}"].magnitude_in(POWER_UNIT)
-                    - expected_power
-                ),
+                abs(current - v_ab / ohms),      # I  vs  V/R   (declared R)
+                abs(power - v_ab * current),     # P  vs  V*I   (three channels)
             )
-        tolerance = max(settings.power_atol_watt, settings.ohm_atol_volt)
+        tolerance = NgspiceDCSolver.ADMISSION_ATOL
         return ValidationCheck(
             name="provider_element_metric_consistency",
             outcome=(
@@ -794,12 +893,15 @@ class NgspiceDCSolver:
             residual=worst,
             tolerance=tolerance,
             detail=(
-                f"provider-reported element current and power against Crafty's "
-                f"v/R and v*v/R: worst deviation {worst:.3e}. These two metrics "
-                f"are the only provider values no other check reads, and "
-                f"resistor_power is a declared coupling endpoint."
+                f"provider element current against V_drop/R with R declared by "
+                f"Crafty, and provider element power against V_drop*I from the "
+                f"provider's own voltage and current channels: worst deviation "
+                f"{worst:.3e}. resistor_power is a declared coupling endpoint, "
+                f"so a violation is refused at admission and never reaches a "
+                f"result; this check records that the reconciliation held."
             ),
         )
+
 
     @staticmethod
     def _solution_vector(system, metrics: Mapping[str, Quantity]):

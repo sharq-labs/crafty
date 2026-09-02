@@ -4,6 +4,7 @@
 **Decision status:** `PROPOSED`
 **Evidence:** `L1 EXERCISED` for the provider boundary. **The preregistered scoped `L2` for `Realization != Solver` is NOT claimed** — see §12.
 **Falsifier verdict:** **FALSIFIED** on first pass — one `BLOCKER` and six `BREAKING-RISK`. **All seven closed before commit**; the same evidence then supports SURVIVES WITH REQUIRED CHANGES.
+**Post-acceptance correction (§8.4):** one further provider-admission risk closed after acceptance. Architecture unchanged.
 **Date of this record:** 2026-09-02
 **Branch:** `heterogeneous-ngspice-proof`
 
@@ -104,8 +105,8 @@ both providers. All eleven required changes were carried into the prereg.
 | Item | Location | Lines |
 |---|---|---|
 | Three MNA realization records | `src/engcore/domains/electrical/dc_realizations.py` (**new**) | ~230 |
-| The provider adapter | `src/engcore/domains/electrical/ngspice.py` (**new**) | ~830 |
-| Tests | `tests/test_heterogeneous_ngspice.py` (**new**) | 34 tests |
+| The provider adapter | `src/engcore/domains/electrical/ngspice.py` (**new**) | ~950 |
+| Tests | `tests/test_heterogeneous_ngspice.py` (**new**) | 40 tests |
 | Tier labels | `tests/conftest.py` (**edited**) | +18, assertions unchanged |
 
 Both new modules sit **beside** `dc/`, not inside it, because
@@ -317,6 +318,102 @@ carefully.
 
 ---
 
+# 8.4 Post-acceptance correction — provider power is now admitted, not merely reported
+
+**Raised after this milestone was accepted at `PROPOSED / L1 EXERCISED`. The
+architecture was not reopened; one guard was moved and strengthened.**
+
+## The residual risk
+
+`resistor_power:<id>` is a provider-sourced quantity that the electro-thermal
+composition transports directly into `heat_input`. §8.2 D1 added
+`provider_element_metric_consistency` to the validation report to catch a
+provider whose power convention differed. **That was detection, not admission
+control**, and the distinction turned out to be the whole point.
+
+## Measured, before fixing
+
+A provider halving its reported element power — node voltages and element
+currents left exactly right and entirely plausible — was run through the coupled
+loop:
+
+```text
+honest provider     criterion_met   T* = 338.577017565 K
+halved power        criterion_met   T* = 320.524069785 K
+                    validation of the electrical result: FAIL
+                    ==> 18.052948 K of wrong physics, admitted
+```
+
+The check fired. `validation_status` was `FAIL`. **And the coupling loop
+transported the value anyway and converged confidently around it**, because the
+loop reads `result.value(...)` and does not read validation reports — nor should
+it have to. *A check whose only effect is a field nothing consults is not a
+guard.*
+
+## The correction
+
+The reconciliation moved to `extract_metrics`, the boundary the solver contract
+describes as where numeric output *"re-enters the unit-aware scientific world"*,
+and a violation now **raises** `NgspiceExecutionFailure` — the existing category
+for *the provider ran and did not deliver what was asked*. No `ScientificResult`
+is synthesised, so there is nothing downstream to transport.
+
+**Two relations, neither of which compares the power against itself.** ngspice
+reports node potentials, element currents and element powers on three
+*separate* output channels, and the resistance is Crafty's own declaration:
+
+```text
+1.  I  ≈  V_drop / R        Ohm's law. Right-hand side is a provider VOLTAGE
+                            and a Crafty DECLARATION — no current, no power.
+                            Catches a current sign or scale convention error.
+
+2.  P  ≈  V_drop · I        Definition of power. Right-hand side is a provider
+                            VOLTAGE and a provider CURRENT — no power.
+                            Catches a power convention error, including
+                            absorbed-versus-delivered.
+
+3.  P  ≥  0                 A passive element with R > 0 absorbs power. Checked
+                            separately because flipping current AND power
+                            together satisfies relation 2 while inverting the
+                            physics.
+```
+
+**Sign convention, decided explicitly.** `build_netlist` emits
+`R<i> <node_a> <node_b> <ohms>` in the Crafty circuit's own terminal order, so
+the provider's `@r[i]` is positive when current flows `node_a → node_b` — the
+same convention as Crafty's `resistor_current`, measured to agree exactly in
+spike R3. `resistor_power` is **absorbed** power.
+
+Tolerance `1e-9` absolute and relative — the DC domain's own figure, loose
+against the observed machine-epsilon agreement by orders of magnitude, and tight
+against any convention error by orders more.
+
+`provider_element_metric_consistency` remains in the report, now as the
+*reporting* half: a reader of a stored result can see **that** the power was
+reconciled and against what, without needing to know that a violation would have
+prevented the record existing.
+
+## Negative cases, executed
+
+| Corruption | Other quantities | Result |
+|---|---|---|
+| power × 0.5 | voltages and currents correct | **refused** — `V_drop * I` relation |
+| power × −1 (delivered, not absorbed) | voltages and currents correct | **refused** |
+| current × −1, power left self-consistent | `P = V·I` still holds | **refused** — only the Ohm's-law relation against Crafty's *declared* R catches this |
+| the halved-power provider, **inside the coupled loop** | — | **raises; no `CoupledRun` is produced at all** |
+
+## What is unchanged
+
+Native/ngspice equivalence (`2.776e-16` standalone, `6e-13 K` coupled), the
+failure taxonomy, `coupled.py` byte-unchanged, zero provider logic in scientific
+core, no new framework, no new record type, no schema movement. The singular-
+circuit precondition check (§8.1) and this admission gate stay separate concerns:
+the singular case returns zeros, which satisfy all three relations above, and is
+caught by rank instead.
+
+
+---
+
 # 9. Deviations from the preregistration
 
 ## D-a — §8.2 fixed field values the frozen contract refuses
@@ -462,7 +559,7 @@ provider.
    implementation_id`**, so prereg §11's "moving it later changes no serialized
    record" is false for that module.
 8. **`test_n`'s bounds pin one build's stderr banner**, not an invariant.
-9. **21 of the 34 tests hard-error without WSL + ngspice** rather than skipping,
+9. **27 of the 40 tests hard-error without WSL + ngspice** rather than skipping,
    so the regression baseline is machine-specific. That is deliberate — a skip
    would let the evidence evaporate silently — but it must be stated.
 10. **ngspice's exit-code behaviour has no upstream contract** I could locate.
@@ -477,13 +574,13 @@ provider.
 
 | Suite | Command | Result |
 |---|---|---|
-| Targeted | `pytest tests/test_heterogeneous_ngspice.py -q` | **34 passed** |
+| Targeted | `pytest tests/test_heterogeneous_ngspice.py -q` | **40 passed** |
 | FAST | `pytest tests/ -m "not expensive" -q` | **1262 passed**, 516 deselected |
-| FULL | `pytest tests/ -q` | **1778 passed** |
+| FULL | `pytest tests/ -q` | **1784 passed** |
 
 Baseline before this milestone: **1744 FULL / 1249 FAST** (495 deselected).
-`1744 + 34 = 1778`. The 13 static tests (source scans, record scans, reduction
-attacks) stay in FAST; the 21 that launch the provider are tiered `expensive`
+`1744 + 40 = 1784`. The 13 static tests (source scans, record scans, reduction
+attacks) stay in FAST; the 27 that launch the provider are tiered `expensive`
 by TESTING.md's own behavioural criterion. **No pre-existing test was edited,
 weakened, skipped or re-toleranced.**
 
@@ -491,7 +588,8 @@ Coverage against prereg §12: A (`test_a`, `a2`), B (`test_b`, `b2`),
 C (`test_c`, `c2`), D (`test_d`, `d2`), E (`test_e`–`e4`), F (`test_f`),
 G (`test_g`–`g6`), H (`test_h`), I (`test_i`), J (`test_j`, `j2`),
 L (`test_l`), M (`test_m`–`m3`), N (`test_n`); reductions `test_r1`–`r6`.
-K is the FULL suite above.
+K is the FULL suite above. The post-acceptance admission gate adds
+`test_p`–`p4` (§8.4).
 
 ---
 

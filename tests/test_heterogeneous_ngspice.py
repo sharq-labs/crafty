@@ -796,6 +796,180 @@ def test_g6_supports_does_not_claim_what_prepare_refuses():
 
 
 # =====================================================================
+# TEST P — provider power is admitted only if independently reconciled
+# =====================================================================
+
+class _CorruptPower(ng.NgspiceDCSolver):
+    """A provider whose power channel uses a different convention.
+
+    Node voltages and element currents remain exactly right and entirely
+    plausible; only ``@r[p]`` is altered. This is the realistic failure — a
+    provider reporting power on another convention — not one returning garbage.
+    """
+
+    factor = 0.5
+
+    def solve(self, prepared):
+        raw = super().solve(prepared)
+        values = dict(raw.values)
+        for key in list(values):
+            if key.startswith("@") and key.endswith("[p]"):
+                values[key] = values[key] * self.factor
+        return type(raw)(
+            convergence=raw.convergence, values=values,
+            iterations=raw.iterations, wall_seconds=raw.wall_seconds,
+            warnings=raw.warnings, diagnostics=raw.diagnostics,
+        )
+
+
+class _FlippedPower(_CorruptPower):
+    """Delivered rather than absorbed: the sign convention inverted."""
+
+    factor = -1.0
+
+
+class _FlippedCurrent(ng.NgspiceDCSolver):
+    """The current channel inverted, with power left internally consistent.
+
+    Both channels are flipped together, so ``P = V * I`` would still be
+    satisfied if the power relation were the only one checked. Only the
+    Ohm's-law relation against Crafty's **declared** resistance catches it.
+    """
+
+    def solve(self, prepared):
+        raw = super().solve(prepared)
+        values = dict(raw.values)
+        for key in list(values):
+            if key.startswith("@") and key.endswith("[i]"):
+                values[key] = -values[key]
+        return type(raw)(
+            convergence=raw.convergence, values=values,
+            iterations=raw.iterations, wall_seconds=raw.wall_seconds,
+            warnings=raw.warnings, diagnostics=raw.diagnostics,
+        )
+
+
+@pytest.mark.parametrize(
+    "solver_class,expected",
+    [
+        (_CorruptPower, "V_drop \\* I"),
+        (_FlippedPower, "V_drop \\* I"),
+        (_FlippedCurrent, "current convention"),
+    ],
+)
+def test_p_a_corrupted_provider_quantity_is_refused_at_admission(
+    solver_class, expected
+):
+    """A provider value its own other channels deny never becomes a metric.
+
+    Refused as a **provider execution failure** — the provider ran and did not
+    deliver what was asked — so no ``ScientificResult`` is synthesised. It is
+    not a scientific verdict: Crafty's ``build_validation_report`` remains the
+    sole authority on whether an *admitted* answer is physically consistent.
+    """
+    with pytest.raises(ng.NgspiceExecutionFailure, match=expected):
+        ng.solve_circuit_with_ngspice(
+            divider("corrupt"), run_id="corrupt", solver=solver_class()
+        )
+
+
+def test_p2_the_corrupted_power_is_refused_before_the_coupled_loop_admits_it():
+    """The requirement, and the reason the reporting check was not enough.
+
+    Measured before the gate existed: a provider halving its reported power
+    produced ``validation_status = FAIL`` on the electrical result **and the
+    coupling loop transported it anyway**, converging to `320.524069785 K`
+    against the true `338.577017565 K` — **18.05 K of wrong physics, admitted
+    under a green coupling outcome.** The loop reads values, not reports.
+
+    Now the run raises and no ``CoupledRun`` exists at all.
+    """
+    honest = run_coupled(NOMINAL, provider="ngspice", label="P2")
+    (true_temperature,) = honest.final_values.values()
+    assert true_temperature.magnitude_in(KELVIN) == pytest.approx(
+        338.577018, abs=1e-6
+    )
+
+    problems = cp.coupled_problems(
+        NOMINAL,
+        {s.component_id: s.conductor.reference_resistance for s in NOMINAL.stages},
+    )
+    plan = cp.nominal_plan(
+        NOMINAL, cp.coupled_dependencies(NOMINAL, problems),
+        seed=Quantity(300.0, KELVIN), tolerance=Quantity(1e-6, KELVIN),
+        max_iterations=50,
+    )
+    table = dict(cp._executors(NOMINAL, problems))
+    electrical = next(
+        p.problem_id for p in problems if p.problem_id.startswith("electrical_dc:")
+    )
+    table[electrical] = ngspice_electrical_executor(NOMINAL, _CorruptPower())
+
+    with pytest.raises(ng.NgspiceExecutionFailure):
+        cp.run_fixed_point(
+            problems, table, plan, run_id="P2-corrupt",
+            software_version="hetero-proof", assumptions=(),
+        )
+
+    # the corruption was material, not a rounding-level nudge
+    assert _CorruptPower.factor == 0.5
+
+
+def test_p3_the_relations_are_independent_of_the_quantity_they_check():
+    """Requirement 4: no relation compares the power against itself.
+
+    ngspice reports node potentials, element currents and element powers on
+    three separate output channels, and the resistance is Crafty's own
+    declaration. The two relations are:
+
+        I ≈ V_drop / R      right-hand side: a provider VOLTAGE and a Crafty
+                            DECLARATION — no current, no power
+        P ≈ V_drop · I      right-hand side: a provider VOLTAGE and a provider
+                            CURRENT — no power
+
+    Neither right-hand side contains the quantity on its left.
+    """
+    source = _code_only(inspect.getsource(ng.NgspiceDCSolver._admit_element_power))
+    # the power relation is built from v_drop and current, never from power
+    assert "expected_power = v_drop * current" in source
+    assert "expected_current = v_drop / ohms" in source
+    assert "expected_power = power" not in source
+
+    # and it is exercised numerically: the true values satisfy both relations
+    solver = ng.NgspiceDCSolver()
+    result = ng.solve_circuit_with_ngspice(
+        divider("independent"), run_id="indep", solver=solver
+    )
+    for cid, ohms in (("R1", 10.0), ("R2", 20.0)):
+        v = result.values[f"resistor_voltage:{cid}"].magnitude_in("volt")
+        i = result.values[f"resistor_current:{cid}"].magnitude_in("ampere")
+        p = result.values[f"resistor_power:{cid}"].magnitude_in("watt")
+        assert i == pytest.approx(v / ohms, abs=1e-12)
+        assert p == pytest.approx(v * i, abs=1e-12)
+        assert p >= 0.0
+
+
+def test_p4_admission_is_a_provider_failure_not_a_scientific_verdict():
+    """The taxonomy is unchanged: refusal raises, and raises the right type."""
+    with pytest.raises(ng.NgspiceProviderError) as raised:
+        ng.solve_circuit_with_ngspice(
+            divider("taxonomy"), run_id="tax", solver=_FlippedPower()
+        )
+    assert isinstance(raised.value, ng.NgspiceExecutionFailure)
+    assert not isinstance(raised.value, ScientificCoreError)
+
+    # a well-posed honest run is untouched, and records the reconciliation
+    good = ng.solve_circuit_with_ngspice(divider("ok"), run_id="ok")
+    assert good.validation_status is ValidationOutcome.PASS
+    check = next(
+        c for c in good.validation.checks
+        if c.name == "provider_element_metric_consistency"
+    )
+    assert check.outcome is ValidationOutcome.PASS
+    assert check.residual <= ng.NgspiceDCSolver.ADMISSION_ATOL
+
+
+# =====================================================================
 # TEST H / I / L — no leakage, in any direction
 # =====================================================================
 

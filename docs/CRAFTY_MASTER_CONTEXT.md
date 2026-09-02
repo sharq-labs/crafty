@@ -2929,5 +2929,25 @@ that would have been misled.
   single `model` field cannot say so. Carried forward as a candidate reopen
   trigger for a `DESIGN-FROZEN` contract, not repaired.
 
-Regression: **FULL 1744 → 1778**, FAST 1249 → 1262. No pre-existing test edited;
+## 66.4 Post-acceptance correction
+
+One further provider-admission risk was closed after the milestone was accepted,
+without reopening its architecture. `resistor_power:*` is provider-sourced and
+transports directly into `heat_input`; §8.2 D1 had added a *reporting* check for
+it. Measured: a provider halving its reported power produced
+`validation_status = FAIL` **and the coupling loop transported it anyway**,
+converging 18.05 K from the truth — because the loop reads values, not reports.
+
+The reconciliation moved to `extract_metrics`, where provider numbers become
+Crafty metrics, and a violation now **raises** `NgspiceExecutionFailure`, so no
+result exists to transport. Two independent relations, neither comparing the
+power against itself: `I ≈ V_drop/R` (provider voltage against Crafty's
+*declared* resistance) and `P ≈ V_drop·I` (three separate provider channels),
+plus a passive-sign guard. Four negative cases execute, including the corrupted
+provider inside the coupled loop.
+
+**The lesson is general and worth carrying: a check whose only effect is a field
+nothing consults is not a guard.**
+
+Regression: **FULL 1744 → 1784**, FAST 1249 → 1262. No pre-existing test edited;
 the one edit to `tests/conftest.py` adds tier labels and changes no assertion.
