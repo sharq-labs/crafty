@@ -2286,6 +2286,7 @@ not in the tables above, the claim is too strong.
 | MODEL0-R — Scientific Model / Computational Realization / Solver separation | `DESIGN-FROZEN` | `L2 DIFFERENTIATED`, scoped — see §58 and `docs/model0r-differential-evidence.md` §8 |
 | DATA-BOUNDARY0 — scientific data identity vs. storage location | `PROPOSED` | `L1 EXERCISED` — see §56 |
 | MIN-FOUNDATION-ET — system composition: which quantity supplies which | `PROPOSED` | `L1 EXERCISED` for the record; `L0 REASONED` for the deferrals — see §64 |
+| ET-VERTICAL — closed-loop coupling execution: the plan/outcome records | `PROPOSED` | `L1 EXERCISED` for the executed loop; several claims `L0` or zero — see §65 |
 
 ---
 
@@ -2547,9 +2548,9 @@ MODEL0-R DIFFERENTIAL PROOF           ✅ DESIGN-FROZEN / L2 DIFFERENTIATED (sco
 MINIMUM FOUNDATION required by the coupled proof
                                       ✅ MIN-FOUNDATION-ET — PROPOSED / L1 (§64)
         ↓
-ELECTRO-THERMAL VERTICAL PROOF           <- next
+ELECTRO-THERMAL VERTICAL PROOF        ✅ ET-VERTICAL — PROPOSED / L1 (§65)
         ↓
-HETEROGENEOUS REAL PROVIDER PROOF
+HETEROGENEOUS REAL PROVIDER PROOF        <- next
         ↓
 API / MCP v0
         ↓
@@ -2724,3 +2725,112 @@ and this milestone's evidence is thinner than its conclusions.
 `BLOCKER`. Its one `BREAKING-RISK` — an endpoint name that denoted two different
 time levels of one quantity — was closed before commit, when it cost a rename
 rather than a schema bump against an exact-match reader.
+
+---
+
+# 65. ET-VERTICAL — completed
+
+```text
+Decision status:        PROPOSED
+Evidence:               L1 EXERCISED (the executed loop); several claims L0 or zero
+Milestone execution:    COMPLETE
+```
+
+Full record: `docs/electrothermal-vertical-prereg.md` (immutable, committed
+before implementation) and `docs/electrothermal-vertical-evidence.md`. **Not a
+freeze.**
+
+**The first genuine closed-loop multiphysics execution in the repository.**
+`MIN-FOUNDATION-ET` represented the electro-thermal loop and stopped one
+electrical solve short of closing it. This milestone closes it: iteration *n ≥ 2*
+solves the electrical problem at a resistance the previous thermal solve
+produced.
+
+## 65.1 Zero new universal records, decided by a measurement
+
+`architecture-decision-reviewer` compared six options and selected **A** —
+domain-level orchestration, everything in the electro-thermal **system pack**,
+nothing in `engcore/scientific`. The decision rested on a count, not an argument:
+
+| Gate | Question | Result |
+|---|---|---|
+| **G0** | Is the declared dependency set executable as declared? | **0** admissible topological orders, **3** admissible tears, **0** seed-supplying records per tear |
+| **G1** | Does anything under `engcore/scientific` read coupling-execution information? | **0** executable identifiers (19 lexical occurrences over 18 lines, all prose declaring the reader's absence) |
+
+G0 says four facts are genuinely missing from the records — which edges are cut,
+what value each cut edge's target takes first, when to stop, how long to try.
+G1 says no *universal* consumer of those facts exists. `MIN-FOUNDATION-ET` added
+its one universal record because a count showed no reader could recover the fact;
+there is no analogous count here, so the records are pack-local and the
+**promotion criterion is preregistered**: a second, materially different coupled
+consumer written against them without editing them.
+
+**No file under `src/engcore/scientific/` was added or edited.** The only
+pre-existing file touched anywhere is one system-pack `__init__.py`: +48 lines,
+exports only.
+
+## 65.2 What was demonstrated
+
+Ten executed cases, every preregistered analytic prediction reproduced, none
+adjusted.
+
+* **The loop closes.** CASE A converges in 10 iterations to `T* = 338.577018 K`,
+  `R* = 11.785282 Ω`, `P* = 2.121290 W`. **Iteration 1 reproduces
+  `MIN-FOUNDATION-ET`'s open-loop pass to `rel=1e-12`; iteration 2 is the second
+  electrical solve that milestone refused to perform**, consuming the
+  `R(T₁) = 12.009105 Ω` it computed and threw away.
+* **The transported endpoint carries the physics, not its dimension.** Switching
+  the source from `final_temperature` to `steady_state_temperature` — **one field
+  of one record, no code change** — moves the converged answer by **3.376418 K**.
+  Both endpoints are kelvin, both check clean; only the enumerated name separates
+  them. This is the executed consequence of `MIN-FOUNDATION-ET`'s D-1 rename.
+* **Coupling convergence ≠ numerical convergence.** CASE C2 runs a negative-TCR
+  conductor at its double root, where `|g'| = 1` exactly: **50 iterations, every
+  sub-solve reporting success, every iterate inside the model's declared validity
+  domain, and coupling convergence `False`.**
+* **Coupling convergence ≠ scientific validity.** CASE F converges to
+  `T* = 498.994793 K` with every sub-solve passing, while
+  `assess_resistance_validity` reports `OUTSIDE_VALIDATED_DOMAIN` — the model's
+  declared range is 200–450 K. Three independent verdicts, one run.
+* **Arity 2 does not force a component-instance concept.** Two conductors in
+  series, two bodies, one circuit: converges in 8 iterations, six distinct
+  endpoints, no aliasing — because the *electrical domain* names per instance and
+  the dependency record never parses the name.
+* **No relaxation was required, and a closed form says why.** For a linear-TCR
+  conductor with `α > 0`, the fixed-point map contracts **exactly when** the
+  resistance is positive at ambient — the same condition. Every configuration
+  that would diverge is already refused by the domain as unphysical. Measured
+  against the closed form to 1 % in three configurations.
+
+## 65.3 What it did **not** establish
+
+* **H0(B) partially won.** The falsifier proved the loop carried an unstated
+  structural assumption — *at most one incoming edge per endpoint* — true of
+  exactly the 1:1 topology built first. Two sources on one target resolved
+  silently to the last declared, and the run still reported convergence on a
+  different physical system. **It contains no domain word, so the AST scan
+  structurally could not see it.** This is `MIN-FOUNDATION-ET` finding C-2
+  reproduced one layer out. Closed before commit by **refusing** the plan, not by
+  inventing a combination rule.
+* **`ScientificTwin` as instance authority gained zero evidence for the second
+  consecutive milestone.** The twin is built and read by nothing; the test that
+  asserts it is not the runtime state could not have failed.
+* **`CouplingOutcome` lost its own reduction.** At two members a boolean
+  reproduces every assertion. It is kept on a naming argument recorded at `L0`,
+  and is the first candidate for deletion.
+* **One runner exists.** `QuantityDependency` is now executed rather than
+  declared, at arity 2, which strengthens it *within* `L1`. It is not
+  differentiation.
+* **Nothing about fan-in combination, mixed-dimension norms, fields, tensors,
+  acausal or runtime-directed transport, external providers, concurrency,
+  restart, or more than two domains.** Each is refused, declared, or absent.
+
+`architecture-falsifier` returned **SURVIVES WITH REQUIRED CHANGES**, no
+`BLOCKER`. **Three `BREAKING-RISK` findings, all closed before commit** — the
+fan-in resolution above; a field named `converged_values` that held an
+unconverged iterate on a budget-exhausted run; and a `"{problem}::{quantity}"`
+key whose components already contain colons. Eight further findings were fixed
+or measured, including an exported graph reader that reported every edge of a
+cyclic graph as lying on the cycle.
+
+Regression: **FULL 1682 → 1744**, FAST 1187 → 1249. No pre-existing test edited.
