@@ -216,8 +216,13 @@ it asserts nothing checkable.
 The axes that *are* evidenced already have homes, and MODEL0-R uses them:
 
 * **`ModelFormulation`** — the computational form (`ALGEBRAIC`, `ODE`, `DAE`,
-  `PDE`, `DISCRETE`, `SURROGATE`). One axis, disjoint members, decidable from
-  the record itself.
+  `PDE`, `DISCRETE`). One axis, disjoint members, decidable from the record
+  itself. A `SURROGATE` member was removed for the same reason as the fidelity
+  enum: it names a *strategy*, not a form, and a surrogate is itself posed in
+  one of these forms — a response surface is algebraic, a learned
+  latent-dynamics model is an ODE. Offering it as a sixth member made a caller
+  discard the mathematical form to record the strategy. Surrogate character is
+  deferred until there is evidence for a coherent realization-strategy axis.
 * **`assumptions`** — where "POD-Galerkin reduction to 12 modes" is stated as
   the falsifiable claim it is, rather than compressed into the label
   `REDUCED_ORDER`.

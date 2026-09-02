@@ -107,12 +107,30 @@ class ModelFormulation(str, Enum):
     This is **not** :class:`~engcore.scientific.models.definition.ModelType`,
     whose meaning is epistemic — how far a model is derived versus fitted.
     A fundamental relation may be realized algebraically or as a PDE; an
-    empirical correlation may be realized as a surrogate. The two axes are
-    independent, and ``ModelType`` keeps its existing meaning untouched.
+    empirical correlation may be realized as an algebraic expression. The two
+    axes are independent, and ``ModelType`` keeps its existing meaning
+    untouched.
 
     It is also not a :class:`~engcore.scientific.solvers.SolverCapability`:
     stating that a realization is a PDE says what it *is*, not that some
     particular backend can integrate it.
+
+    Why ``SURROGATE`` is not a member
+    ---------------------------------
+    An earlier draft listed it beside these. It is not the same axis. The
+    members below answer *what mathematical form is posed*; "surrogate"
+    answers *by what strategy the realization was obtained* — and a surrogate
+    is itself posed in one of these forms. A response-surface surrogate is
+    algebraic; a learned latent-dynamics surrogate is an ODE; a neural
+    operator is none of these in the same sense. Offering ``SURROGATE`` as a
+    sixth member therefore forced a caller to discard the mathematical form
+    in order to record the strategy, for exactly the realizations whose form
+    a solver most needs to know.
+
+    Surrogate character is **deferred, not renamed**: no member, field or
+    flag replaces it here. If a coherent realization-strategy axis is needed
+    later, it arrives as its own contract with evidence for its members —
+    not as a foreign member smuggled into this one.
     """
 
     ALGEBRAIC = "algebraic"
@@ -120,7 +138,6 @@ class ModelFormulation(str, Enum):
     DAE = "dae"
     PDE = "pde"
     DISCRETE = "discrete"
-    SURROGATE = "surrogate"
 
 
 @dataclass(frozen=True)

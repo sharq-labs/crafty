@@ -19,16 +19,16 @@ is the gate for a milestone freeze.
 
 | Tier | Selection | Tests | Sequential | Parallel | Use it |
 |---|---|---|---|---|---|
-| **FAST** | `-m "not expensive"` | 1034 | **9.2 s** | 7.3 s | after every ordinary code edit |
+| **FAST** | `-m "not expensive"` | 1035 | **9.2 s** | 7.3 s | after every ordinary code edit |
 | **TARGETED** | a path | varies | seconds | — | the milestone you are working on |
-| **SCIENTIFIC** | `-m "not campaign"` | 1525 | 137.7 s | **53.7 s** | after a scientific/core change |
-| **FULL** | *(no selection)* | 1529 | 578.3 s | **273.2 s** | before a milestone freeze or merge |
+| **SCIENTIFIC** | `-m "not campaign"` | 1526 | 137.7 s | **53.7 s** | after a scientific/core change |
+| **FULL** | *(no selection)* | 1530 | 578.3 s | **273.2 s** | before a milestone freeze or merge |
 
 FAST is **63× faster** than FULL and still runs 68% of the suite. Use it.
 
 Test counts are current. **The wall-clock figures throughout this document
-were measured at 1526 FULL tests**, before MODEL0-R's final revision added
-three; nothing was re-timed for three sub-millisecond assertions, and the
+were measured at 1526 FULL tests**, before MODEL0-R's final revisions added
+four; nothing was re-timed for three sub-millisecond assertions, and the
 run-to-run spread documented below dwarfs the difference.
 
 The markers are assigned centrally in [`tests/conftest.py`](../tests/conftest.py)
@@ -73,7 +73,7 @@ Set `PY` to your interpreter (`python`, or an absolute path on Windows).
 python -m pytest tests/ -m "not expensive" -q
 ```
 
-1034 tests, ~10 s. This is the default loop for AI-assisted development.
+1035 tests, ~10 s. This is the default loop for AI-assisted development.
 
 ### 2. TARGETED milestone — the package you are changing
 
@@ -81,7 +81,7 @@ python -m pytest tests/ -m "not expensive" -q
 python -m pytest tests/test_model0r_realization_foundation.py -q
 ```
 
-103 tests, 1.3 s for the current milestone. Substitute the milestone's own
+104 tests, 1.3 s for the current milestone. Substitute the milestone's own
 module. See "Choosing targeted tests" below.
 
 ### 3. SCIENTIFIC regression — after a scientific or core change
@@ -90,7 +90,7 @@ module. See "Choosing targeted tests" below.
 python -m pytest tests/ -m "not campaign" -q
 ```
 
-1525 tests, 137.7 s sequential — or 53.7 s with `-n 12 --dist loadfile`. Every
+1526 tests, 137.7 s sequential — or 53.7 s with `-n 12 --dist loadfile`. Every
 frozen-experiment reproduction and domain solver test, without the four largest
 campaigns. Dropping just those four removes 428 s of the 578 s FULL runtime.
 
@@ -100,7 +100,7 @@ campaigns. Dropping just those four removes 428 s of the 578 s FULL runtime.
 python -m pytest tests/ -q -rsxX --durations=30
 ```
 
-1529 tests, 578.3 s. This is the fallback and the reference result. If a parallel
+1530 tests, 578.3 s. This is the fallback and the reference result. If a parallel
 run and this run ever disagree, **this one is right**.
 
 ### 5. FULL parallel regression
@@ -109,7 +109,7 @@ run and this run ever disagree, **this one is right**.
 python -m pytest tests/ -n 8 --dist loadfile -q
 ```
 
-1529 tests, 273.2 s. **Use `-n 8`, not `-n auto`** — see "Parallel execution"
+1530 tests, 273.2 s. **Use `-n 8`, not `-n auto`** — see "Parallel execution"
 below, where `-n auto` is measured failing intermittently with `MemoryError`.
 `--dist loadfile` is not optional.
 
@@ -181,7 +181,7 @@ that.
 
 ## What FAST does not cover
 
-FAST is a real suite — 1034 tests including the entire scientific-core contract
+FAST is a real suite — 1035 tests including the entire scientific-core contract
 layer, the SRIA architecture layer, the design layer, campaign persistence,
 serialization, registries, error taxonomy and the dependency-direction guards.
 It is not a smoke test. But it deliberately omits these risk classes:

@@ -293,10 +293,28 @@ def test_solver_registry_deduplicates_identically_named_capabilities():
 
 def test_formulation_members_and_serialized_values():
     assert {member.value for member in ModelFormulation} == {
-        "algebraic", "ode", "dae", "pde", "discrete", "surrogate",
+        "algebraic", "ode", "dae", "pde", "discrete",
     }
     for member in ModelFormulation:
         assert ModelFormulation(member.value) is member
+
+
+def test_formulation_carries_no_realization_strategy_member():
+    """``SURROGATE`` named a strategy, not a mathematical form.
+
+    A surrogate is itself posed in one of these forms — a response surface is
+    algebraic, a learned latent-dynamics model is an ODE — so the member made
+    a caller discard the form in order to record the strategy. It is deferred,
+    and no member, field or flag replaces it.
+    """
+    assert not hasattr(ModelFormulation, "SURROGATE")
+    for strategy in ("surrogate", "emulator", "reduced_order", "data_driven"):
+        with pytest.raises(ValueError):
+            ModelFormulation(strategy)
+
+    fields = set(ModelRealizationDefinition.__dataclass_fields__)
+    for smuggled in ("strategy", "surrogate", "is_surrogate", "emulates"):
+        assert smuggled not in fields
 
 
 def test_no_universal_fidelity_classification_is_declared_anywhere():
@@ -712,9 +730,9 @@ def _registry() -> RealizationRegistry:
                 required_solver_capabilities={"core:pde"},
             ),
             _realization(
-                realization_id="other.model.surrogate",
+                realization_id="other.model.discrete",
                 model=ModelReference("other.model", "2.0.0"),
-                formulation=ModelFormulation.SURROGATE,
+                formulation=ModelFormulation.DISCRETE,
                 provided_capabilities={WAVES},
                 required_solver_capabilities={"core:algebraic"},
             ),
@@ -787,7 +805,7 @@ def test_registry_filters_by_provided_scientific_capability():
     assert [
         r.realization_id
         for r in registry.providing("electromagnetics:wave_propagation")
-    ] == ["other.model.surrogate"]
+    ] == ["other.model.discrete"]
     assert registry.providing("thermal:heat_convection") == ()
 
 
@@ -798,7 +816,7 @@ def test_registry_filters_by_required_solver_capability():
     found = registry.list(requires_solver_capability="core:algebraic")
     assert [r.realization_id for r in found] == [
         "example.model.analytical",
-        "other.model.surrogate",
+        "other.model.discrete",
     ]
 
 
@@ -806,8 +824,8 @@ def test_registry_filters_by_formulation():
     registry = _registry()
     assert [
         r.realization_id
-        for r in registry.list(formulation=ModelFormulation.SURROGATE)
-    ] == ["other.model.surrogate"]
+        for r in registry.list(formulation=ModelFormulation.DISCRETE)
+    ] == ["other.model.discrete"]
     assert [
         r.realization_id
         for r in registry.list(formulation=ModelFormulation.PDE)
@@ -830,7 +848,7 @@ def test_registry_filters_by_model_id():
     registry = _registry()
     assert [
         r.realization_id for r in registry.list(model_id="other.model")
-    ] == ["other.model.surrogate"]
+    ] == ["other.model.discrete"]
 
 
 def test_registry_iteration_and_listing_are_deterministic():
@@ -850,7 +868,7 @@ def test_registry_introspection_supports_unknown_versus_unsupported():
     # "unsupported here", not "never heard of it".
     assert ELASTICITY in provided
     assert registry.list(
-        provides=ELASTICITY, formulation=ModelFormulation.SURROGATE
+        provides=ELASTICITY, formulation=ModelFormulation.DISCRETE
     ) == ()
     # Genuinely unknown to this registry.
     assert ScientificCapability("thermal", "radiation") not in provided
@@ -1159,7 +1177,7 @@ def test_realization_assumes_no_discretization_family():
     expressible.
     """
     assert {member.value for member in ModelFormulation} == {
-        "algebraic", "ode", "dae", "pde", "discrete", "surrogate",
+        "algebraic", "ode", "dae", "pde", "discrete",
     }
     payload = _realization(formulation=ModelFormulation.PDE).to_dict()
     for absent in (
