@@ -23,12 +23,23 @@ from enum import Enum
 from typing import Any, Mapping, Protocol, runtime_checkable
 
 from ..errors import ScientificCoreError
-from ..serialization import require_schema, schema_string
+from ..results.data_reference import ScientificDataReference
+from ..serialization import require_schema, require_schema_any, schema_string
 from ..units.quantity import Quantity
 from .capability import SolverCapability
 
 SOLVER_IDENTITY_SCHEMA = schema_string("solver_identity")
-RAW_OUTPUT_SCHEMA = schema_string("raw_solver_output")
+#: Bumped alongside ``scientific_result``. ``data_references`` is part of this
+#: record's serialized semantics too: it is the only statement of which bulk
+#: arrays a solve produced once they have left ``diagnostics``, so a reader
+#: that dropped it would report a solve as having produced nothing.
+RAW_OUTPUT_SCHEMA = schema_string("raw_solver_output", 2)
+
+#: The version before ``data_references`` existed. Still read, never written.
+RAW_OUTPUT_SCHEMA_V1 = schema_string("raw_solver_output", 1)
+
+#: Exactly the versions this reader knows how to interpret. Not a range.
+SUPPORTED_RAW_OUTPUT_SCHEMAS = (RAW_OUTPUT_SCHEMA_V1, RAW_OUTPUT_SCHEMA)
 
 
 class ConvergenceState(str, Enum):
@@ -158,6 +169,12 @@ class RawSolverOutput:
     warnings: tuple[str, ...] = ()
     diagnostics: Mapping[str, Any] = field(default_factory=dict)
     artifacts: tuple[str, ...] = ()
+    #: Identities of bulk arrays this solve produced and handed to a store.
+    #: The arrays themselves are not here and never were: ``diagnostics`` is
+    #: an untyped dict that gets serialized, so an O(mesh) array parked in it
+    #: makes every stored raw record unreadable. A reference is O(1) and says
+    #: precisely which data was produced without carrying it.
+    data_references: tuple[ScientificDataReference, ...] = ()
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "convergence", ConvergenceState(self.convergence))
@@ -170,6 +187,18 @@ class RawSolverOutput:
         object.__setattr__(self, "warnings", tuple(self.warnings))
         object.__setattr__(self, "artifacts", tuple(self.artifacts))
         object.__setattr__(self, "diagnostics", dict(self.diagnostics))
+        references = tuple(self.data_references)
+        for reference in references:
+            if not isinstance(reference, ScientificDataReference):
+                raise ScientificCoreError(
+                    f"raw output data reference must be a "
+                    f"ScientificDataReference, got {type(reference).__name__}"
+                )
+        object.__setattr__(
+            self,
+            "data_references",
+            tuple(sorted(references, key=lambda r: r.name)),
+        )
 
     @property
     def succeeded(self) -> bool:
@@ -189,11 +218,12 @@ class RawSolverOutput:
             "warnings": list(self.warnings),
             "diagnostics": dict(sorted(self.diagnostics.items(), key=lambda kv: kv[0])),
             "artifacts": list(self.artifacts),
+            "data_references": [r.to_dict() for r in self.data_references],
         }
 
     @classmethod
     def from_dict(cls, payload: Mapping[str, Any]) -> "RawSolverOutput":
-        require_schema(payload, RAW_OUTPUT_SCHEMA)
+        version = require_schema_any(payload, SUPPORTED_RAW_OUTPUT_SCHEMAS)
         return cls(
             convergence=ConvergenceState(payload["convergence"]),
             values=dict(payload.get("values", {})),
@@ -203,6 +233,15 @@ class RawSolverOutput:
             warnings=tuple(payload.get("warnings", ())),
             diagnostics=dict(payload.get("diagnostics", {})),
             artifacts=tuple(payload.get("artifacts", ())),
+            # Same compatibility branch as ``ScientificResult.from_dict``: a
+            # ``raw_solver_output/1`` record predates bulk references and loads
+            # with none.
+            data_references=()
+            if version == RAW_OUTPUT_SCHEMA_V1
+            else tuple(
+                ScientificDataReference.from_dict(r)
+                for r in payload.get("data_references", ())
+            ),
         )
 
 

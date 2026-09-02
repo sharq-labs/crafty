@@ -32,6 +32,29 @@ def require_schema(payload: Mapping[str, Any], expected: str) -> None:
         )
 
 
+def require_schema_any(
+    payload: Mapping[str, Any], accepted: tuple[str, ...]
+) -> str:
+    """Reject a payload unless its schema is one this reader understands.
+
+    The reader half of an additive version bump: the writer emits the newest
+    string, and the reader keeps loading the older versions it still knows how
+    to interpret. Returns the version found, so a caller can branch on it.
+
+    Deliberately a tuple of **exact strings**, not a version range, a
+    comparison or a migration framework. A version is admitted only because
+    somebody checked that this reader handles it; a range would admit versions
+    that do not exist yet, which is the failure mode ``require_schema``
+    existed to prevent in the first place.
+    """
+    found = payload.get("schema")
+    if found not in accepted:
+        raise ScientificCoreError(
+            f"unsupported schema {found!r}; expected one of {list(accepted)}"
+        )
+    return str(found)
+
+
 def encode(value: Any) -> Any:
     """Recursively convert a value into JSON-compatible primitives.
 

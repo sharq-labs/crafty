@@ -386,12 +386,171 @@ than one undifferentiated "not found":
 The planner itself is not implemented. These are the contracts that keep it
 implementable without a breaking change.
 
+## Bulk scientific data: identity, not location (DATA-BOUNDARY0)
+
+A `ScientificResult` is a small interpreted record. A solved field is not. One
+CFD state is O(mesh), and a record carrying it inline stops being readable,
+diffable and cheaply hashable, and drags the whole array through every
+provenance and evidence payload that quotes it.
+
+The record therefore **names** its bulk data instead of containing it:
+
+```
+Scientific control plane      ScientificResult          no storage knowledge
+        | references
+Scientific data identity      ScientificDataReference   content, not location
+        | resolved by
+Runtime / storage plane       engcore.data              locations live here
+```
+
+`ScientificDataReference` carries a logical `name`, a `unit`, a value `count`,
+a `dtype`, and a **content digest**. It carries no path, URI, host, device,
+provider or store identity. Where bytes sit is an execution fact, and an
+execution fact must not change what a result *means*: if a path were part of
+the identity, moving a file would silently mint a different scientific record
+and a provenance chain would rot the first time storage was reorganized.
+Relocating an artifact therefore leaves both the reference and the serialized
+result **byte-identical**, and there is nothing to migrate.
+
+### What the digest proves, and what it does not
+
+The digest is a statement about bytes, and only about bytes. It gives
+**content identity**, **integrity**, **relocation stability** and **content
+addressing**.
+
+It does **not** prove scientific equivalence:
+
+* Two computations that are scientifically equivalent to within tolerance will
+  in general produce **different** digests. Different hardware, compiler, BLAS,
+  thread count, reduction order or library version routinely change the last
+  bits of a floating-point result while changing nothing a scientist would call
+  the answer. A digest mismatch is evidence that the bytes differ; it is not
+  evidence that the science differs.
+* A digest match says the byte images agree. It says nothing about whether
+  either computation was correct, converged or physically meaningful — those
+  belong to validation and uncertainty, which are separate fields on the
+  result.
+
+Tolerance-level comparison of two datasets is a real and different operation.
+Nothing here implements it or substitutes for it.
+
+**Identity is over the canonical byte image**, not IEEE value equality: `-0.0`
+and `0.0` are distinct preimages, as are distinct NaN payload bit patterns.
+Normalizing before hashing would mean the digest no longer attests to the bytes
+a solver actually produced, which is the one thing it exists to do. A producer
+that exposes a buffer that is not 1-D contiguous float64 is refused rather than
+converted, so a float32 or device array cannot be silently upcast into a digest
+that describes data nobody computed.
+
+### What the reference does not decide
+
+`count` is a count of values. It is **not** a shape, mesh, topology or field
+support, and no descriptor field exists. `count` may be zero: this milestone
+found no evidence that an empty scientific dataset is invalid, and no storage
+invariant requires otherwise. The consequence is documented rather than banned
+— every empty payload of a dtype shares one digest, so one empty blob satisfies
+every empty reference; a consumer for which emptiness is a domain error
+enforces that itself.
+
+**DATA-BOUNDARY0 intentionally does not define `FIELD0`/`TOPO0` descriptors.**
+Shape, support, coordinate frame and topology semantics remain deferred and
+undecided. Nothing here closes the reference against future work, and no rule
+is recorded about the form a future descriptor must take. One factual
+constraint a later milestone will have to plan around: `require_schema` is an
+exact string match with no migration path, so changing a schema version string
+makes existing stored records unloadable by the current reader. That constrains
+how an evolution is rolled out; it does not forbid one. Widening the closed
+`dtype` or `digest_algorithm` sets is a value change and touches no schema.
+
+### The legacy `artifacts` field
+
+`ScientificResult.artifacts` is **unchanged**. It is legacy, generic and
+untyped, it predates this milestone, and every value that loaded before still
+loads — including on the deserialization path. Absence of an in-repo producer
+is not evidence that no external caller exists.
+
+New scientific-data code must not use it as the bulk-data channel: it carries
+no unit, no count and no content identity, so nothing can check what was put in
+it. Bulk data belongs in `data_references`. A fitness test
+(`test_f4b_new_scientific_data_code_does_not_use_the_artifacts_channel`)
+asserts that the modules introduced by DATA-BOUNDARY0 never write `artifacts`;
+it constrains new code only and breaks no stored value.
+
+Reference **names** are likewise not policed by shape. `phase/alpha`,
+`velocity/x` and `species:H2O` are scientific names that happen to contain
+punctuation, and rejecting them on the suspicion that they resemble a path
+would let a storage concern dictate scientific vocabulary. Storage
+independence is achieved by the record having no storage field at all, not by
+guessing at strings.
+
+Nothing in `engcore.scientific` imports `engcore.data`, and nothing in
+`engcore.data` imports a named domain pack. Both directions are enforced by
+tests. Only a domain/orchestration module may depend on both.
+
+### Failure semantics for bulk data
+
+| State | Answer |
+|---|---|
+| present and intact | the values |
+| absent from every consulted store | `BulkDataUnavailable` |
+| present but corrupt, truncated or substituted | `BulkDataIntegrityError` |
+
+There is no fourth outcome. Empty, zero-filled and nearest-match are never
+*fabricated*, and a bulk failure never invalidates the scalar values of the
+result that referenced it — those were computed, validated and attributed, and
+remain usable. (An empty result that was genuinely stored and verifies against
+its reference is a legitimate answer, not a fabricated one.)
+
+### Schema version
+
+`data_references` is **scientific content**, not decoration: it is the result's
+statement of which bulk data the claim is about, and for `RawSolverOutput` it
+is the only statement that a solve produced bulk data at all once the array has
+left `diagnostics`. A reader that accepted such a payload and then ignored the
+field would return a result that silently understates what was computed.
+
+So the version moves. The writer emits `scientific_result/2` and
+`raw_solver_output/2`; the reader accepts `/1` and `/2`:
+
+| Direction | Behaviour |
+|---|---|
+| `/1` payload → this reader | succeeds, `data_references == ()` |
+| `/2` payload → this reader | succeeds, references round-trip |
+| `/2` payload → a pre-milestone reader | **fails loudly** on schema mismatch |
+| unknown `/3` → this reader | fails loudly; the accept-set is exact strings |
+
+The mechanism is one helper (`require_schema_any`) and one branch per
+`from_dict`. A `/1` payload loads with no references **by version, not by key
+presence** — `/1` predates the contract and cannot have written one.
+Re-serializing a `/1` payload writes `/2`; that one-way upgrade is intended.
+This is not a migration framework and none is implied: a third version means
+one more string.
+
+The cost — a pre-milestone reader can no longer read any new payload, including
+scalar-only ones — was accepted deliberately. Loud failure is recoverable;
+silent understatement of a scientific claim is not.
+
+**Status:** `PROPOSED`, evidence `L1 EXERCISED`. Two storage backends written
+by one author against one interface differentiate nothing; heterogeneous
+provider evidence comes later.
+
+* Preregistration (written before execution): `docs/data-boundary0-prereg.md`
+* Evidence (written after execution): `docs/data-boundary0-evidence.md`
+
 ## Deliberately deferred
 
 Symbolic/expression constraints; mixed-variable encoding (integer,
 categorical, boolean are *representable* but not encodable in V0); PDE
 machinery beyond generic condition types; a UQ engine; persistence and
 databases; distributed scheduling; an AI planner; RAG; visualization.
+
+Deferred by DATA-BOUNDARY0 specifically: a generic field model; topology;
+discretization contracts; interpolation; transfer operators; a Probe framework;
+field uncertainty; MPI; GPU; object storage; a retention, ownership or
+garbage-collection system for stored artifacts; a distributed filesystem; and
+any external provider. Content-addressed blobs are shared by construction, so a
+store deletion or a move with `remove_source=True` affects every reference to
+that content — a documented consequence of the dedup, not a lifetime system.
 
 Deferred by MODEL0-R specifically: capability-graph traversal; domain, model
 and solver resolvers; a knowledge graph; materials and substances; geometry,

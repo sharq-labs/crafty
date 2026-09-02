@@ -1,6 +1,7 @@
 """Scientific results: value + unit + model + solver + validation + provenance."""
 
-from .provenance import ProvenanceRecord
+from .data_reference import ScientificDataReference
+from .provenance import  ProvenanceRecord
 from .result import ScientificResult
 from .uncertainty import Uncertainty, UncertaintyKind
 from .validation import (
@@ -13,6 +14,7 @@ from .validation import (
 
 __all__ = [
     "ProvenanceRecord",
+    "ScientificDataReference",
     "ScientificResult",
     "Uncertainty",
     "UncertaintyKind",
