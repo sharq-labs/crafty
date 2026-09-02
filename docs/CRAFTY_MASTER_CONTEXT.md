@@ -1,9 +1,10 @@
 # CRAFTY — MASTER CONTEXT, STRATEGY & HANDOVER
 
 **Status:** CANONICAL PROJECT CONTEXT  
-**Last consolidated:** 2026-09-01  
+**Last consolidated:** 2026-09-02  
 **Repository:** `sharq-labs/crafty`  
-**Reviewed baseline commit:** `6abdf279141cf032abdb8052f6ee806c3c264953` (`Freeze D3 design memory milestone`)  
+**Original reviewed baseline commit:** `6abdf279141cf032abdb8052f6ee806c3c264953` (`Freeze D3 design memory milestone`)  
+**State at this consolidation:** branch `model0r-realization-foundation`, head `68ad1bcaf9ddff70e7c178556ba428e038c67b44` (`MODEL0-R: remove SURROGATE from ModelFormulation`). DATA-BOUNDARY0 is complete and present in the working tree, not yet committed at the time of writing.  
 
 > This document is the source of truth for continuing Crafty across ChatGPT, Claude, Codex, human collaborators, or future sessions.
 >
@@ -29,6 +30,17 @@ Any new AI agent or engineer must read this document before proposing major arch
 This is a **canonical structured reconstruction of all material decisions and objectives known at consolidation time**. It is not claimed to be a byte-for-byte transcript of every historical chat message.
 
 If a future conversation conflicts with this document, the newer explicit decision must update this file rather than silently diverging.
+
+> **Reading order note, added 2026-09-02.**
+>
+> **§54–§62 were added on 2026-09-02** and record the current development
+> strategy, the two-axis decision model, completed milestone status, the
+> current roadmap and the next milestone.
+>
+> Sections 1–53 remain valid as vision, architecture, science and commercial
+> context. **Where an earlier section states the current next step or the
+> delivery order, §54–§62 govern.** The affected sections (§30, §41, §42, §43,
+> §45, §53) carry an inline amendment note pointing forward.
 
 ---
 
@@ -1168,6 +1180,11 @@ The scientific core must remain usable without any LLM provider.
 
 This principle already exists and should become stronger as Crafty moves toward universal simulation.
 
+> **Clarified 2026-09-02.** The principle targets *domain-specific* edits to
+> universal code. Counting edited core lines ("Core Edit Ratio") is only a
+> secondary diagnostic; the primary test is the set of semantic questions in
+> §59.
+
 ---
 
 # 27. SRIA is a differentiator
@@ -1270,6 +1287,16 @@ Preregistration, frozen baselines and reproducible testing are part of the proje
 ---
 
 # 30. Development discipline
+
+> **Amended 2026-09-02.** This workflow remains correct for *executing* a
+> milestone. Two clarifications from §54–§56:
+>
+> * Milestone **selection** is now governed by §54 (risk and reversibility
+>   cost), not by position in a layer diagram.
+> * The final "Freeze milestone" step is **not** mandatory. A milestone may
+>   complete as `PROPOSED` with an evidence record and no freeze document —
+>   DATA-BOUNDARY0 did exactly that (§56). Completion and freezing are
+>   different axes (§55.3).
 
 New major scientific milestones should follow a disciplined workflow:
 
@@ -1692,6 +1719,14 @@ The documentation and architecture should be updated incrementally so Crafty can
 
 # 41. Current next milestone
 
+> **Superseded as the current next step, 2026-09-02.** MODEL0-R's design
+> foundation has been delivered (commits `3166cfb`, `68ad1bc`) and is
+> `DESIGN-FROZEN` with evidence below `L2` — see §58. The current next
+> milestone is `MODEL0-R DIFFERENTIAL PROOF` (§62).
+>
+> This section is retained because its **statement of the distinction** is
+> still canonical.
+
 Do **not** begin by implementing radar, tire, HVAC, FEM, CFD or a large numerical engine.
 
 The immediate proposed milestone is:
@@ -1721,6 +1756,13 @@ MODEL0-R should be additive and backward-compatible.
 ---
 
 # 42. MODEL0-R intended scope
+
+> **Amended 2026-09-02.** This scope was delivered. One clarification on the
+> "Do not implement yet" list below: DATA-BOUNDARY0 moved a solved **field's
+> bytes** across a storage boundary (§56). It did **not** define `FIELD0`
+> semantics — no shape, support, frame, topology, transfer or interpolation
+> exists, and `count` is a count of values and nothing more (§57). The
+> deferral of `field` in the list below therefore still stands.
 
 The previously prepared implementation prompt established approximately the following scope:
 
@@ -1787,6 +1829,12 @@ ScientificModelDefinition != ModelRealizationDefinition
 ---
 
 # 43. Long-term milestone sequence
+
+> **Amended 2026-09-02.** This sequence is retained as an **architecture
+> work-package catalogue**, not as the delivery order. Delivery is now
+> risk-driven and evidence-gated (§54); the current roadmap is §61. The rule
+> quoted at the end of this section still holds — the linear ordering does not
+> bind.
 
 The exact order may evolve after each preregistered milestone, but the current direction is approximately:
 
@@ -1896,6 +1944,10 @@ Notable baseline data includes:
 - Design Memory
 
 These exact numbers belong to the referenced baseline and should be rechecked after future commits.
+
+> **Updated 2026-09-02.** At DATA-BOUNDARY0 completion the figures are
+> `1582 passed, 0 failed` (FULL) and `1087 passed, 495 deselected` (FAST).
+> See §56.4.
 
 ---
 
@@ -2078,12 +2130,19 @@ Update it when any of the following changes materially:
 - completed frozen milestone
 - current next step
 - major valuation/market assumptions
+- a decision's **status** or **evidence level** (§55) changing
 
 Historical scientific milestone reports should remain separate and frozen; this file is the living strategic context connecting them.
 
 ---
 
 # 53. Current exact next action at consolidation time
+
+> **Superseded 2026-09-02.** This records the next action as of the
+> 2026-09-01 consolidation. MODEL0-R has since been delivered and
+> DATA-BOUNDARY0 completed. **The current next action is §62 —
+> `MODEL0-R DIFFERENTIAL PROOF`.** The instruction below not to begin broad
+> domain implementation still holds.
 
 **Do not begin broad domain implementation.**
 
@@ -2100,7 +2159,437 @@ After MODEL0-R completes and passes targeted + full regression review, reassess 
 
 ---
 
-# 54. Final project intent
+# 54. Development strategy: differential evidence-gated development
+
+**Recorded 2026-09-02.** This supersedes the implicit assumption, present
+throughout §41–§43 and §53, that the architecture layer map is also the
+delivery plan.
+
+The layer map in §24, and the Layer A–I boundaries in
+`docs/architecture-study/07_CRAFTY_ARCHITECTURE_SYNTHESIS_V1.md`, remain
+**valid as design structure**. They describe where a concern belongs once it
+exists. Nothing in them is retracted.
+
+They are **no longer the delivery roadmap.**
+
+> **Architecture layers != delivery milestones.**
+
+Building the layer map top-to-bottom spends the project's scarcest resource —
+a solo founder's execution time — on abstractions whose shape is still a guess,
+in an order chosen by tidiness rather than by risk.
+
+## 54.1 The core loop
+
+```text
+Risk / architectural hypothesis
+        ↓
+smallest expensive-to-reverse boundary
+        ↓
+preregistered proof
+        ↓
+Consumer A
+        ↓
+materially different Consumer B when required
+        ↓
+semantic architecture fitness evaluation
+        ↓
+adversarial falsification
+        ↓
+evidence update
+        ↓
+KEEP / MODIFY / SUPERSEDE / DEFER
+```
+
+Each step is already exercised rather than aspirational:
+
+- **Smallest expensive-to-reverse boundary.** Work is selected by what would be
+  costly to undo later, not by what comes next in a layer diagram.
+- **Preregistered proof.** Hypothesis, fail conditions and predicted results are
+  written *before* implementation and are immutable afterwards.
+  `docs/data-boundary0-prereg.md` is the reference example.
+- **Consumer A / Consumer B.** One consumer *exercises* a contract; it cannot
+  *differentiate* it. A second, **materially different** consumer is what
+  separates a general boundary from a boundary shaped around its only caller.
+  "Materially different" explicitly excludes a second implementation written by
+  the same author, on the same day, against the same interface.
+- **Semantic fitness evaluation.** §59, not a line-count ratio.
+- **Adversarial falsification.** An attempt to break the boundary, bounded by
+  the stop rule in §60.
+- **Evidence update.** Outcomes are recorded in a separate evidence document
+  written *after* execution. Nothing learned afterwards is back-written into
+  the preregistration.
+
+## 54.2 Work packages are pulled, not pushed
+
+`CAP0`, `MAT0`, `FIELD0`, `SYSTEM0`, `TOPO0`, `EQIR0`, `DISC0`, `NUM0`,
+`STATE0`, `COUPLE0`, `SIM0`, `UQ0`, `DISCOVERY0` and the rest remain **useful
+architecture work packages**. Their scoping work is not wasted and their
+content is not withdrawn.
+
+They are pulled into delivery **only when a proof or a consumer requires
+them**, and then only to the extent that proof requires.
+
+This is a change in *scheduling*, not in architecture.
+
+---
+
+# 55. Two-axis decision model
+
+Every architectural decision carries **two independent statuses**. Conflating
+them is how a passing demo becomes a law, and how a well-reasoned distinction
+gets deleted for lack of callers.
+
+## 55.1 Decision status — how settled the design is
+
+| Status | Meaning |
+|---|---|
+| `PROPOSED` | The design exists and is being built on. It may be revised. |
+| `DESIGN-FROZEN` | The design is closed to casual revision. Changing it requires an explicit superseding decision. |
+| `SUPERSEDED` | A later decision replaced it. Retained for the record, not for use. |
+
+## 55.2 Evidence maturity — how much reality the design has met
+
+| Level | Meaning |
+|---|---|
+| `L0 REASONED` | Argued. Not executed. |
+| `L1 EXERCISED` | Executed against a real consumer. |
+| `L2 DIFFERENTIATED` | Executed against two **materially different** consumers that could have disagreed and did not. |
+| `L3 STRESSED` | Survived scale, concurrency, latency, hostile input or failure injection. |
+
+## 55.3 The axes are orthogonal
+
+This is the load-bearing part of the model.
+
+- **`DESIGN-FROZEN` does not mean empirically universal.** It is a statement
+  about process — the design is closed to casual revision — not a claim about
+  physics or about generality.
+- **`L0` does not mean the design must remain unfrozen.** A boundary may
+  legitimately be frozen on reasoning while its evidence is still thin. That is
+  often the right call for a distinction which is expensive to introduce late.
+- `DESIGN-FROZEN / L0` and `PROPOSED / L1` are therefore both coherent
+  positions, and neither is a contradiction to be repaired.
+
+## 55.4 No stronger status exists
+
+Do not invent `VERIFIED`, `CERTIFIED`, `PROVEN`, `FINAL`, `L4`, or any status
+implying evidence Crafty does not hold. If a claim requires a status that is
+not in the tables above, the claim is too strong.
+
+## 55.5 Current holdings
+
+| Decision | Decision status | Evidence |
+|---|---|---|
+| MODEL0-R — Scientific Model / Computational Realization / Solver separation | `DESIGN-FROZEN` | below `L2` — see §58 |
+| DATA-BOUNDARY0 — scientific data identity vs. storage location | `PROPOSED` | `L1 EXERCISED` — see §56 |
+
+---
+
+# 56. DATA-BOUNDARY0 — completed
+
+```text
+Decision status:        PROPOSED
+Evidence:               L1 EXERCISED
+Milestone execution:    COMPLETE
+```
+
+**It is not `DESIGN-FROZEN`, and no freeze document was written.** Milestone
+completion and design freezing are different things (§55.3). Reading
+"complete" as "frozen" is reading the wrong axis.
+
+Records: `docs/data-boundary0-prereg.md` (written before implementation,
+immutable) and `docs/data-boundary0-evidence.md` (written after execution).
+The resulting contract is documented in `docs/scientific-core/README.md`.
+
+## 56.1 What was demonstrated
+
+Executed against the real solved field of the byte-frozen `Conduction1DSolver`,
+at four spatial resolutions:
+
+- a real `Conduction1D` bulk field can leave the scientific control plane;
+- `ScientificResult` remains approximately O(1) in bulk field size;
+- bulk data can be relocated without changing the scientific result record;
+- storage location is not part of scientific data identity;
+- corruption, substitution and truncation are detectable;
+- missing bulk data is an explicit typed failure, never empty or invented data;
+- scalar scientific results remain usable when bulk data is unavailable;
+- existing scalar consumers remain compatible, and no existing test, existing
+  solver or frozen file was modified;
+- `scientific_result` and `raw_solver_output` now use schema `/2`, with
+  explicit backward *reading* of `/1` and **loud** failure when an old reader
+  meets a `/2` payload.
+
+The schema bump was deliberate: a reader that silently dropped
+`data_references` would return a scientific result that understates what was
+computed. Loud failure is recoverable; silent understatement of a scientific
+claim is not.
+
+## 56.2 The separation this establishes
+
+```text
+Scientific Control Plane        engcore.scientific      knows nothing about storage
+        !=
+Scientific Data Identity        ScientificDataReference content identity,
+/ Reference                                             no location
+        !=
+Runtime / Storage Data Plane    engcore.data            knows locations,
+                                                        knows no domain
+```
+
+The dependency direction is the load-bearing part and is test-enforced in both
+directions: `engcore.scientific` never imports `engcore.data`; `engcore.data`
+never imports a named domain pack. Only a domain/orchestration module may
+depend on both.
+
+## 56.3 Content identity != scientific equivalence
+
+Recorded explicitly, because the first draft of the evidence overreached here
+and was corrected before commit:
+
+> **The digest proves byte-content identity, integrity, relocation stability
+> and content addressing. It does not prove numerical or scientific
+> equivalence.**
+
+Two computations that are scientifically equivalent to within tolerance will in
+general produce **different** digests — hardware, compiler, BLAS, thread count,
+reduction order and library version move the last bits without moving the
+science. A digest match likewise says nothing about whether either computation
+was correct or converged; those remain validation and uncertainty questions on
+separate fields of the result.
+
+Tolerance-level comparison of two datasets is a real and different operation.
+Nothing in DATA-BOUNDARY0 implements it or substitutes for it.
+
+## 56.4 Regression figures at completion
+
+```text
+Targeted (tests/test_data_boundary0.py)      52 passed
+FAST     (-m "not expensive")              1087 passed, 495 deselected
+FULL                                       1582 passed, 0 failed
+```
+
+These belong to this milestone and supersede the older baseline figures quoted
+in §45.
+
+---
+
+# 57. What DATA-BOUNDARY0 did **not** prove
+
+These are **known unknowns and deferred evidence, not defects.** Each was
+either preregistered as out of scope or recorded honestly afterwards. None is a
+repair task.
+
+- heterogeneous **real external provider** — both storage backends were written
+  by one author on one day against one interface, which differentiates nothing;
+- distributed field ownership;
+- large-scale / HPC behaviour;
+- GPU / device data;
+- remote / object storage;
+- shaped or tensor scientific descriptors — `count` is a count of values and is
+  deliberately not a shape, mesh, topology or field support;
+- `FIELD0` / `TOPO0` semantics — intentionally undefined here;
+- transfer / interpolation semantics;
+- field uncertainty;
+- artifact lifetime and ownership policy at production scale — content
+  addressing shares blobs, and there is no retention, reference counting or
+  garbage collection.
+
+Also unexercised: non-`float64` dtypes, concurrency, latency, and whether an
+empty scientific dataset is ever meaningful (the universal ban on empty data
+was removed for lack of evidence either way — an absence of evidence, not
+evidence of validity).
+
+**The single thing that would actually raise this to `L2` is a storage backend
+Crafty did not write, resolving a reference produced by a solver Crafty did not
+write.** Not another in-house backend, and not another domain bridge over the
+same two stores.
+
+## 57.1 Process risk discovered
+
+> **Frozen experimental evidence must not imply that production implementation
+> is immutable forever.**
+
+`src/engcore/domains/thermal/` is pinned byte-for-byte by three frozen
+experiments (T1/T2/T3) because those experiments measured a property of that
+exact solver. Pinning is the correct way to protect an experimental claim. It
+is **not** a correct way to own production code indefinitely: a defect in a
+frozen file today has no sanctioned repair path, and the pin does not
+distinguish *"this evidence is about this code"* from *"this code may never
+change"*.
+
+DATA-BOUNDARY0 worked *around* the freeze — the bulk path is a bridge module
+beside the frozen tree — which was right for a spike and is not a general
+answer.
+
+**No unfreeze mechanism is designed here, and none should be improvised.** This
+is logged for whichever milestone next needs to change a frozen tree.
+
+---
+
+# 58. MODEL0-R status
+
+The architectural distinction stands and must be preserved:
+
+```text
+Scientific Model
+        !=
+Computational Realization
+        !=
+Solver Capability
+        !=
+Concrete Solver
+```
+
+```text
+Decision status:   DESIGN-FROZEN
+Evidence:          below L2
+```
+
+The design boundary is `DESIGN-FROZEN`. Its empirical evidence is still below
+`L2 DIFFERENTIATED`: one scientific model has not yet been executed through two
+materially different realizations.
+
+> **Do not reopen or delete the boundary merely because consumers are sparse.**
+
+Sparse consumers are a statement about evidence maturity, not about design
+validity (§55.3). The cost of introducing this separation late — after models,
+results and serialized records have assumed the two are one thing — is exactly
+why it was made early.
+
+## 58.1 Taxonomy members remain provisional where unexercised
+
+Freezing the *boundary* does not freeze every *member* of every enumeration
+inside it.
+
+`ModelFormulation` (`src/engcore/scientific/realizations/definition.py`):
+
+- `ALGEBRAIC`, `ODE`, `DAE`, `PDE` — defensible current members.
+- `DISCRETE` — **under-defined and provisional.** It must be clarified by a
+  real consumer, or removed, **before anything is allowed to rely on it.**
+
+`SURROGATE` was already removed (commit `68ad1bc`) because it answers a
+different question — *by what strategy a realization was obtained*, not *what
+mathematical form is posed*. Surrogate character is deferred, not renamed.
+
+**`ModelFormulation` is not redesigned by this documentation update.** The
+record above states what is provisional; changing it requires its own decision
+and its own consumer.
+
+---
+
+# 59. Architecture fitness evaluation
+
+## 59.1 Core Edit Ratio is a secondary diagnostic
+
+Counting edited lines of universal core when a new domain arrives is cheap and
+occasionally informative. It is **not** the measure of architectural fitness
+and must not be used as an acceptance gate on its own.
+
+It is easy to score well on it while doing architectural damage — a
+domain-aware branch is very few lines — and easy to score badly on it while
+doing something correct: DATA-BOUNDARY0's schema `/2` bump touched core
+deliberately, after review, and was the right call.
+
+## 59.2 The primary questions are semantic
+
+When a new consumer or domain is added, ask:
+
+1. Did a frozen core contract or schema require change?
+2. Did existing serialized records require migration?
+3. Was a domain-specific branch added to universal core?
+4. Did provider identity leak into scientific semantics?
+5. Was untyped metadata used as an escape hatch?
+6. Was an existing abstraction duplicated outside core instead of reused?
+7. Was a new semantic abstraction required?
+8. Was a frozen invariant violated?
+9. Could the consumer have been implemented from the **published contract**
+   alone, without knowledge of core internals?
+
+A "yes" to 1–6 or 8, or a "no" to 9, is a finding that must be explained. It is
+not automatically a failure, but it is never something to pass over silently.
+
+**No CI enforcement of all of this is implemented, and none is required by this
+update.** A few individual questions are already test-enforced in narrow places
+— the two dependency-direction tests, and the `artifacts`-channel fitness test.
+
+---
+
+# 60. Review stop rule
+
+For a high-impact architecture decision:
+
+- **at most two adversarial reasoning / review rounds;**
+- if material uncertainty remains after those two rounds, **obtain executable
+  evidence through a spike** rather than a third round of argument.
+
+> **Architecture argument must not substitute indefinitely for evidence.**
+
+Round three and beyond of adversarial reasoning reliably produces more prose
+and no more knowledge. A spike that costs a day settles what a week of review
+cannot.
+
+---
+
+# 61. Current roadmap — risk-driven
+
+```text
+MODEL0-R                              ✅ design foundation exists
+                                         DESIGN-FROZEN / evidence < L2
+        ↓
+DATA-BOUNDARY0                        ✅ PROPOSED / L1 EXERCISED
+        ↓
+MODEL0-R DIFFERENTIAL PROOF              <- next (§62)
+        ↓
+MINIMUM FOUNDATION required by the coupled proof
+        ↓
+ELECTRO-THERMAL VERTICAL PROOF
+        ↓
+HETEROGENEOUS REAL PROVIDER PROOF
+        ↓
+API / MCP v0
+        ↓
+CROSS-ARCHITECTURE HOSTILE PROOF
+        ↓
+HVAC commercial vertical
+        ↓
+domain expert validation + V&V / UQ / benchmarks
+        ↓
+killer demo / pilot / commercial process
+```
+
+**This is a risk-driven roadmap, not a frozen sequence.** Later evidence may
+reorder it.
+
+"MINIMUM FOUNDATION required by the coupled proof" is deliberately not
+enumerated in advance: which of `MAT0`, `FIELD0`, `SYSTEM0`, `TOPO0` or `EQIR0`
+gets pulled in, and how much of each, is decided by what the electro-thermal
+proof actually requires (§54.2).
+
+The layered sequences in §43 and in the architecture study remain the
+work-package catalogue this roadmap draws from.
+
+---
+
+# 62. Current next milestone
+
+# `MODEL0-R DIFFERENTIAL PROOF`
+
+**Primary question:**
+
+> Does the separation between Scientific Model, Computational Realization and
+> Solver carry **independently useful information** when ONE scientific model
+> is executed through TWO materially different realizations?
+
+This is the `L1 → L2` step for MODEL0-R (§55.2): two realizations of the same
+scientific claim that could have disagreed, where the model record stays fixed
+and the realization record is what changes.
+
+**Not implemented by this documentation update.** It requires its own
+preregistration, written before any source file is added or edited, following
+§54.1.
+
+---
+
+# 63. Final project intent
 
 Crafty is being built toward a future where a user or AI agent can state a scientific/engineering objective, while Crafty provides the deterministic scientific machinery required to transform that intent into a defensible simulation/design workflow.
 
