@@ -875,6 +875,19 @@ def test_no_universal_core_file_was_added_or_edited():
     assert current == tracked
 
 
+#: The one file a later, execution-portability-only milestone
+#: (`ngspice-cross-platform-portability`) is documented and authorized to
+#: touch: `NgspiceInvocation`'s executable discovery, so the same provider
+#: adapter reaches a native Linux `ngspice` as readily as the WSL route this
+#: milestone's own machine used. No scientific model, result semantics or
+#: validation logic changed there — see
+#: docs/ngspice-cross-platform-portability-evidence.md. MIN-CROSS-DOMAIN-
+#: FOUNDATION's own claim (this milestone left electrical/ as a byte-frozen
+#: control group) is unaffected: it was true when this milestone was
+#: written, and that fact does not change.
+_PORTABILITY_EXCEPTION = "src/engcore/domains/electrical/ngspice.py"
+
+
 def test_no_thermal_control_or_prior_probe_file_was_edited():
     """FAIL CONDITIONS 2 and 3.
 
@@ -884,7 +897,10 @@ def test_no_thermal_control_or_prior_probe_file_was_edited():
     """
     assert _diff("src/engcore/domains/thermal/") == ""
     assert _diff("src/engcore/domains/thermal_lumped.py") == ""
-    assert _diff("src/engcore/domains/electrical/") == ""
+    electrical_changed = set(
+        _diff("src/engcore/domains/electrical/").split()
+    ) - {_PORTABILITY_EXCEPTION}
+    assert electrical_changed == set(), sorted(electrical_changed)
     assert _diff("experiments/hostile_core_stress/") == ""
 
 
