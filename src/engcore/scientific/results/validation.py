@@ -188,11 +188,10 @@ class ValidationReport:
     # A problem may declare, in ``ScientificProblem.validation_requirements``,
     # which *named* checks a result computed from it must satisfy — every
     # shipped domain already populates this field with names that are the
-    # literal ``ValidationCheck.name`` values its own validator produces
-    # (``kinetics/cstr``'s ``state_physically_admissible``,
-    # ``trajectory_finite`` and so on). Nothing before this method
-    # cross-referenced the two: ``require_level`` gates on an *evidentiary
-    # level*, which every admissibility check in this codebase deliberately
+    # literal ``ValidationCheck.name`` values its own validator produces.
+    # Nothing before this method cross-referenced the two: ``require_level``
+    # gates on an *evidentiary level*, which every admissibility check in
+    # this codebase deliberately
     # declines to establish (``establishes=None`` — a passing admissibility
     # check is not stronger evidence of numerical accuracy, and correctly
     # claims none), and ``ScientificResult.is_usable`` is global over the

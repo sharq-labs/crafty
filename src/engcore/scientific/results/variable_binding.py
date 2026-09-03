@@ -5,7 +5,7 @@ The measured gap, corroborated by six consumers across two prior milestones
 `docs/exec-spec-structured-input-stress-evidence.md` §I):
 ``ScientificDataReference`` carries ``{name, unit, count, dtype, digest,
 digest_algorithm}`` and *no field naming a variable*. A records-only reader
-handed an eight-value displacement array, or a three-species concentration
+handed an eight-value displacement array, or a three-quantity state
 trajectory, cannot say which declared ``ScientificVariable`` — of possibly
 several sharing a dimension — the values belong to.
 
