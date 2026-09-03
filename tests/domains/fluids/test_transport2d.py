@@ -208,6 +208,26 @@ def test_assembly_is_shared_between_both_solvers_not_reimplemented() -> None:
 # F4 — VariableBulkLinkage: the mandatory real production caller
 # =====================================================================
 
+def test_solve_transport2d_itself_refuses_a_result_missing_the_field_variable() -> None:
+    """Closes the falsifier's C4 coverage gap: the internal linkage check
+    inside `solve_transport2d` (not `check_against` called standalone) must
+    itself refuse construction when the field variable the linkage would
+    name is not declared on the problem. Built by dropping FIELD_VARIABLE
+    (and the boundary conditions that reference it) from an otherwise real
+    problem — production control flow, driven into its failure branch."""
+    import dataclasses
+
+    domain = make_domain(8)
+    problem = build_transport2d_problem(domain)
+    crippled = dataclasses.replace(
+        problem,
+        variables=tuple(v for v in problem.variables if v.name != FIELD_VARIABLE),
+        boundary_conditions=(),
+    )
+    with pytest.raises(Transport2DError):
+        solve_transport2d(domain, run_id="missing-field-variable", problem=crippled)
+
+
 def test_field_output_is_bound_through_variable_bulk_linkage() -> None:
     domain = make_domain(16)
     problem = build_transport2d_problem(domain)
