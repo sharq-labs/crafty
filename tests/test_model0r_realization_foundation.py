@@ -946,20 +946,41 @@ def test_legacy_model_record_still_loads_unchanged():
 
 
 def test_legacy_model_record_re_serializes_byte_identically():
-    """MODEL0-R must not perturb one byte of a frozen scientific record."""
+    """MODEL0-R must not perturb one byte of a frozen scientific record.
+
+    A later, separate milestone (`planner-provided-capabilities`) is
+    documented and authorized to add exactly one additive key to this
+    serialized shape: `provided_capabilities`, defaulting to `[]` for a
+    payload — like `LEGACY_MODEL_JSON` — that predates it. MODEL0-R's own
+    claim (this record was untouched by the realization split) still holds:
+    every other key is unchanged, in value and in position.
+    """
     model = ScientificModelDefinition.from_dict(LEGACY_MODEL_JSON)
-    assert model.to_dict() == LEGACY_MODEL_JSON
-    assert to_json(model) == json.dumps(LEGACY_MODEL_JSON, sort_keys=True)
+    expected = dict(LEGACY_MODEL_JSON, provided_capabilities=[])
+    assert model.to_dict() == expected
+    assert to_json(model) == json.dumps(expected, sort_keys=True)
 
 
 def test_model_definition_gained_no_realization_fields():
+    """MODEL0-R added no realization fields to the model layer.
+
+    `provided_capabilities` is present because a later, separate milestone
+    (`planner-provided-capabilities`) added it to the model layer itself —
+    it is not a realization field. The names MODEL0-R actually introduced
+    at the realization layer (`realization`, `formulation`, `fidelity`,
+    `realizations`, `required_solver_capabilities`) still never leaked in.
+    """
     fields = set(ScientificModelDefinition.__dataclass_fields__)
     assert fields == {
         "model_id", "version", "name", "domain", "model_type", "description",
         "inputs", "outputs", "assumptions", "validity", "references",
-        "required_capabilities", "validation_status", "metadata",
+        "required_capabilities", "provided_capabilities", "validation_status",
+        "metadata",
     }
-    for added in ("realization", "formulation", "fidelity", "realizations"):
+    for added in (
+        "realization", "formulation", "fidelity", "realizations",
+        "required_solver_capabilities",
+    ):
         assert added not in fields
 
 

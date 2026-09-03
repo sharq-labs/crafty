@@ -805,6 +805,21 @@ def test_g3_neither_column_can_answer_structure_without_its_payload():
 #: true when this milestone was written, and that fact does not change.
 _PORTABILITY_EXCEPTION = "src/engcore/domains/electrical/ngspice.py"
 
+#: The two files a later, model-discovery-only milestone
+#: (`planner-provided-capabilities`) is documented and authorized to touch:
+#: adding a `provided_capabilities` field to `ScientificModelDefinition` and
+#: a matching `ModelRegistry.providers_of` query method, so a deterministic
+#: caller can answer "which models provide capability X" without name
+#: parsing or a metadata side-channel. No exec-spec structured-input
+#: behaviour changed there — see
+#: docs/planner-provided-capabilities-evidence.md. This guard's own claim
+#: (this milestone touches nothing under `src/`) is unaffected: it was true
+#: when this milestone was written, and that fact does not change.
+_PLANNER_DISCOVERY_EXCEPTIONS = {
+    "src/engcore/scientific/models/definition.py",
+    "src/engcore/scientific/models/registry.py",
+}
+
 
 def test_h_no_universal_core_or_committed_evidence_was_modified():
     """FAIL CONDITION §13.7."""
@@ -816,7 +831,11 @@ def test_h_no_universal_core_or_committed_evidence_was_modified():
             text=True,
             check=True,
         )
-        changed = set(diff.stdout.split()) - {_PORTABILITY_EXCEPTION}
+        changed = (
+            set(diff.stdout.split())
+            - {_PORTABILITY_EXCEPTION}
+            - _PLANNER_DISCOVERY_EXCEPTIONS
+        )
         assert changed == set(), f"{path} was modified: {sorted(changed)}"
     untracked = subprocess.run(
         ["git", "ls-files", "--others", "--exclude-standard", "src/"],

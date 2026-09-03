@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from typing import Iterable, Iterator, Mapping
 
+from ..capabilities import ScientificCapability
 from ..errors import DuplicateRegistrationError, ModelNotFoundError
 from .definition import ScientificModelDefinition
 
@@ -85,6 +86,26 @@ class ModelRegistry:
                 continue
             results.append(model)
         return tuple(results)
+
+    def providers_of(
+        self, capability: ScientificCapability | str
+    ) -> tuple[ScientificModelDefinition, ...]:
+        """All registered models declaring they provide ``capability``.
+
+        Discovery, not selection: this is the answer to "which models
+        provide X", the inverse question from ``list(capability=...)``
+        (which filters on ``required_capabilities`` — "which models need
+        X"). Zero, one or many models may provide the same capability, and
+        when more than one does, all of them are returned, unranked and in
+        deterministic ``(model_id, version)`` order — choosing among them
+        is a planner's job, not this registry's.
+        """
+        wanted = ScientificCapability.coerce(capability)
+        return tuple(
+            self._models[key]
+            for key in sorted(self._models)
+            if wanted in self._models[key].provided_capabilities
+        )
 
     def versions(self, model_id: str) -> tuple[str, ...]:
         return tuple(

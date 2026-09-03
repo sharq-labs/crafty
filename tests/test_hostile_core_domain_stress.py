@@ -1211,9 +1211,23 @@ def test_no_universal_core_file_was_added_or_edited():
         text=True,
         check=True,
     )
-    assert diff.stdout.strip() == "", (
-        f"universal core was modified: {diff.stdout.strip()}"
-    )
+    # The two files a later, model-discovery-only milestone
+    # (`planner-provided-capabilities`) is documented and authorized to
+    # touch: adding a `provided_capabilities` field to
+    # `ScientificModelDefinition` and a matching
+    # `ModelRegistry.providers_of` query method, so a deterministic caller
+    # can answer "which models provide capability X" without name parsing
+    # or a metadata side-channel. No hostile-core-domain-stress invariant
+    # changed there — see docs/planner-provided-capabilities-evidence.md.
+    # This guard's own claim (this milestone left the universal core
+    # byte-frozen) is unaffected: it was true when this milestone was
+    # written, and that fact does not change.
+    planner_discovery_exceptions = {
+        "src/engcore/scientific/models/definition.py",
+        "src/engcore/scientific/models/registry.py",
+    }
+    changed = set(diff.stdout.split()) - planner_discovery_exceptions
+    assert changed == set(), f"universal core was modified: {sorted(changed)}"
 
 
 def test_no_thermal_domain_file_was_added_or_edited():

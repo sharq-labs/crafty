@@ -15,6 +15,11 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Mapping
 
+from ..capabilities import (
+    ScientificCapability,
+    capability_identifiers,
+    scientific_capabilities,
+)
 from ..errors import InvalidScientificProblem, ModelValidityError
 from ..ir.values import ValueKind
 from ..ir.variables import VariableRole
@@ -596,7 +601,17 @@ class ModelBindingReport:
 
 @dataclass(frozen=True)
 class ScientificModelDefinition:
-    """A versioned scientific model contract."""
+    """A versioned scientific model contract.
+
+    ``provided_capabilities`` states what this model *offers*, as distinct
+    from ``required_capabilities``, which states what it *needs*. The two
+    are not each other's inverse and are not validated against each other:
+    a model may need one capability and provide an unrelated one. This is
+    the minimum surface a deterministic caller needs to answer "which
+    registered models provide capability X" — see
+    ``ModelRegistry.providers_of`` — without resorting to name parsing,
+    metric-name inference, or an untyped metadata side-channel.
+    """
 
     model_id: str
     version: str
@@ -610,6 +625,7 @@ class ScientificModelDefinition:
     validity: ValidityDomain = field(default_factory=ValidityDomain)
     references: tuple[str, ...] = ()
     required_capabilities: frozenset[str] = frozenset()
+    provided_capabilities: frozenset[ScientificCapability] = frozenset()
     validation_status: ModelValidationStatus = ModelValidationStatus.UNVALIDATED
     metadata: Mapping[str, Any] = field(default_factory=dict)
 
@@ -641,6 +657,17 @@ class ScientificModelDefinition:
         object.__setattr__(
             self, "required_capabilities", frozenset(self.required_capabilities)
         )
+        # Typed with ScientificCapability (not the bare-string convention
+        # `required_capabilities` happens to use on this class) so it is the
+        # exact same identity ModelRealizationDefinition.provided_capabilities
+        # already uses — one capability type, not two. Empty by default: a
+        # model that declares nothing is undiscoverable by capability, which
+        # is the correct silent behaviour for models predating this field
+        # (see ModelRegistry.providers_of and the backward-compatibility
+        # tests) rather than an error or an inferred claim.
+        object.__setattr__(
+            self, "provided_capabilities", scientific_capabilities(self.provided_capabilities)
+        )
         object.__setattr__(self, "metadata", dict(self.metadata))
 
     @property
@@ -653,6 +680,15 @@ class ScientificModelDefinition:
     @property
     def provided_metrics(self) -> tuple[str, ...]:
         return tuple(spec.metric for spec in self.outputs)
+
+    def provides(self, capability: ScientificCapability | str) -> bool:
+        """Whether this model declares it provides ``capability``.
+
+        Mirrors ``ModelRealizationDefinition.provides`` — the model layer's
+        answer to "what does this offer", as distinct from
+        ``required_capabilities``, which answers "what does this need".
+        """
+        return ScientificCapability.coerce(capability) in self.provided_capabilities
 
     def check_against(self, problem) -> ModelBindingReport:
         """Bind this model's typed inputs and outputs to a problem.
@@ -807,6 +843,9 @@ class ScientificModelDefinition:
             "validity": self.validity.to_dict(),
             "references": list(self.references),
             "required_capabilities": sorted(self.required_capabilities),
+            "provided_capabilities": list(
+                capability_identifiers(self.provided_capabilities)
+            ),
             "validation_status": self.validation_status.value,
             "metadata": dict(sorted(self.metadata.items())),
         }
@@ -833,6 +872,9 @@ class ScientificModelDefinition:
             else ValidityDomain(),
             references=tuple(payload.get("references", ())),
             required_capabilities=frozenset(payload.get("required_capabilities", ())),
+            provided_capabilities=scientific_capabilities(
+                payload.get("provided_capabilities", ())
+            ),
             validation_status=ModelValidationStatus(
                 payload.get("validation_status", "unvalidated")
             ),
