@@ -159,10 +159,23 @@ def test_the_executed_encoding_outcomes(fact, channel, expected):
 
 
 def test_the_boundary_condition_channel_works_and_is_unused_in_production():
-    """The slab's ends ARE representable. The production domain writes none.
+    """The slab's ends ARE representable. Thermal's production domain writes
+    none of them — this is the measurement that keeps the slab's residue
+    honest: what is missing there is the *non-uniform* initial condition,
+    not boundary conditions.
 
-    This is the measurement that keeps the slab's residue honest: what is missing
-    there is the *non-uniform* initial condition, not boundary conditions.
+    UPDATED by REAL-FLUID-PDE-DOMAIN (`docs/real-fluid-pde-evidence.md`):
+    this test's own original assertion message anticipated exactly this —
+    `f"BoundaryCondition now has producers: {producers}"` — a canary meant
+    to be updated, not a frozen invariant. `fluids/transport2d` is now a
+    real production producer: it declares four genuine
+    `BoundaryCondition(kind=DIRICHLET, ...)` instances (one per side of the
+    square domain), because the boundary VALUE channel this test measured as
+    "works" is exactly what that domain needs — Dirichlet `c = c*(x,y)`
+    restricted to each side. `thermal/conduction1d` still writes none (it
+    fixes its own boundary condition as a metadata string, unchanged by this
+    milestone), so the slab-specific finding above is unaffected; only the
+    repo-wide "and nothing uses it" half of the old claim no longer holds.
     """
     encoding = encodings.ENCODINGS["col-slab"]
     assert len(encoding.problem.boundary_conditions) == 2
@@ -172,7 +185,9 @@ def test_the_boundary_condition_channel_works_and_is_unused_in_production():
         for path in domains.rglob("*.py")
         if "BoundaryCondition(" in path.read_text(encoding="utf-8")
     ]
-    assert producers == [], f"BoundaryCondition now has producers: {producers}"
+    assert producers == [
+        "src/engcore/domains/fluids/transport2d/problem.py"
+    ], f"BoundaryCondition producers changed unexpectedly: {producers}"
 
 
 # =====================================================================
