@@ -123,6 +123,7 @@ EXPENSIVE_MODULES: dict[str, str] = {
     "tests/domains/kinetics/test_k3_configuration.py": "solves K3 truth holdouts against the K1.5 boundary",
     "tests/systems/aerospace/test_multirotor_mvr0.py": "runs multirotor reference design studies",
     "tests/systems/aerospace/test_multirotor_mvr1.py": "runs target-driven multirotor design studies",
+    "tests/test_executable_scientific_spec.py": "reconstructs and executes three domains, launches fresh interpreters and one real ngspice process",
 }
 
 #: Tests inside an expensive module that stay in FAST. Each only reads files,
@@ -193,6 +194,52 @@ STATIC_GUARDS: dict[str, frozenset[str]] = {
     "tests/systems/aerospace/test_multirotor_mvr1.py": frozenset(
         {
             "test_no_mvr1_logic_leaks_into_frozen_general_design_layer",
+        }
+    ),
+    # EXEC-SPEC. The measurement itself is records work and costs milliseconds;
+    # what is expensive is executing three domains, launching fresh interpreters
+    # and driving ngspice. The residue table, the decision rule, the planner
+    # questions, the negative cases and the architecture guards stay in FAST,
+    # because those are the assertions a code edit is most likely to break.
+    "tests/test_executable_scientific_spec.py": frozenset(
+        {
+            "test_the_reader_cannot_see_the_domain",
+            "test_one_instrument_serves_every_column",
+            "test_every_attempt_was_actually_executed",
+            "test_the_boundary_condition_channel_works_and_is_unused_in_production",
+            "test_every_residue_item_names_a_failed_attempt",
+            "test_the_strict_residue_table",
+            "test_the_placement_residue_table",
+            "test_the_preregistered_decision_rule_selects_the_outcome",
+            "test_the_placement_reading_reaches_the_same_outcome_by_a_different_route",
+            "test_every_identifier_a_planner_would_read_actually_resolves",
+            "test_three_columns_reconstruct_by_parameter_name_convention",
+            "test_the_slab_boundary_records_determine_a_variable_they_do_not_govern",
+            "test_an_unverified_element_type_is_a_hole_the_example_hid",
+            "test_the_slab_refuses_a_boundary_set_the_solver_does_not_implement",
+            "test_the_slab_residue_is_booked_ledger_two",
+            "test_the_cstr_residue_is_placement_only_and_ledger_one",
+            "test_connectivity_is_unanswerable_from_the_problem_alone",
+            "test_connectivity_is_answerable_for_the_network_column_at_l1",
+            "test_a_foreign_structure_schema_is_reported_not_guessed",
+            "test_required_inputs_are_computed_by_the_core_not_by_this_milestone",
+            "test_a_persisted_problem_is_data_and_only_data",
+            "test_the_circuit_round_trip_preserves_identity_but_not_python_equality",
+            "test_the_dc_problem_is_a_projection_of_the_artifact_not_a_source",
+            "test_n_a_missing_structure_is_a_typed_failure",
+            "test_n_b_identity_mismatch_is_refused",
+            "test_n_c_corrupted_structure_is_refused",
+            "test_n_d_unsupported_schema_fails_loudly",
+            "test_n_e_a_valid_problem_without_its_structure_does_not_execute",
+            "test_n_f_structure_for_the_wrong_domain_does_not_silently_bind",
+            "test_reconstruction_failure_is_not_a_scientific_verdict",
+            "test_a_residue_free_column_refuses_a_second_source_of_truth",
+            "test_the_slab_refuses_an_initial_profile_it_cannot_represent",
+            "test_no_src_file_was_added_or_edited",
+            "test_the_milestone_lives_outside_the_package",
+            "test_no_scientific_problem_schema_moved",
+            "test_the_residue_payloads_declare_their_schema",
+            "test_no_metadata_was_used_to_carry_science",
         }
     ),
 }
