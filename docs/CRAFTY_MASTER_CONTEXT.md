@@ -2288,6 +2288,7 @@ not in the tables above, the claim is too strong.
 | MIN-FOUNDATION-ET — system composition: which quantity supplies which | `PROPOSED` | `L1 EXERCISED` for the record; `L0 REASONED` for the deferrals — see §64 |
 | ET-VERTICAL — closed-loop coupling execution: the plan/outcome records | `PROPOSED` | `L1 EXERCISED` for the executed loop; several claims `L0` or zero — see §65 |
 | HETERO-NGSPICE — real external provider substitution: the adapter boundary | `PROPOSED` | `L1 EXERCISED`; the preregistered scoped `L2` was **withdrawn** — see §66 |
+| HOSTILE-CORE-STRESS — which distinctions a hostile PDE consumer forces | **none — freezes nothing** | `L0 REASONED` + measured gaps; `L1` for the probe only — see §67 |
 
 ---
 
@@ -2951,3 +2952,143 @@ nothing consults is not a guard.**
 
 Regression: **FULL 1744 → 1784**, FAST 1249 → 1262. No pre-existing test edited;
 the one edit to `tests/conftest.py` adds tier labels and changes no assertion.
+
+---
+
+# 67. HOSTILE-CORE-STRESS — completed
+
+```text
+Decision status:        none — this milestone freezes nothing
+Evidence:               L0 REASONED + measured gaps; L1 EXERCISED for the probe only
+Milestone execution:    COMPLETE
+```
+
+Full record: `docs/hostile-core-domain-stress-prereg.md` (immutable, committed
+before implementation) and `docs/hostile-core-domain-stress-evidence.md`. **A
+discovery/falsification milestone: no architecture was implemented, and none may
+be inferred as approved from it.**
+
+**Ran ahead of `API / MCP v0`**, which §61 permits as a risk-driven reordering.
+The deviation is recorded in the preregistration rather than assumed.
+
+## 67.1 The consumer, and why it
+
+`architecture-decision-reviewer` compared five options and selected **1D
+transient advection-diffusion** — `∂c/∂t + u ∂c/∂x = D ∂²c/∂x²`, `Pe = 40`,
+three frozen cases, two discretizations. A lumped pipe network lost because it
+is **isomorphic to the existing `electrical/dc` MNA domain** and so differences
+against nothing. A 2D Navier-Stokes skeleton lost on confounding and cost. **2D
+scalar transport in a prescribed velocity field lost narrowly**, on one recorded
+judgement: its extra pressures target concepts already deferred at `L0`, while
+the selected consumer attacks records that exist, are frozen, and had never been
+exercised. That judgement carries a preregistered reversal condition.
+
+## 67.2 What was measured
+
+A records-only reader — forbidden by AST scan from importing the probe's domain
+— was handed serialized payloads and counted admissible readings, reproducing
+`MIN-FOUNDATION-ET` §64.1's instrument. A **steelman encoding was binding**: no
+gap could be declared before a maximal honest attempt in existing typed
+contracts, because the repository's only PDE domain routes *around* those
+contracts (**`BoundaryCondition` has zero producers anywhere in
+`src/engcore/domains/`**).
+
+**The two central gaps, both Ledger 1:**
+
+* **Boundary records are not injective onto physical systems.** Reversing the
+  transport direction leaves **every serialized `BoundaryCondition`
+  byte-identical** while flipping which end is the inflow: 2 admissible
+  readings. The fallback *"Dirichlet means inflow"* is killed by the probe's own
+  steady case, which has Dirichlet at both ends. **Universal beyond PDEs** —
+  §66.4's passive-sign guard needed the same distinction for a two-terminal
+  lumped element with no topology anywhere.
+* **`validity_context` cannot see structural facts about a problem**, so no
+  declarative criterion can reference how many conditions were declared, and no
+  model can enumerate the conditions its equation requires
+  (`InputSourceKind` has two members, neither a condition).
+
+**What already works, recorded with equal prominence:** `ExecutionBinding`
+recovers the realization identity exactly as `MODEL0-R` intended;
+`is_time_dependent` is correct once a domain writes real `InitialCondition`
+records — the defect is in the *baseline domain*, not the contract;
+DATA-BOUNDARY0's storage independence holds unchanged under a field-valued
+consumer; and the `MIN-FOUNDATION-ET` repair to `unresolved_inputs` survived the
+shot aimed directly at it.
+
+## 67.3 Falsified once, and substantially better for it
+
+`architecture-falsifier` returned **FALSIFIED**: three `BLOCKER`s, three
+`BREAKING-RISK`s, **all closed before commit**. The measurements survived; the
+**claim layer** did not.
+
+* **The two-ledger rule was blending ledgers.** It booked a finding by *which
+  record was inspected* rather than *which record the missing concept belongs
+  to*, so one absent concept was Ledger 1 under one question and Ledger 2 under
+  another. Closed by stating the rule — *Ledger 1 only when **both** the
+  measurement and the remedy live in a record that exists* — and splitting the
+  orientation finding accordingly.
+* **A claimed dilemma was a false dilemma.** The milestone asserted that no
+  encoding gives both a typed mesh-dependent validity criterion and a mesh-free
+  problem identity. `ProvenanceRecord.inputs` does — a typed
+  `Mapping[str, Quantity]` the probe **already populated**. Withdrawn and
+  replaced by the residual that survives: such a criterion is assessable
+  **per-run and never pre-run**, which generalizes verbatim to CFL, Courant, y+
+  and element aspect ratio.
+* **An inexpressibility claim the preregistration had pre-committed not to
+  make.** The probe's prose said the platform could not express a physical
+  admissibility check. It can, today, with no contract change — so the probe now
+  writes it and executes it. What survives is an **asymmetry**: a domain can
+  record an admissibility *violation* and structurally cannot record its
+  *attainment*, because no `ValidationLevel` member names it.
+
+**One finding was withdrawn outright.** The milestone reported that at `D = 0`
+an infinite cell Péclet number cannot be expressed, since `Quantity` refuses
+non-finite magnitudes. It is a property of the author's chosen parameterisation,
+not of the contract: `Pe ≤ 2` and `1/Pe ≥ 0.5` are the same criterion and the
+reciprocal is finite. **`Quantity`'s invariant survives intact.**
+
+**The lesson worth carrying: an instrument that produces counts can itself be
+wrong, and this one was — twice — in the direction of flattering its own
+hypothesis.** Both errors were false gaps, and both were caught by asking which
+typed channel had not been tried.
+
+## 67.4 What it did **not** establish
+
+* **`FIELD0` / `TOPO0` gained nothing.** Every field-semantics finding is
+  Ledger 2 — a re-confirmation of an already-recorded `L0` deferral, booked at
+  **zero claimed evidence gain**.
+* **No existing holding moved.** `MODEL0-R`, `DATA-BOUNDARY0`,
+  `MIN-FOUNDATION-ET`, `ET-VERTICAL` and `HETERO-NGSPICE` are unchanged.
+  `ScientificTwin` gains zero evidence for the **third** consecutive milestone.
+* **Nothing about** vector or tensor rank, 2D/3D topology, field-valued
+  coefficients, nonlinearity, coupling, external providers, concurrency, scale,
+  field transfer between supports, or **time-varying boundary values** — the
+  last a cost of freezing the inflow constant, named by the falsifier and not
+  claimed.
+* **`QuantityDependency` remains scalar-endpoint-oriented, correctly.** A field
+  endpoint reports `MISSING`; a *scalar reduction* of the same field checks
+  clean. The only expressible coupling endpoint today is the one that has
+  already thrown the field away. The §64.3 convective-transport limit is **not
+  closed**.
+
+## 67.5 Next milestone
+
+**`MIN-FOUNDATION-PDE`** — the minimum semantic foundation a real field consumer
+forces, scoped to exactly three questions: boundary orientation (`FORCED`), a
+route from problem structure into `validity_context` (`FORCED`), and non-uniform
+`InitialCondition` (`LIKELY-FORCED`). **Not** three roadmap milestones; the same
+evidence-driven method used for electro-thermal.
+
+Entry condition: a **real** consumer, not another probe. The reviewer's rejected
+candidate D — 2D scalar transport in a prescribed velocity field — is the
+natural choice, because it forces the representational half this milestone
+deliberately did not probe.
+
+Explicitly deferred with their own evidence required: `DiscretizationDefinition`
+(identity already works; *selection* is the gap), an admissibility
+`ValidationLevel`, and every Ledger-2 item. Explicitly rejected: `Mesh`,
+`VectorQuantity`, `FieldState`, a general boundary system.
+
+Regression: **FULL 1784 → 1825**, FAST 1262 → 1303. No pre-existing test edited,
+no tolerance loosened. `src/engcore/scientific/` and `src/engcore/domains/thermal/`
+byte-unchanged, asserted by tests rather than claimed.
