@@ -42,6 +42,11 @@ from typing import TYPE_CHECKING, Any, Sequence
 import numpy as np
 
 from ....scientific.errors import ScientificValidationError
+from ....scientific.ir.orientation import (
+    BoundaryOrientation,
+    MixedOrientationError,
+    classify_sign,
+)
 from ....scientific.results.validation import (
     ValidationCheck,
     ValidationLevel,
@@ -50,7 +55,14 @@ from ....scientific.results.validation import (
 )
 from ....scientific.units.quantity import Quantity
 from .errors import Transport2DConfigurationError
-from .reference import REFERENCE_EXPRESSION, REFERENCE_ID, exact_centre, exact_field
+from .problem import ALL_SIDES
+from .reference import (
+    REFERENCE_EXPRESSION,
+    REFERENCE_ID,
+    exact_centre,
+    exact_field,
+    side_orientation,
+)
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from ....scientific.ir.problem import ScientificProblem
@@ -591,3 +603,66 @@ def run_verification_gate(
         min_observed_order=min_observed_order,
         analytic_rel_tol=analytic_rel_tol,
     )
+
+
+# =====================================================================
+# Boundary orientation (MIN-FIELD-SUPPORT-FOUNDATION) — real production use
+# of `engcore.scientific.ir.orientation`, and the mandatory negative test.
+# =====================================================================
+#
+# F6 (see docs/real-fluid-pde-evidence.md §5) already proved, against this
+# package's own production grid and velocity field, that every side of this
+# benchmark is exactly half inflow, half outflow. This section wires that
+# finding into `BoundaryOrientation`/`classify_sign`: a genuine, non-
+# decorative production attempt to describe one side with a single sign,
+# and the loud refusal that attempt is REQUIRED to produce.
+
+def classify_boundary_orientation(
+    domain: "Transport2DDomain", side: str, *, reference: str = "outward_normal"
+) -> BoundaryOrientation:
+    """Attempt one ``BoundaryOrientation`` for ``side``, from THIS domain's
+    real production velocity field and real production grid resolution
+    (``reference.side_orientation`` — never a synthetic sample array).
+
+    Raises ``MixedOrientationError``, uncaught, whenever the side's actual
+    physics is not single-signed. For every instance of this benchmark
+    (its velocity field is fixed — see ``problem.py``'s module docstring)
+    that is every side, always: the rotational field makes ``u.n`` change
+    sign at each side's midpoint regardless of grid resolution or the
+    physical scale chosen. This is the milestone's required negative test,
+    exercised here as real production code rather than only in a test file.
+    """
+    samples = side_orientation(
+        side,
+        n_cells=domain.grid.n_cells,
+        side_m=domain.side_m,
+        omega_per_s=domain.omega_per_s,
+    )
+    sign = classify_sign(
+        samples.normal_components,
+        context=(
+            f"transport2d domain {domain.domain_id!r} side {side!r} "
+            f"(u.n against the {reference})"
+        ),
+    )
+    return BoundaryOrientation(boundary_name=side, reference=reference, sign=sign)
+
+
+def boundary_orientation_report(
+    domain: "Transport2DDomain", *, reference: str = "outward_normal"
+) -> dict[str, str]:
+    """Per-side outcome of :func:`classify_boundary_orientation` for every
+    side of :data:`ALL_SIDES`. Never raises: a caller that wants the whole
+    picture rather than the first refusal gets one string per side, either
+    the classified sign or the refusal detail.
+    """
+    outcomes: dict[str, str] = {}
+    for side in ALL_SIDES:
+        try:
+            orientation = classify_boundary_orientation(
+                domain, side, reference=reference
+            )
+            outcomes[side] = f"single sign: {orientation.sign.value}"
+        except MixedOrientationError as exc:
+            outcomes[side] = f"refused: {exc}"
+    return outcomes

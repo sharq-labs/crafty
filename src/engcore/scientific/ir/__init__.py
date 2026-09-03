@@ -3,6 +3,12 @@
 from .conditions import BoundaryCondition, BoundaryKind, InitialCondition
 from .constraints import ConstraintCheck, ConstraintDefinition, ConstraintOperator
 from .objectives import ObjectiveDefinition, ObjectiveDirection
+from .orientation import (
+    BoundaryOrientation,
+    MixedOrientationError,
+    OrientationSign,
+    classify_sign,
+)
 from .problem import (
     ModelReference,
     ScientificProblem,
@@ -38,6 +44,10 @@ __all__ = [
     "BoundaryCondition",
     "BoundaryKind",
     "InitialCondition",
+    "BoundaryOrientation",
+    "MixedOrientationError",
+    "OrientationSign",
+    "classify_sign",
     "ConstraintCheck",
     "ConstraintDefinition",
     "ConstraintOperator",

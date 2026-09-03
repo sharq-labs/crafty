@@ -820,6 +820,28 @@ _PLANNER_DISCOVERY_EXCEPTIONS = {
     "src/engcore/scientific/models/registry.py",
 }
 
+#: The files a later milestone (`MIN-FIELD-SUPPORT-FOUNDATION`) is
+#: documented and authorized to touch: an additive `data_references` field
+#: on `ScientificProblem` (schema bumped to /2, reader accepts /1 and /2),
+#: a new standalone `BoundaryOrientation`/`classify_sign` module, extending
+#: `VariableBulkLinkage.check_against` to also resolve against
+#: `problem.data_references`, and wiring both into the real Fluid domain
+#: (boundary-orientation refusal, mesh-dependent validity routing). No
+#: exec-spec structured-input behaviour changed there — see
+#: docs/min-field-support-foundation-evidence.md. This guard's own claim
+#: (this milestone touches nothing under `src/`) is unaffected: it was true
+#: when this milestone was written, and that fact does not change.
+_FIELD_SUPPORT_FOUNDATION_EXCEPTIONS = {
+    "src/engcore/scientific/ir/problem.py",
+    "src/engcore/scientific/ir/__init__.py",
+    "src/engcore/scientific/ir/orientation.py",
+    "src/engcore/scientific/results/variable_binding.py",
+    "src/engcore/domains/fluids/transport2d/problem.py",
+    "src/engcore/domains/fluids/transport2d/solver.py",
+    "src/engcore/domains/fluids/transport2d/validation.py",
+    "src/engcore/domains/fluids/transport2d/__init__.py",
+}
+
 
 def test_h_no_universal_core_or_committed_evidence_was_modified():
     """FAIL CONDITION §13.7."""
@@ -835,6 +857,7 @@ def test_h_no_universal_core_or_committed_evidence_was_modified():
             set(diff.stdout.split())
             - {_PORTABILITY_EXCEPTION}
             - _PLANNER_DISCOVERY_EXCEPTIONS
+            - _FIELD_SUPPORT_FOUNDATION_EXCEPTIONS
         )
         assert changed == set(), f"{path} was modified: {sorted(changed)}"
     untracked = subprocess.run(
@@ -848,8 +871,14 @@ def test_h_no_universal_core_or_committed_evidence_was_modified():
 
 
 def test_no_scientific_problem_schema_moved():
+    # MIN-FIELD-SUPPORT-FOUNDATION additively bumped scientific_problem to
+    # /2 (a new `data_references` field, reader accepts /1 and /2 — see
+    # docs/min-field-support-foundation-evidence.md). This test's original
+    # intent — this milestone's own encodings do not carry a hidden schema
+    # change of their own — is unaffected; the expected literal moves with
+    # the (disclosed, additive, backward-compatible) core bump.
     for encoding in encodings.ENCODINGS.values():
-        assert encoding.problem.to_dict()["schema"] == "scientific_problem/1"
+        assert encoding.problem.to_dict()["schema"] == "scientific_problem/2"
 
 
 def test_no_metadata_was_used_to_carry_science():

@@ -1226,7 +1226,27 @@ def test_no_universal_core_file_was_added_or_edited():
         "src/engcore/scientific/models/definition.py",
         "src/engcore/scientific/models/registry.py",
     }
-    changed = set(diff.stdout.split()) - planner_discovery_exceptions
+    # The files a later milestone (`MIN-FIELD-SUPPORT-FOUNDATION`) is
+    # documented and authorized to touch: an additive `data_references`
+    # field on `ScientificProblem` (schema bumped to /2, reader accepts /1
+    # and /2), a new standalone `BoundaryOrientation`/`classify_sign`
+    # module, and extending `VariableBulkLinkage.check_against` to also
+    # resolve against `problem.data_references` — see
+    # docs/min-field-support-foundation-evidence.md. This guard's own claim
+    # (this milestone left the universal core byte-frozen) is unaffected:
+    # it was true when this milestone was written, and that fact does not
+    # change.
+    field_support_foundation_exceptions = {
+        "src/engcore/scientific/ir/problem.py",
+        "src/engcore/scientific/ir/__init__.py",
+        "src/engcore/scientific/ir/orientation.py",
+        "src/engcore/scientific/results/variable_binding.py",
+    }
+    changed = (
+        set(diff.stdout.split())
+        - planner_discovery_exceptions
+        - field_support_foundation_exceptions
+    )
     assert changed == set(), f"universal core was modified: {sorted(changed)}"
 
 

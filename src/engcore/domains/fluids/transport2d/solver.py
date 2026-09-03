@@ -490,10 +490,25 @@ def solve_transport2d(
     model_identities = tuple((m.model_id, m.version) for m in TRANSPORT2D_MODELS)
     assumptions = TRANSPORT2D_MODELS[0].assumptions
 
+    # Mesh-dependent validity criterion (MIN-FIELD-SUPPORT-FOUNDATION),
+    # ENCODING_C (docs/hostile-core-domain-stress-evidence.md §J.3): a typed
+    # Quantity in ProvenanceRecord.inputs, assessable via
+    # problem.validity_context(extra=...) against TRANSPORT2D_MODEL's own
+    # ValidityDomain. No core change — existing contracts. Byte-identical
+    # across every grid resolution of the SAME physical problem (the
+    # criterion is run-scoped provenance, never part of problem identity).
+    inverse_peclet_cell = Quantity(
+        1.0 / domain.peak_cell_peclet, "dimensionless"
+    )
+    mesh_validity = TRANSPORT2D_MODELS[0].validity.assess(
+        problem.validity_context(extra={"inverse_peclet_cell": inverse_peclet_cell})
+    )
+
     inputs = {
         "diffusivity": domain.diffusivity,
         "side": domain.side,
         "angular_rate": domain.angular_rate,
+        "inverse_peclet_cell": inverse_peclet_cell,
     }
     diagnostics = {k: v for k, v in raw.diagnostics.items() if k != "field"}
     provenance = ProvenanceRecord(
@@ -515,6 +530,7 @@ def solve_transport2d(
             "diffusion_scheme": "central_2nd_order",
             "backend": solver.identity.backend,
             "domain_canonical": domain.to_dict(),
+            "mesh_validity_assessment": mesh_validity.to_dict(),
         },
     )
 

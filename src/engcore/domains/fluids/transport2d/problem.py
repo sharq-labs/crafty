@@ -168,6 +168,30 @@ TRANSPORT2D_MODEL = ScientificModelDefinition(
                     "claim) and negative is anti-diffusion, ill-posed."
                 ),
             ),
+            # Mesh-dependent, so it cannot be a fact about the PHYSICAL
+            # problem (see problem_id's fingerprint, which deliberately
+            # excludes the grid) — it is supplied through
+            # `validity_context(extra=...)` at the point a grid actually
+            # exists, per ENCODING_C
+            # (docs/hostile-core-domain-stress-evidence.md §J.3): no core
+            # change, existing contracts. Stated on the RECIPROCAL cell
+            # Peclet number, not the Peclet number itself, so the criterion
+            # stays a finite Quantity even in a hypothetical zero-diffusion
+            # limit (`Quantity` refuses non-finite magnitudes) — the same
+            # reparameterization that milestone measured and adopted.
+            RangeCondition(
+                name="inverse_peclet_cell",
+                minimum=Quantity(0.5, "dimensionless"),
+                minimum_inclusive=True,
+                description=(
+                    "dx*D/(|u|_max) >= 0.5, i.e. peak cell Peclet number <= 2 "
+                    "— the diffusion-dominated regime this benchmark's "
+                    "convergence order is asymptotically first-order in. "
+                    "A coarse mesh legitimately falls outside this; that is "
+                    "reported, not treated as an error (see "
+                    "docs/fluid-pde-preparation.md §B2)."
+                ),
+            ),
         ),
         description=(
             "Steady advection-diffusion of a passive scalar in a prescribed, "

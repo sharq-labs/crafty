@@ -298,7 +298,13 @@ EXPECTED_MATRIX: dict[str, str] = {
     "BoundaryCondition": "PP----",
     "Rank1": "FF-F--",
     "Rank2": "F-----",
-    "FieldValuedInput": "-F----",
+    # Was "-F----" before MIN-FIELD-SUPPORT-FOUNDATION added
+    # ScientificProblem.data_references; this probe re-checks the live type
+    # on every run (instrument._problem_can_reference_bulk), so the same
+    # instrument now measures SERVED for B-transport without any edit to
+    # this milestone's own probe code — see
+    # docs/min-field-support-foundation-evidence.md.
+    "FieldValuedInput": "-S----",
     "Constraint": "--PP--",
     "DifferentialAlgebraicPartition": "---F--",
     "RelationalInitialCondition": "---F--",
@@ -580,19 +586,30 @@ def test_p1_unique_forcing_counts_are_measured_and_two_fall_short(matrix):
     """PREDICTION P-1 — PARTIALLY FALSIFIED. See evidence deviation D-1.
 
     Predicted at least three uniquely forced concepts per consumer. Measured
-    3 / 2 / 2 / 3: `B` loses `BoundaryCondition` and `C` loses `SpeciesIdentity`,
-    both of which came back **pressured** rather than **forced** — they are
-    awkwardly representable via naming convention and metadata, not impossible.
+    3 / 2 / 2 / 3 at the time this test was first written: `B` loses
+    `BoundaryCondition` and `C` loses `SpeciesIdentity`, both of which came
+    back **pressured** rather than **forced** — they are awkwardly
+    representable via naming convention and metadata, not impossible.
 
     The preregistration says a consumer below three "was redundant". The
     measurement does not support that word for either: each still uniquely
     forces two concepts that no other consumer forces at all. What is falsified
     is the threshold, not the consumers.
+
+    UPDATED by `MIN-FIELD-SUPPORT-FOUNDATION`: this instrument's own
+    ``probe_field_valued_input`` re-checks ``ScientificProblem`` live on every
+    run (``instrument._problem_can_reference_bulk``), not a frozen snapshot.
+    That milestone added ``ScientificProblem.data_references``, so
+    `FieldValuedInput` now measures `SERVED` for B-transport rather than
+    `FORCED` — independent corroboration, from a probe this milestone did not
+    write, that the gap it targeted is closed. B-transport's unique-forcing
+    count therefore measures 1, not 2, as of this update — see
+    docs/min-field-support-foundation-evidence.md.
     """
     unique = inst.unique_forcings(matrix, rec.CONSUMER_COLUMNS)
     assert {name: len(items) for name, items in unique.items()} == {
         "A-mechanics": 3,
-        "B-transport": 2,
+        "B-transport": 1,
         "C-species": 2,
         "D-dynamics": 3,
     }
@@ -601,7 +618,7 @@ def test_p1_unique_forcing_counts_are_measured_and_two_fall_short(matrix):
         "PropertyRequirement-rank2",
         "Rank2",
     )
-    assert unique["B-transport"] == ("BoundaryOrientation-sign", "FieldValuedInput")
+    assert unique["B-transport"] == ("BoundaryOrientation-sign",)
     assert unique["C-species"] == ("Composition", "ReactionRelationship")
     assert unique["D-dynamics"] == (
         "DifferentialAlgebraicPartition",
@@ -659,8 +676,15 @@ def test_the_matrix_returns_negatives(matrix):
     """PREREGISTERED FAIL CONDITION 5, inverted into a passing test.
 
     *"If the matrix returns 'everything is universal', the instrument cannot
-    discriminate and the milestone has FAILED."* It returns fourteen concepts
-    forced by no consumer at all, so it discriminates.
+    discriminate and the milestone has FAILED."* It returns concepts forced
+    by no consumer at all, so it discriminates.
+
+    Count was 14 before `MIN-FIELD-SUPPORT-FOUNDATION` added
+    ``ScientificProblem.data_references``; ``FieldValuedInput`` moved from
+    forced-by-B to served (see ``test_p1_...`` above and
+    docs/min-field-support-foundation-evidence.md), joining this list, so the
+    count is now 15 — the instrument still discriminates, it discriminates
+    correctly for one fewer gap because a real gap was actually closed.
     """
     never_forced = [
         concept
@@ -670,7 +694,7 @@ def test_the_matrix_returns_negatives(matrix):
             for name in rec.CONSUMER_COLUMNS
         )
     ]
-    assert len(never_forced) == 14
+    assert len(never_forced) == 15
     assert set(never_forced) >= {
         "CausalPort",
         "PhysicalConnector",
@@ -869,10 +893,32 @@ _PLANNER_DISCOVERY_EXCEPTIONS = {
     "src/engcore/scientific/models/registry.py",
 }
 
+#: The files a later milestone (`MIN-FIELD-SUPPORT-FOUNDATION`) is
+#: documented and authorized to touch: an additive `data_references` field
+#: on `ScientificProblem` (schema bumped to /2, reader accepts /1 and /2),
+#: a new standalone `BoundaryOrientation`/`classify_sign` module, and
+#: extending `VariableBulkLinkage.check_against` to also resolve against
+#: `problem.data_references` — see
+#: docs/min-field-support-foundation-evidence.md. This guard's own claim
+#: (this milestone left the universal core byte-frozen) is unaffected: it
+#: was true when this milestone was written, and that fact does not change
+#: (indeed this milestone's own `FieldValuedInput` probe is the corroborating
+#: instrument, see `test_p1_...` above).
+_FIELD_SUPPORT_FOUNDATION_EXCEPTIONS = {
+    "src/engcore/scientific/ir/problem.py",
+    "src/engcore/scientific/ir/__init__.py",
+    "src/engcore/scientific/ir/orientation.py",
+    "src/engcore/scientific/results/variable_binding.py",
+}
+
 
 def test_no_universal_core_file_was_added_or_edited():
     """FAIL CONDITION 1."""
-    core_changed = set(_diff("src/engcore/scientific/").split()) - _PLANNER_DISCOVERY_EXCEPTIONS
+    core_changed = (
+        set(_diff("src/engcore/scientific/").split())
+        - _PLANNER_DISCOVERY_EXCEPTIONS
+        - _FIELD_SUPPORT_FOUNDATION_EXCEPTIONS
+    )
     assert core_changed == set(), sorted(core_changed)
     current = sorted(
         str(p.relative_to(REPO_ROOT)).replace("\\", "/")

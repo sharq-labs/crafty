@@ -154,6 +154,15 @@ class VariableBulkLinkage:
         neither argument checks nothing and says so by returning no issues,
         exactly as ``QuantityDependency`` does: the two sides are knowable at
         different times, and an absent argument is not a failing check.
+
+        ``reference_name`` is resolved against **both**
+        ``result.data_references`` (an output field, DATA-BOUNDARY0) and, if
+        present, ``problem.data_references`` (an input field, added by
+        MIN-FIELD-SUPPORT-FOUNDATION) — a bulk array a linkage names may be
+        something a result produced or something a problem statement
+        prescribed (a non-uniform initial or boundary field, a field-valued
+        coefficient). A single linkage type serves both directions; nothing
+        about its shape changed to add this, only where it is allowed to look.
         """
         issues: list[BindingIssue] = []
         variable = None
@@ -179,16 +188,30 @@ class VariableBulkLinkage:
                 if candidate.name == self.reference_name:
                     reference = candidate
                     break
-            if reference is None:
-                result_id = getattr(result, "result_id", "?")
-                issues.append(
-                    BindingIssue(
-                        self.reference_name,
-                        BindingIssueKind.MISSING,
-                        f"result {result_id!r} carries no data reference "
-                        f"named {self.reference_name!r}",
-                    )
+        if reference is None and problem is not None:
+            for candidate in getattr(problem, "data_references", ()):
+                if candidate.name == self.reference_name:
+                    reference = candidate
+                    break
+        if reference is None and (result is not None or problem is not None):
+            owners = []
+            if result is not None:
+                owners.append(f"result {getattr(result, 'result_id', '?')!r}")
+            if problem is not None:
+                owners.append(
+                    f"problem {getattr(problem, 'problem_id', '?')!r}"
                 )
+            subject = owners[0] if len(owners) == 1 else " nor ".join(owners)
+            verb = "carries" if len(owners) == 1 else "carry"
+            prefix = "" if len(owners) == 1 else "neither "
+            issues.append(
+                BindingIssue(
+                    self.reference_name,
+                    BindingIssueKind.MISSING,
+                    f"{prefix}{subject} {verb} no data reference named "
+                    f"{self.reference_name!r}",
+                )
+            )
 
         if variable is not None and reference is not None:
             if dimensionality(variable.unit) != dimensionality(reference.unit):

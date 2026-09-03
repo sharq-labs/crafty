@@ -12,7 +12,7 @@ from enum import Enum
 from typing import Any, Mapping
 
 from ..errors import InvalidScientificProblem
-from ..serialization import require_schema, schema_string
+from ..serialization import require_schema, require_schema_any, schema_string
 from ..units.quantity import Quantity, dimensionality
 from ..units.validation import require_same_dimension
 from .conditions import BoundaryCondition, BoundaryKind, InitialCondition
@@ -20,7 +20,14 @@ from .constraints import ConstraintDefinition
 from .objectives import ObjectiveDefinition
 from .variables import ScientificParameter, ScientificVariable, VariableRole
 
-PROBLEM_SCHEMA = schema_string("scientific_problem")
+#: /1 carried no ``data_references``; /2 (MIN-FIELD-SUPPORT-FOUNDATION) adds
+#: it, additively, following the exact reader-accepts-old-and-new discipline
+#: DATA-BOUNDARY0 already established for ``scientific_result``. A /1
+#: payload loads with ``data_references == ()`` **by version, not by key
+#: presence** — /1 predates the field and cannot have written one.
+PROBLEM_SCHEMA_V1 = schema_string("scientific_problem", 1)
+PROBLEM_SCHEMA = schema_string("scientific_problem", 2)
+_ACCEPTED_PROBLEM_SCHEMAS = (PROBLEM_SCHEMA_V1, PROBLEM_SCHEMA)
 MODEL_REFERENCE_SCHEMA = schema_string("model_reference")
 UNCERTAINTY_SPEC_SCHEMA = schema_string("uncertainty_specification")
 
@@ -126,6 +133,20 @@ class ScientificProblem:
         default_factory=UncertaintySpecification
     )
     validation_requirements: frozenset[str] = frozenset()
+    #: Input-side bulk scientific data a problem statement names but does
+    #: not contain — a prescribed non-uniform initial or boundary field, a
+    #: field-valued model coefficient. Symmetric with
+    #: ``ScientificResult.data_references``: identity only, O(1) regardless
+    #: of the size of the array it names, resolved by a runtime/storage
+    #: layer this module knows nothing about (DATA-BOUNDARY0). A caller
+    #: names *which declared variable* a reference instantiates with a
+    #: ``VariableBulkLinkage`` — the same record already used on the result
+    #: side — checked against ``data_references`` here exactly as it is
+    #: checked against ``ScientificResult.data_references`` (see
+    #: ``results/variable_binding.py``). Added by
+    #: MIN-FIELD-SUPPORT-FOUNDATION; see
+    #: ``docs/min-field-support-foundation-evidence.md``.
+    data_references: tuple["ScientificDataReference", ...] = ()
     metadata: Mapping[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -137,8 +158,22 @@ class ScientificProblem:
         for label in (
             "variables", "parameters", "objectives", "constraints",
             "initial_conditions", "boundary_conditions", "models",
+            "data_references",
         ):
             object.__setattr__(self, label, tuple(getattr(self, label)))
+        if self.data_references:
+            # Imported lazily: results/__init__ imports provenance.py, which
+            # imports ModelReference from this module, so a module-level
+            # import here would be circular. The class exists and is stable
+            # long before any ScientificProblem is constructed.
+            from ..results.data_reference import ScientificDataReference
+
+            for reference in self.data_references:
+                if not isinstance(reference, ScientificDataReference):
+                    raise InvalidScientificProblem(
+                        "data_references must contain ScientificDataReference "
+                        f"instances, got {type(reference).__name__}"
+                    )
         object.__setattr__(
             self, "required_capabilities", frozenset(self.required_capabilities)
         )
@@ -172,6 +207,7 @@ class ScientificProblem:
             ("objective", self.objectives),
             ("constraint", self.constraints),
             ("boundary condition", self.boundary_conditions),
+            ("data reference", self.data_references),
         ):
             names = [item.name for item in items]
             duplicates = {n for n in names if names.count(n) > 1}
@@ -295,6 +331,12 @@ class ScientificProblem:
     def parameter_values(self) -> dict[str, Quantity]:
         return {p.name: p.value for p in self.parameters}
 
+    def data_reference(self, name: str) -> "ScientificDataReference":
+        for candidate in self.data_references:
+            if candidate.name == name:
+                return candidate
+        raise InvalidScientificProblem(f"unknown data reference {name!r}")
+
     def metric_units(self) -> dict[str, str]:
         """Declared units per referenced metric, for result validation.
 
@@ -351,12 +393,19 @@ class ScientificProblem:
             "required_capabilities": sorted(self.required_capabilities),
             "uncertainty": self.uncertainty.to_dict(),
             "validation_requirements": sorted(self.validation_requirements),
+            "data_references": [r.to_dict() for r in self.data_references],
             "metadata": dict(sorted(self.metadata.items())),
         }
 
     @classmethod
     def from_dict(cls, payload: Mapping[str, Any]) -> "ScientificProblem":
-        require_schema(payload, PROBLEM_SCHEMA)
+        # /1 predates data_references and cannot have written one; a /1
+        # payload therefore loads with data_references == () by version,
+        # not by key presence, mirroring DATA-BOUNDARY0's own rule for
+        # scientific_result/1 -> /2.
+        require_schema_any(payload, _ACCEPTED_PROBLEM_SCHEMAS)
+        from ..results.data_reference import ScientificDataReference
+
         return cls(
             problem_id=payload["problem_id"],
             name=payload.get("name", ""),
@@ -396,6 +445,10 @@ class ScientificProblem:
             else UncertaintySpecification(),
             validation_requirements=frozenset(
                 payload.get("validation_requirements", ())
+            ),
+            data_references=tuple(
+                ScientificDataReference.from_dict(r)
+                for r in payload.get("data_references", ())
             ),
             metadata=dict(payload.get("metadata", {})),
         )

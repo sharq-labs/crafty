@@ -204,8 +204,17 @@ def test_c1_check_against_reports_missing_variable():
     problem = ScientificProblem(problem_id="p1")  # no variables declared
     linkage = VariableBulkLinkage(variable_name="u_x", reference_name="u_x:field")
     issues = linkage.check_against(problem=problem)
-    assert len(issues) == 1
-    assert issues[0].kind is BindingIssueKind.MISSING
+    # MIN-FIELD-SUPPORT-FOUNDATION added ScientificProblem.data_references
+    # and extended check_against to resolve reference_name against it (not
+    # only against result.data_references) — see
+    # docs/min-field-support-foundation-evidence.md. A problem with neither
+    # the named variable nor the named reference now correctly reports BOTH
+    # as missing, not only the variable: passing problem= alone used to skip
+    # reference resolution entirely (it only ever looked at a `result`),
+    # which is exactly the residue this milestone closed.
+    assert len(issues) == 2
+    assert all(issue.kind is BindingIssueKind.MISSING for issue in issues)
+    assert {issue.name for issue in issues} == {"u_x", "u_x:field"}
 
 
 def test_c2_check_against_reports_missing_reference():
@@ -572,9 +581,16 @@ def test_g5_frozen_domain_trees_are_byte_unchanged():
 
 
 def test_g6_no_schema_string_moved():
-    """Only ``variable_bulk_linkage/1`` is new. Every existing schema string
-    this milestone touches (results/validation.py, results/__init__.py, the
-    package __init__) is unchanged."""
+    """Only ``variable_bulk_linkage/1`` is new at THIS milestone. Every
+    existing schema string this milestone touches (results/validation.py,
+    results/__init__.py, the package __init__) is unchanged.
+
+    ``PROBLEM_SCHEMA`` is the one documented exception, added later by
+    `MIN-FIELD-SUPPORT-FOUNDATION`: an additive ``data_references`` field
+    bumped it to ``scientific_problem/2``, with the reader still accepting
+    ``/1`` — see docs/min-field-support-foundation-evidence.md. This test's
+    own claim (nothing else in this list moved) is otherwise unaffected.
+    """
     from engcore.scientific.results.data_reference import DATA_REFERENCE_SCHEMA
     from engcore.scientific.results.result import RESULT_SCHEMA
     from engcore.scientific.results.validation import CHECK_SCHEMA, REPORT_SCHEMA
@@ -584,7 +600,7 @@ def test_g6_no_schema_string_moved():
     assert RESULT_SCHEMA == "scientific_result/2"
     assert CHECK_SCHEMA == "validation_check/1"
     assert REPORT_SCHEMA == "validation_report/1"
-    assert PROBLEM_SCHEMA == "scientific_problem/1"
+    assert PROBLEM_SCHEMA == "scientific_problem/2"
     assert VARIABLE_BULK_LINKAGE_SCHEMA == "variable_bulk_linkage/1"
 
 

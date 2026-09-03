@@ -99,6 +99,8 @@ from .validation import (
     VERIFICATION_LADDER,
     Transport2DValidationSettings,
     VerificationReport,
+    boundary_orientation_report,
+    classify_boundary_orientation,
     read_centre_concentration_unguarded,
     read_centre_concentration_with_admission,
     run_verification_gate,
@@ -152,6 +154,9 @@ __all__ = [
     # admission (F8)
     "read_centre_concentration_unguarded",
     "read_centre_concentration_with_admission",
+    # boundary orientation (MIN-FIELD-SUPPORT-FOUNDATION)
+    "classify_boundary_orientation",
+    "boundary_orientation_report",
     # units
     "FIELD_UNIT",
     "LENGTH_UNIT",

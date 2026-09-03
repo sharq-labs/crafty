@@ -748,7 +748,15 @@ def test_g2_an_unknown_schema_is_refused_rather_than_guessed(executed):
 
 
 def test_g3_no_existing_schema_version_moved():
-    """prereg §8.2. The new record is additive; nothing else changed."""
+    """prereg §8.2. The new record is additive; nothing else changed.
+
+    ``PROBLEM_SCHEMA`` is the one documented exception, added later by
+    `MIN-FIELD-SUPPORT-FOUNDATION`: an additive ``data_references`` field
+    bumped it to ``scientific_problem/2``, reader still accepting ``/1`` —
+    see docs/min-field-support-foundation-evidence.md. This test's own claim
+    (nothing else in this list moved, and *this* milestone's own additions
+    were additive) is otherwise unaffected.
+    """
     from src.engcore.scientific.ir.problem import PROBLEM_SCHEMA
     from src.engcore.scientific.models.definition import MODEL_SCHEMA
     from src.engcore.scientific.realizations.definition import REALIZATION_SCHEMA
@@ -756,7 +764,7 @@ def test_g3_no_existing_schema_version_moved():
     from src.engcore.scientific.results.result import RESULT_SCHEMA
     from src.engcore.scientific.twins.definition import SCIENTIFIC_TWIN_SCHEMA
 
-    assert PROBLEM_SCHEMA == "scientific_problem/1"
+    assert PROBLEM_SCHEMA == "scientific_problem/2"
     assert MODEL_SCHEMA == "scientific_model_definition/1"
     assert REALIZATION_SCHEMA == "model_realization_definition/1"
     assert RESULT_SCHEMA == "scientific_result/2"
