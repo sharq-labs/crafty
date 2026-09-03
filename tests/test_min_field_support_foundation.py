@@ -324,6 +324,40 @@ def test_c7_lumped_two_terminal_case_is_single_signed_and_never_refuses():
     assert classify_sign((-3.5,)) is OrientationSign.NEGATIVE
 
 
+def test_c8_result_side_reference_shadows_a_same_named_problem_side_one():
+    """Documents check_against's precedence as a tested rule, not an
+    accident of code order (architecture-decision-reviewer, required
+    change 3): when a result and a problem both carry a data_references
+    entry with the SAME name but different content, the result-side one is
+    resolved first and its dimension is what a linkage is checked against."""
+    problem_ref, _ = ScientificDataReference.for_values(
+        "shared:name", [1.0, 2.0, 3.0], unit="meter"
+    )
+    result_ref, _ = ScientificDataReference.for_values(
+        "shared:name", [9.0, 9.0], unit="volt"
+    )
+    variable = ScientificVariable(
+        name="v", unit="volt", role=VariableRole.OBSERVABLE
+    )
+    problem = ScientificProblem(
+        problem_id="c8", variables=(variable,), data_references=(problem_ref,)
+    )
+
+    class _FakeResult:
+        result_id = "c8-result"
+        data_references = (result_ref,)
+
+    linkage = VariableBulkLinkage(
+        variable_name="v", reference_name="shared:name"
+    )
+    # Resolved against the RESULT's reference (volt, matching the variable)
+    # even though a problem-side reference of the same name also exists
+    # (meter, which would NOT have matched) — proving the precedence
+    # concretely rather than leaving it implicit.
+    issues = linkage.check_against(problem=problem, result=_FakeResult())
+    assert issues == ()
+
+
 # =====================================================================
 # D — non-uniform conditions (H3): real Thermal-typed second consumer
 # =====================================================================

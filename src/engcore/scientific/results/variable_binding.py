@@ -182,6 +182,14 @@ class VariableBulkLinkage:
                     )
                 )
 
+        # Precedence, tested (test_c8 in tests/test_min_field_support_
+        # foundation.py) rather than left an accident of code order: a
+        # result-side reference of a given name is checked before a
+        # problem-side one of the same name. An output a result actually
+        # produced is a stronger claim about what a name means than an
+        # input a problem merely names, and no current consumer constructs
+        # both with the same name and different content on purpose — this
+        # is the rule for the day one does.
         reference = None
         if result is not None:
             for candidate in getattr(result, "data_references", ()):

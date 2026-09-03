@@ -143,8 +143,24 @@ class ScientificProblem:
     #: ``VariableBulkLinkage`` — the same record already used on the result
     #: side — checked against ``data_references`` here exactly as it is
     #: checked against ``ScientificResult.data_references`` (see
-    #: ``results/variable_binding.py``). Added by
-    #: MIN-FIELD-SUPPORT-FOUNDATION; see
+    #: ``results/variable_binding.py``).
+    #:
+    #: PRECEDENCE, stated because nothing here enforces it (falsifier
+    #: finding C.1, MIN-FIELD-SUPPORT-FOUNDATION): a variable MAY carry both
+    #: an ``InitialCondition``/``BoundaryCondition.value`` (a single
+    #: ``Quantity``) and a ``data_references`` entry bound to it through a
+    #: ``VariableBulkLinkage``. Nothing in this class relates the two — a
+    #: ``VariableBulkLinkage`` is not itself stored on the problem, by the
+    #: same standalone-record precedent as ``QuantityDependency``. When both
+    #: exist for one variable, **the bulk reference is authoritative for
+    #: that variable's actual initial/boundary state; the scalar condition
+    #: is representative/informational only and must never be read by a
+    #: solver as the complete state.** A future consumer that reads only
+    #: ``initial_conditions``/``boundary_conditions`` and ignores
+    #: ``data_references`` for a variable a ``VariableBulkLinkage`` binds
+    #: would silently compute with a wrong, uniform state — this sentence
+    #: is the guard against that until a real consumer forces a typed one.
+    #: Added by MIN-FIELD-SUPPORT-FOUNDATION; see
     #: ``docs/min-field-support-foundation-evidence.md``.
     data_references: tuple["ScientificDataReference", ...] = ()
     metadata: Mapping[str, Any] = field(default_factory=dict)
