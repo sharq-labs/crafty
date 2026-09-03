@@ -2289,6 +2289,7 @@ not in the tables above, the claim is too strong.
 | ET-VERTICAL — closed-loop coupling execution: the plan/outcome records | `PROPOSED` | `L1 EXERCISED` for the executed loop; several claims `L0` or zero — see §65 |
 | HETERO-NGSPICE — real external provider substitution: the adapter boundary | `PROPOSED` | `L1 EXERCISED`; the preregistered scoped `L2` was **withdrawn** — see §66 |
 | HOSTILE-CORE-STRESS — which distinctions a hostile PDE consumer forces | **none — freezes nothing** | `L0 REASONED` + measured gaps; `L1` for the probe only — see §67 |
+| CROSS-DOMAIN-COVERAGE — which gaps are universal across domain families | **none — freezes nothing** | `L0 REASONED` + a measured coverage matrix; `L1` for the probes only — see §68 |
 
 ---
 
@@ -3092,3 +3093,150 @@ Explicitly deferred with their own evidence required: `DiscretizationDefinition`
 Regression: **FULL 1784 → 1825**, FAST 1262 → 1303. No pre-existing test edited,
 no tolerance loosened. `src/engcore/scientific/` and `src/engcore/domains/thermal/`
 byte-unchanged, asserted by tests rather than claimed.
+
+---
+
+# 68. CROSS-DOMAIN-COVERAGE — completed
+
+```text
+Decision status:        none — this milestone freezes nothing
+Evidence:               L0 REASONED + a measured coverage matrix; L1 for the probes
+Milestone execution:    COMPLETE
+```
+
+Full record: `docs/cross-domain-coverage-stress-prereg.md` (immutable, committed
+before implementation) and `docs/cross-domain-coverage-stress-evidence.md`.
+**A coverage-discovery milestone: no architecture was implemented.**
+
+**Ran ahead of `API / MCP v0` for the second time**, and consumed the consumer
+`MIN-FOUNDATION-PDE` had reserved. Both deviations are recorded in the
+preregistration rather than assumed.
+
+## 68.1 The four consumers, and what each differences against
+
+Selected by `architecture-decision-reviewer` over five alternatives, one per
+founder-fixed family, each rejected-if-isomorphic against the **whole**
+repository rather than against one neighbour:
+
+* **A — two-element plane-stress CST patch.** A 1D bar was rejected as
+  isomorphic to the existing MNA solve. The patch breaks that on a **rank-1
+  unknown**, a **rank-2 derived tensor** and a **matrix constitutive law**.
+* **B — 2D steady advection-diffusion in a rotational field**, verified by a
+  manufactured solution. Minimised deliberately; the transport-operator overlap
+  with `HOSTILE-CORE-STRESS` is conceded, not discovered.
+* **C — closed isothermal three-species batch.** Isothermal to eliminate the
+  existing CSTR overlap; **closed** to break the B/C shared lineage that
+  Modelica's stream-connector retrofit identifies.
+* **D — planar pendulum in Cartesian coordinates**, a genuine DAE. A controlled
+  first-order plant was rejected as isomorphic to `thermal_lumped`.
+
+Two **existing** domains — `electrical/dc` and `thermal_lumped`, chosen
+milestones ago for other reasons and neither edited — were scored on the same
+matrix as a control group.
+
+## 68.2 What was measured
+
+Executed science, all machine-precision: the patch test recovers `σ_xx = E·ε` at
+**relative error `0.0`** in both elements with `K = Kᵀ` to `0.0`; `div u` is
+**exactly `0.0`**; the weighted invariant `c_A + c_B + 2c_C` holds to `1.1e-14`
+while the **naive unweighted sum drifts `4.576`**; the pendulum's two
+realizations — which solve **different unknowns** — agree to `2.6e-14 m`.
+
+**Two universal candidates, both from column-varying probes:**
+
+* **`VariableToBulkLinkage`** — all four consumers attach a bulk
+  `ScientificDataReference` to a multi-variable problem, and that record carries
+  no field naming a variable. Neither the association nor the ordering is
+  recorded. This row was **split out of a conflated `ScientificField` row** that
+  was understating it by half.
+* **`AdmissibilityAttainment`** — four consumers now write four genuinely
+  different kinds of admissibility criterion into their records (a
+  positive-definite invariant, a maximum-principle excursion, a non-negativity
+  excursion, an algebraic residual), and **every one carries
+  `establishes=None`** because `ValidationLevel` has no member for it.
+
+**An unplanned finding:** B's coarse grid produces `c_min = −0.0136`, so one
+record simultaneously **claims `ANALYTICALLY_VERIFIED`** and carries a failed
+admissibility check that can attain nothing.
+
+**Recorded with equal prominence — what the contracts already serve:**
+`DynamicState` is **served**, not forced; `MaterialState` and scalar
+`PropertyRequirement` are forced by nothing, corroborating
+`electrical/material.py`'s recorded "no property hierarchy needed" argument.
+
+## 68.3 Falsified on the claim layer, and three claims withdrawn
+
+`architecture-falsifier` returned **SURVIVES WITH REQUIRED CHANGES**: four
+`BLOCKER`s and five `BREAKING-RISK`s, **all against the claims, none against the
+executed science**, and all closed.
+
+* **The instrument was mostly not measuring the consumers.** 26 of 29 probes
+  returned a column-constant verdict, so those rows' cross-column patterns were
+  the author's own `science` declarations re-printed. The response was to make
+  the four claim-bearing rows payload-sensitive and to **publish the variance
+  itself**: 24 of 30 rows remain column-constant, and the evidence document
+  labels them contract-gap measurements rather than coverage measurements.
+* **`Domain/Topology` forced by `electrical/dc` — the milestone's headline
+  answer to "these gaps are PDE artifacts" — was a FALSE GAP and is withdrawn.**
+  `dc/problem.py` records that it translates a circuit *"without smuggling
+  topology into the IR"* because connectivity travels by a separate typed
+  channel bound by a verified fingerprint. The probe had never been handed that
+  artifact. With it, topology is forced only by the two field consumers — the
+  exact PDE-shaped profile the claim denied.
+* **`AdmissibilityAttainment` was 6/6 from a probe that never read the result**,
+  while zero of six columns recorded an admissibility check at all. Now 4/6, and
+  exhibited.
+* **Five probes answered a *recoverability* question with a *forcing* argument**,
+  every one returning "fully representable" — an armed false-negative generator
+  that would have silently served a dash to any future consumer declaring a
+  port. Fixed.
+* **A preregistered steelman was missed**: `ScientificVariable.lower/upper` is an
+  existing typed channel for admissibility bounds and was never attempted. It is
+  now declared — and no path that inspects a `ScientificResult` reads it.
+
+**The lesson, and it is the second consecutive milestone to earn it: an
+instrument that produces a matrix can be measuring its own author.** The defence
+is not a better argument but a published measurement of how many of its own
+cells vary.
+
+## 68.4 What it did **not** establish
+
+* **No existing holding moved.** `MODEL0-R`, `DATA-BOUNDARY0`,
+  `MIN-FOUNDATION-ET`, `ET-VERTICAL`, `HETERO-NGSPICE` and
+  `HOSTILE-CORE-STRESS` are unchanged. `ScientificTwin` gains zero evidence for
+  the **fourth** consecutive milestone.
+* **`L2` is excluded outright.** Four consumers by one author on one branch is
+  exactly the lineage §54.1 excludes from "materially different".
+* **The row set is uncontrolled.** The control group governs the columns;
+  nothing governs the concepts. A concept the author did not list is invisible,
+  not absent — **complex-valued quantities** are the recorded counterexample,
+  and the control being `electrical/dc` means even the control cannot surface
+  them.
+* **Zero evidence for coupling.** No `QuantityDependency`, no second problem, so
+  `CausalPort` and `PhysicalConnector` are dash by construction and must not be
+  counted as measured negatives.
+* **`ModelFormulation.DAE` got its first production-shaped use and is still
+  insufficient** — it cannot state the index, which unknowns are algebraic, or
+  whether the statement or its index-reduced form is meant.
+
+## 68.5 Next milestone
+
+**`MIN-FOUNDATION-PDE`** — unchanged in name from §67.5 and now better scoped.
+Four questions: boundary orientation (with the new 2D constraint that **a
+boundary region is not the granularity at which orientation lives** — under
+rotation every side carries both roles); a route from problem structure into
+`validity_context`; **`VariableToBulkLinkage`**, the strongest new input; and
+non-uniform `InitialCondition`.
+
+Entry condition unchanged and binding: a **real** consumer, not another probe.
+Consumer B was run here as a minimised probe, so the preregistered preference is
+**promotion of it into a real domain pack**.
+
+Explicitly deferred: an admissibility `ValidationLevel` member — adding one later
+is *additive*, so it fails the "cheaper now than later" test — and rank-1
+semantics, on two exhibited consumers.
+
+Regression: **FULL 1825 → 1867**, FAST 1303 → 1345. No pre-existing test edited;
+`src/engcore/scientific/`, `domains/thermal/`, `domains/electrical/`,
+`thermal_lumped.py` and `experiments/hostile_core_stress/` all byte-unchanged,
+asserted by tests rather than claimed.
