@@ -11,6 +11,11 @@ from .validation import (
     ValidationReport,
     unverified_report,
 )
+from .variable_binding import (
+    VARIABLE_BULK_LINKAGE_SCHEMA,
+    VariableBulkLinkage,
+    unlinked_references,
+)
 
 __all__ = [
     "ExecutionBinding",
@@ -19,6 +24,9 @@ __all__ = [
     "ScientificResult",
     "Uncertainty",
     "UncertaintyKind",
+    "VARIABLE_BULK_LINKAGE_SCHEMA",
+    "VariableBulkLinkage",
+    "unlinked_references",
     "ValidationCheck",
     "ValidationLevel",
     "ValidationOutcome",

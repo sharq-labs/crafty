@@ -11,13 +11,26 @@ Two deliberate design decisions:
 2. **NOT_RUN is distinct from PASS.** A check that never executed can never
    contribute evidence. This is the mechanism that prevents a result from
    claiming validation that was not actually performed.
+
+A third, added by MIN-CROSS-DOMAIN-FOUNDATION:
+
+3. **Detection is not enforcement.** A report can say a check failed; nothing
+   makes anything refuse to consume the result anyway, unless something
+   explicitly asks. ``require_admission``/``is_admissible``/
+   ``admission_issues`` are that explicit ask — a caller opts in by calling
+   one, cross-referencing this report's checks against a set of *names* a
+   problem declared required (``ScientificProblem.validation_requirements``).
+   No new record and no new ``ValidationLevel`` member were added for this:
+   both fields already existed, were already populated by every shipped
+   domain, and nothing before this cross-referenced them. See
+   docs/min-cross-domain-foundation-evidence.md.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Mapping
+from typing import Any, Iterable, Mapping
 
 from ..errors import ScientificValidationError
 from ..serialization import require_schema, schema_string
@@ -168,6 +181,78 @@ class ValidationReport:
             raise ScientificValidationError(
                 f"validation level {ValidationLevel(level).value!r} was not "
                 f"established by any passing check"
+            )
+
+    # ---- admission (MIN-CROSS-DOMAIN-FOUNDATION) -------------------------
+    #
+    # A problem may declare, in ``ScientificProblem.validation_requirements``,
+    # which *named* checks a result computed from it must satisfy — every
+    # shipped domain already populates this field with names that are the
+    # literal ``ValidationCheck.name`` values its own validator produces
+    # (``kinetics/cstr``'s ``state_physically_admissible``,
+    # ``trajectory_finite`` and so on). Nothing before this method
+    # cross-referenced the two: ``require_level`` gates on an *evidentiary
+    # level*, which every admissibility check in this codebase deliberately
+    # declines to establish (``establishes=None`` — a passing admissibility
+    # check is not stronger evidence of numerical accuracy, and correctly
+    # claims none), and ``ScientificResult.is_usable`` is global over the
+    # whole report rather than scoped to a *specific declared name* — a
+    # required check that never ran (``NOT_RUN``) does not by itself flip
+    # ``is_usable`` unless something else in the report also failed.
+    #
+    # This closes that gap by reusing exactly the two fields that already
+    # exist and are already populated, rather than adding a record or a
+    # ``ValidationLevel`` member. See docs/min-cross-domain-foundation-
+    # evidence.md for the executed measurement and the negative proof that
+    # motivated it: a provider silently halving reported power produced a
+    # ``FAIL``ing check that nothing consumed, and a coupled loop converged
+    # 18 K away from the honest answer with the bad value never refused.
+    def admission_issues(self, requirements: Iterable[str]) -> tuple[str, ...]:
+        """Why ``requirements`` are not all satisfied by a *passing* check of
+        the same name. Empty means every named requirement passed.
+
+        ``NOT_RUN`` counts as unsatisfied, on the same principle stated at
+        the top of this module: a check that never executed contributes no
+        evidence, and a *required* admission gate needs evidence, not
+        silence. ``WARNING`` and ``FAIL`` are likewise unsatisfied — a
+        required check that only warns has not established what it was
+        required to establish.
+        """
+        by_name = {check.name: check for check in self.checks}
+        issues: list[str] = []
+        for name in sorted(set(requirements)):
+            check = by_name.get(name)
+            if check is None:
+                issues.append(f"{name!r}: never checked")
+            elif not check.passed:
+                issues.append(f"{name!r}: {check.outcome.value}")
+        return tuple(issues)
+
+    def is_admissible(self, requirements: Iterable[str]) -> bool:
+        """``True`` iff every named requirement is backed by a passing check."""
+        return not self.admission_issues(requirements)
+
+    def require_admission(
+        self, requirements: Iterable[str], *, context: str = ""
+    ) -> None:
+        """Raise unless every declared requirement is backed by a passing
+        check of the same name.
+
+        This is the enforcement primitive: a caller that calls this before
+        consuming ``result.value(...)`` cannot silently proceed past a
+        declared requirement that failed or never ran. A caller that does
+        not call it gets no protection — enforcement is not automatic on
+        construction, exactly as ``require_level`` is not automatic, because
+        a result may legitimately exist and be reported on (a failed run is
+        still evidence) without every consumer of every result needing the
+        strictest possible gate.
+        """
+        issues = self.admission_issues(requirements)
+        if issues:
+            prefix = f"{context}: " if context else ""
+            raise ScientificValidationError(
+                f"{prefix}admission refused; declared requirement(s) not "
+                f"satisfied by a passing check: {'; '.join(issues)}"
             )
 
     def to_dict(self) -> dict[str, Any]:

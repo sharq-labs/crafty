@@ -112,6 +112,7 @@ from .realizations import (
     RealizationRegistry,
 )
 from .results import (
+    VARIABLE_BULK_LINKAGE_SCHEMA,
     ExecutionBinding,
     ProvenanceRecord,
     ScientificDataReference,
@@ -122,6 +123,8 @@ from .results import (
     ValidationLevel,
     ValidationOutcome,
     ValidationReport,
+    VariableBulkLinkage,
+    unlinked_references,
     unverified_report,
 )
 from .serialization import to_json
@@ -242,6 +245,9 @@ __all__ = [
     "UncertaintyKind",
     "ProvenanceRecord",
     "ExecutionBinding",
+    "VariableBulkLinkage",
+    "VARIABLE_BULK_LINKAGE_SCHEMA",
+    "unlinked_references",
     # twins
     "ScientificTwin",
     "TwinDatum",
