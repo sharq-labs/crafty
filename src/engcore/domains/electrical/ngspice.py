@@ -43,8 +43,9 @@ serialized scientific field depend on an English string from one build of one
 version, which is provider syntax entering scientific semantics.
 
 **2. It never lets provider identity into a scientific record.** The invocation
-— including the fact that this machine reaches ngspice through WSL — is
-configuration held by :class:`NgspiceInvocation` and passed as an argument. It
+— including which of the supported routes reaches ngspice on this machine,
+native executable or WSL — is configuration held by :class:`NgspiceInvocation`
+and passed as an argument. It
 appears in no `ScientificProblem`, no `ScientificModelDefinition`, no
 `ModelRealizationDefinition` and no `ProvenanceRecord`. Moving the executable
 must leave the serialized result byte-identical, and a test asserts it.
@@ -76,6 +77,7 @@ from __future__ import annotations
 import os
 import re
 import shlex
+import shutil
 import subprocess
 import time
 from dataclasses import dataclass, field
@@ -173,22 +175,51 @@ class NgspiceExecutionFailure(NgspiceProviderError):
 # Invocation — configuration, never a scientific record
 # =====================================================================
 
+def _discover_command() -> tuple[str, ...]:
+    """Capability discovery for reaching the provider on *this* machine.
+
+    Deliberately not an OS-sniffing branch that assumes WSL. It asks the one
+    question that is actually portable — "is there a directly executable
+    native ``ngspice`` on ``PATH``?" — via :func:`shutil.which`, which works
+    identically on Linux, macOS and Windows. When that answers yes (as it
+    does on this native-Linux machine, and would for a Windows machine with a
+    native ngspice install), the argv prefix is that one executable.
+
+    Only when no native executable is discoverable does this fall back to
+    ``wsl.exe -e ngspice`` — the one *other* supported route, kept because a
+    Windows machine that reaches ngspice only through WSL (no native
+    ``ngspice.exe`` on ``PATH``) is a real, previously-exercised
+    configuration and this discovery must not remove it. That fallback is
+    never reached on a machine where ``shutil.which("ngspice")`` finds
+    anything, native-Linux included.
+
+    An argv prefix rather than a single path, because the WSL route needs
+    more than one token and a single ``executable_path`` field could not
+    express that.
+    """
+    native = shutil.which("ngspice")
+    if native:
+        return (native,)
+    return ("wsl.exe", "-e", "ngspice")
+
+
 @dataclass(frozen=True)
 class NgspiceInvocation:
     """How to reach the provider on this machine. **Runtime, not science.**
 
-    Holds an argv prefix rather than a path, because on this machine ngspice is
-    not directly executable from Windows at all: it is reached as
-    ``wsl.exe -e ngspice``. A single ``executable_path`` field could not express
-    that, and inventing one would have quietly assumed a portability this
-    milestone has not earned.
+    ``command`` defaults to :func:`_discover_command`'s answer — capability
+    discovery, evaluated fresh at construction — never a platform branch and
+    never a hard-coded path. Where the binary lives, and by which of the two
+    supported routes it is reached, is discovered or configured; it is never
+    part of what a solver *is*, which is exactly why ``SolverIdentity`` (see
+    below) carries none of it.
 
     Nothing here is ever serialized into a scientific record. This object is an
     argument, in the same way a ``BulkDataStore`` holds locations while
     ``ScientificDataReference`` holds none.
     """
 
-    command: tuple[str, ...] = ("wsl.exe", "-e", "ngspice")
+    command: tuple[str, ...] = field(default_factory=_discover_command)
     timeout_seconds: float = 60.0
 
     def __post_init__(self) -> None:
