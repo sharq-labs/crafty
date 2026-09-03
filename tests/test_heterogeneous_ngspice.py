@@ -18,6 +18,7 @@ import inspect
 import json
 import pathlib
 import subprocess
+import sys
 import textwrap
 
 import pytest
@@ -1118,14 +1119,26 @@ def test_j_relocating_the_provider_leaves_the_result_byte_identical():
 
     Two different argv routes to the *same* provider, compared as serialized
     bytes. Only the run-time-read version travels, in ``SolverIdentity``.
+
+    The two routes are built from whatever :meth:`NgspiceInvocation` itself
+    discovers on this machine — never a route hard-coded to one platform's
+    layout (a prior form of this test hard-coded ``wsl.exe``, which made a
+    portability property untestable everywhere but the one Windows+WSL
+    machine that wrote it). The "different route to the same provider" is a
+    :mod:`sys.executable` re-exec wrapper: it changes the argv *shape*
+    without assuming a shell, a WSL layer, or a specific OS is present, so
+    the same test exercises the property on every platform that runs it.
     """
     circuit = divider("relocation")
-    direct = ng.NgspiceDCSolver(
-        ng.NgspiceInvocation(command=("wsl.exe", "-e", "ngspice"))
-    )
+    direct = ng.NgspiceDCSolver(ng.NgspiceInvocation())
     wrapped = ng.NgspiceDCSolver(
         ng.NgspiceInvocation(
-            command=("wsl.exe", "-e", "bash", "-lc", 'exec ngspice "$@"', "_")
+            command=(
+                sys.executable,
+                "-c",
+                "import os, sys; os.execvp(sys.argv[1], sys.argv[1:])",
+                *direct.invocation.command,
+            )
         )
     )
     a = ng.solve_circuit_with_ngspice(circuit, run_id="reloc", solver=direct)
