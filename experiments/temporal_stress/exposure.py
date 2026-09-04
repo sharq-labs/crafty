@@ -68,6 +68,8 @@ __all__ = [
     "matched_histories",
     "compare_histories",
     "sampling_independence",
+    "ControlValueNullControl",
+    "control_value_null_control",
 ]
 
 KELVIN = "kelvin"
@@ -369,4 +371,82 @@ def sampling_independence(
         fine_samples=len(times_f),
         exposure_coarse_k_s=_exposure(times_c, temps_c),
         exposure_fine_k_s=_exposure(times_f, temps_f),
+    )
+
+
+# =====================================================================
+# The NULL CONTROL the falsifier required (finding C.1)
+# =====================================================================
+
+@dataclass(frozen=True)
+class ControlValueNullControl:
+    """Two runs differing only in an imposed CONTROL — no history at all."""
+
+    heat_a_w: float
+    heat_b_w: float
+    duration_s: float
+    final_temperature_a_k: float
+    final_temperature_b_k: float
+    problem_records_identical: bool
+
+    @property
+    def answer_difference_k(self) -> float:
+        return abs(self.final_temperature_a_k - self.final_temperature_b_k)
+
+
+def control_value_null_control(
+    *, heat_a_w: float = 40.0, heat_b_w: float = 4.0, duration_s: float = 600.0
+) -> ControlValueNullControl:
+    """The control this milestone's A4 claim needed and did not originally have.
+
+    `architecture-falsifier` returned a BLOCKER against the two-histories
+    result: "two runs are indistinguishable in the universal records" is
+    already true for C1 **with no history whatsoever**, because
+    ``build_lumped_thermal_problem`` declares ``heat_input`` and
+    ``ambient_temperature`` as CONTROL variables *with no value on any record*
+    and the value arrives out of band through ``bind_body``.
+
+    This function measures that directly. Two single-segment runs, zero
+    schedule, zero path dependence, identical everything except the imposed
+    heat. Their ``ScientificProblem`` records serialise byte-identically and
+    their answers differ by ~17 K.
+
+    The consequence for the A4 finding is stated in the evidence document and
+    is not softened: **record indistinguishability of the two histories is
+    explained by this omission, not by a temporal gap.** What survives the
+    control is the part this does not explain — that the exposure functional
+    is a property of the history rather than of the stored trajectory
+    (:func:`sampling_independence`), and that the two matched schedules differ
+    in peak temperature and exposure while agreeing exactly at the endpoint.
+    Those are physics results. The representation claim is withdrawn to the
+    strength this control leaves it.
+    """
+    import json
+
+    def _run(heat_w: float) -> tuple[float, str]:
+        body = _body(duration_s=duration_s)
+        problem = lump.build_lumped_thermal_problem(
+            body, problem_id="null-control"
+        )
+        solver = lump.LumpedThermalSolver()
+        solver.bind_body(
+            body, problem.problem_id, heat_input=Quantity(heat_w, WATT)
+        )
+        prepared = solver.prepare(problem)
+        raw = solver.solve(prepared)
+        metrics = solver.extract_metrics(prepared, raw)
+        return (
+            metrics[lump.TEMPERATURE_METRIC].magnitude_in(KELVIN),
+            json.dumps(problem.to_dict(), sort_keys=True),
+        )
+
+    final_a, record_a = _run(heat_a_w)
+    final_b, record_b = _run(heat_b_w)
+    return ControlValueNullControl(
+        heat_a_w=heat_a_w,
+        heat_b_w=heat_b_w,
+        duration_s=duration_s,
+        final_temperature_a_k=final_a,
+        final_temperature_b_k=final_b,
+        problem_records_identical=record_a == record_b,
     )

@@ -227,8 +227,10 @@ def z2_one_variable_per_time_level() -> EncodingAttempt:
             "temperature_t0 and ambient_temperature, which share the same "
             "dimension",
             "nothing orders them: no typed field says t0 precedes t1",
-            "the declaration scales O(N) in the number of instants, putting "
-            "history-length growth into a control-plane record",
+            "the declaration scales O(N) in the number of instants. Cited "
+            "against prereg F4 (boundary-safety), NOT against DATA-BOUNDARY0: "
+            "that rule is about a record CONTAINING bulk bytes, and this is "
+            "record-count growth, which is a different and lesser concern",
         ),
         facts={
             "variables": tuple(v.name for v in problem.variables),
@@ -392,8 +394,15 @@ def z4_time_varying_input_as_two_bulk_references() -> EncodingAttempt:
             ),
             # The steelman's own move: declare the coordinate as a variable so
             # that a linkage has something to bind the time array to.
+            # The steelman the previous milestone's falsifier caught being
+            # skipped: ScientificVariable carries typed, dimension-checked,
+            # finite BOUNDS, so the coordinate's EXTENT is expressible.
             ScientificVariable(
-                name="sample_time", unit=SECOND, role=VariableRole.OBSERVABLE
+                name="sample_time",
+                unit=SECOND,
+                role=VariableRole.OBSERVABLE,
+                lower=Quantity(0.0, SECOND),
+                upper=Quantity(600.0, SECOND),
             ),
         ),
         initial_conditions=(
@@ -457,12 +466,19 @@ def z4_time_varying_input_as_two_bulk_references() -> EncodingAttempt:
             "VariableBulkLinkage.check_against resolves both against "
             "ScientificProblem.data_references and returns no issues",
             "content digests give both arrays relocation-stable identity",
+            "ScientificVariable bounds express the coordinate's EXTENT: "
+            "sample_time is declared over [0 s, 600 s], typed, dimension- "
+            "checked and finite. The interval a coordinate spans IS "
+            "representable today",
+            "a reader can OBSERVE whether two references' counts agree, "
+            "because count is a typed field",
         ),
         residue=(
-            "nothing states that the two arrays are paired, that they are the "
-            "same length, or that sample i of one corresponds to sample i of "
-            "the other; a 5-sample coordinate against an 11-sample value "
-            f"array raises {len(bad_issues)} issues",
+            "nothing states that the two arrays were REQUIRED to be the same "
+            "length, or that sample i of one corresponds to sample i of the "
+            "other; a 5-sample coordinate against an 11-sample value array "
+            f"raises {len(bad_issues)} issues. (A reader can see 5 != 11; it "
+            "cannot know that was an error rather than two unrelated arrays)",
             "nothing states that one array is the INDEPENDENT coordinate the "
             f"other is a function of; the reader returns "
             f"{coordinate.outcome.value} over "
@@ -482,6 +498,10 @@ def z4_time_varying_input_as_two_bulk_references() -> EncodingAttempt:
             "sample_times_outcome": samples.outcome.value,
             "reference_fields": samples.candidates,
             "unlinked": unlinked_references(problem, linkages),
+            "coordinate_extent_expressible": (
+                problem.variable("sample_time").is_bounded
+            ),
+            "coordinate_counts": coordinate.value,
         },
     )
 
@@ -553,6 +573,29 @@ def z5_event_as_problem_splitting() -> EncodingAttempt:
     reader = RecordsOnlyTemporalReader()
     event_answer = reader.events(stamped_after)
 
+    # The nearest thing to a declared discontinuity the records permit: two
+    # conditions on ONE variable at two stated instants. The core accepts it
+    # without comment — nothing orders them, and nothing says the later one
+    # supersedes the earlier rather than contradicting it.
+    restated = ScientificProblem(
+        problem_id="z5-restated",
+        variables=problem_before.variables,
+        parameters=problem_before.parameters,
+        initial_conditions=(
+            InitialCondition(
+                variable=lump.TEMPERATURE,
+                value=Quantity(300.0, KELVIN),
+                time=Quantity(0.0, SECOND),
+            ),
+            InitialCondition(
+                variable=lump.TEMPERATURE,
+                value=switch_state,
+                time=Quantity(300.0, SECOND),
+            ),
+        ),
+    )
+    restated_answer = reader.events(restated)
+
     return EncodingAttempt(
         label="Z5",
         question="can 'an event occurs at t_e' be stated without solver code?",
@@ -564,6 +607,9 @@ def z5_event_as_problem_splitting() -> EncodingAttempt:
             "representable, per condition",
             "the segment boundary can be placed exactly at the discontinuity, "
             "which is what C1's constant-input realization requires anyway",
+            "TWO conditions on ONE variable at two stated instants construct "
+            "and validate: the records CAN carry a restatement of one "
+            "variable at a second time",
         ),
         residue=(
             "nothing relates the two problems: no typed field says B follows "
@@ -576,13 +622,20 @@ def z5_event_as_problem_splitting() -> EncodingAttempt:
             f"the reader returns {event_answer.outcome.value} for the event "
             "question: InitialCondition.time states when a condition applies, "
             "not that anything changed there",
+            "two conditions on one variable are accepted with NO check: "
+            "nothing orders them, nothing says the later supersedes the "
+            "earlier (a discontinuity) rather than contradicting it, and the "
+            f"reader can only return {restated_answer.outcome.value}",
             "an event schedule of n switches needs n+1 problems, so the "
-            "declaration again scales O(N) in the event count",
+            "declaration scales O(N) in the event count (prereg F4, not "
+            "DATA-BOUNDARY0 — no record carries bulk bytes here)",
         ),
         facts={
             "switch_state_k": switch_state.magnitude_in(KELVIN),
             "event_outcome": event_answer.outcome.value,
             "stamped_condition_times": event_answer.candidates,
+            "restated_outcome": restated_answer.outcome.value,
+            "restated_condition_count": len(restated.initial_conditions),
             "problems": (problem_before.problem_id, stamped_after.problem_id),
         },
     )
@@ -751,8 +804,8 @@ def z7_history_as_dependency_chain() -> EncodingAttempt:
             "nothing says what varied along the path, so two schedules that "
             "meet at the same endpoint through different histories chain "
             "identically",
-            "the chain scales O(N) in the number of segments, so a fine "
-            "schedule puts history length into control-plane records",
+            "the chain scales O(N) in the number of segments (prereg F4, "
+            "not DATA-BOUNDARY0 — each edge is O(1) and carries no array)",
         ),
         facts={
             "chain_length": len(chain),

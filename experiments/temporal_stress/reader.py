@@ -168,14 +168,44 @@ class RecordsOnlyTemporalReader:
                 outcome=Outcome.UNRECOVERABLE,
                 detail=f"result reports no value named {metric!r}",
             )
+        # The steelman the previous milestone's falsifier used to overturn a
+        # claimed gap (master context §67.3): ``ProvenanceRecord.inputs`` is a
+        # typed ``Mapping[str, Quantity]``, so a producer CAN put a
+        # [time]-dimensioned input there and a records-only reader CAN read it
+        # without parsing a name. It is consulted here rather than assumed
+        # empty.
+        provenance = getattr(result, "provenance", None)
+        instants = tuple(
+            sorted(
+                name
+                for name, value in dict(
+                    getattr(provenance, "inputs", {}) or {}
+                ).items()
+                if _is_time_quantity(value)
+            )
+        )
+        if not instants:
+            return TemporalAnswer(
+                question=f"at what time does {metric!r} hold?",
+                outcome=Outcome.UNRECOVERABLE,
+                detail=(
+                    "ScientificResult.values maps a name to a Quantity; a "
+                    "Quantity carries a magnitude and a unit and no time "
+                    "coordinate. ProvenanceRecord.inputs — the one other "
+                    "typed Quantity channel on a result — carries no "
+                    "[time]-dimensioned entry either."
+                ),
+            )
         return TemporalAnswer(
             question=f"at what time does {metric!r} hold?",
-            outcome=Outcome.UNRECOVERABLE,
+            outcome=Outcome.AMBIGUOUS,
+            candidates=instants,
             detail=(
-                "ScientificResult.values maps a name to a Quantity; a "
-                "Quantity carries a magnitude and a unit and no time "
-                "coordinate. No other typed field on the result relates a "
-                "value to an instant."
+                "ProvenanceRecord.inputs carries [time]-dimensioned "
+                f"entries {list(instants)}, so a producer CAN record an "
+                "instant in a typed field. Nothing relates any of them to "
+                f"{metric!r} in particular, or says which is the level the "
+                "value holds at."
             ),
         )
 
@@ -214,7 +244,9 @@ class RecordsOnlyTemporalReader:
         )
 
     # -- Q: when does each sample of a bulk array exist? -------------------
-    def sample_times(self, reference: Any) -> TemporalAnswer:
+    def sample_times(
+        self, reference: Any, siblings: Sequence[Any] = ()
+    ) -> TemporalAnswer:
         """The time coordinate of a bulk array's samples.
 
         ``ScientificDataReference`` carries name, unit, count, dtype, digest
@@ -229,6 +261,32 @@ class RecordsOnlyTemporalReader:
                 if not key.startswith("_")
             )
         )
+        # A sibling reference of [time] dimension and equal count is the
+        # strongest circumstantial evidence available. It is circumstantial,
+        # not a statement, and the outcome says so — but it is READ, so this
+        # answer is a function of its arguments.
+        candidate_coordinates = tuple(
+            sorted(
+                sibling.name
+                for sibling in siblings
+                if sibling is not reference
+                and dimensionality(sibling.unit) == TIME_DIMENSION
+                and sibling.count == reference.count
+            )
+        )
+        if candidate_coordinates:
+            return TemporalAnswer(
+                question="when does each sample of this bulk array exist?",
+                outcome=Outcome.AMBIGUOUS,
+                candidates=candidate_coordinates,
+                detail=(
+                    "a sibling reference of [time] dimension and equal count "
+                    f"exists ({list(candidate_coordinates)}). Equal count is "
+                    "a coincidence a reader can observe, not a statement any "
+                    "record makes: nothing says the two are paired, ordered "
+                    "the same way, or that either is a coordinate."
+                ),
+            )
         return TemporalAnswer(
             question="when does each sample of this bulk array exist?",
             outcome=Outcome.UNRECOVERABLE,
@@ -236,7 +294,9 @@ class RecordsOnlyTemporalReader:
             detail=(
                 "the reference's entire typed surface is "
                 f"{list(fields)}; none of it is a coordinate, an ordering "
-                "statement, or a pairing with another reference"
+                "statement, or a pairing with another reference, and no "
+                "sibling reference of [time] dimension and equal count was "
+                "offered"
             ),
         )
 
@@ -268,16 +328,25 @@ class RecordsOnlyTemporalReader:
                 outcome=Outcome.UNRECOVERABLE,
                 detail="no reference carries a [time] dimension",
             )
+        # ``count`` IS typed and readable, so a reader can observe whether the
+        # lengths even agree. Booking that in Ledger B rather than claiming
+        # total blindness: what a reader cannot do is know they were SUPPOSED
+        # to agree, or which array is the coordinate of which.
+        counts = {reference.name: reference.count for reference in references}
+        lengths_agree = len(set(counts.values())) == 1
         return TemporalAnswer(
             question="which array is the independent time coordinate?",
             outcome=Outcome.AMBIGUOUS,
             candidates=time_like,
+            value={"counts": counts, "lengths_agree": lengths_agree},
             detail=(
-                "a [time]-dimensioned reference exists, but nothing typed "
-                "states that any other reference is a function of it, nor "
-                "that sample i of one corresponds to sample i of another; "
-                f"{len(tuple(linkages))} linkage(s) each name one array's "
-                "variable and relate no two arrays"
+                "a [time]-dimensioned reference exists, and counts "
+                f"{counts} are readable — so a reader can OBSERVE whether "
+                "lengths agree. What no typed field states is that they were "
+                "required to agree, that sample i of one corresponds to "
+                "sample i of another, or which array is the coordinate of "
+                f"which; {len(tuple(linkages))} linkage(s) each name one "
+                "array's variable and relate no two arrays"
             ),
         )
 
@@ -291,11 +360,38 @@ class RecordsOnlyTemporalReader:
         see — the set of declared condition times — and says outright that a
         condition time is not an event.
         """
+        conditions = tuple(getattr(problem, "initial_conditions", ()))
         times = tuple(
             f"{c.variable}@{c.time}"
-            for c in getattr(problem, "initial_conditions", ())
+            for c in conditions
             if getattr(c, "time", None) is not None
         )
+        # Two conditions on ONE variable at two stated instants is the closest
+        # thing to a declared discontinuity the records permit — and the core
+        # accepts it without comment. The reader reports it as a candidate,
+        # not as an event, because nothing says the second SUPERSEDES the
+        # first rather than contradicting it.
+        per_variable: dict[str, int] = {}
+        for condition in conditions:
+            per_variable[condition.variable] = (
+                per_variable.get(condition.variable, 0) + 1
+            )
+        restated = tuple(
+            sorted(name for name, n in per_variable.items() if n > 1)
+        )
+        if restated:
+            return TemporalAnswer(
+                question="did a discontinuity occur, and at what time?",
+                outcome=Outcome.AMBIGUOUS,
+                candidates=restated,
+                detail=(
+                    f"variable(s) {list(restated)} carry more than one "
+                    "declared condition, which the core accepts without "
+                    "comment. Nothing says whether the later one supersedes "
+                    "the earlier (a discontinuity), refines it, or "
+                    "contradicts it — and nothing orders them."
+                ),
+            )
         return TemporalAnswer(
             question="did a discontinuity occur, and at what time?",
             outcome=Outcome.UNRECOVERABLE,
@@ -321,10 +417,23 @@ class RecordsOnlyTemporalReader:
         """
         provenance = getattr(result, "provenance", None)
         parent = getattr(provenance, "parent_run_id", None)
+        if parent is not None:
+            return TemporalAnswer(
+                question="by what path was this state reached?",
+                outcome=Outcome.AMBIGUOUS,
+                candidates=(str(parent),),
+                detail=(
+                    f"ProvenanceRecord.parent_run_id names {parent!r}, so ONE "
+                    "predecessor is recoverable. Nothing states how much "
+                    "physical time elapsed between the two, nothing orders "
+                    "them against a clock, and two different physical "
+                    "histories may produce identical chains."
+                ),
+            )
         return TemporalAnswer(
             question="by what path was this state reached?",
             outcome=Outcome.UNRECOVERABLE,
-            candidates=() if parent is None else (str(parent),),
+            candidates=(),
             detail=(
                 "the only path-shaped typed field is "
                 "ProvenanceRecord.parent_run_id: one optional predecessor "
@@ -380,3 +489,169 @@ def answers_by_outcome(
     for answer in answers:
         grouped[answer.outcome].append(answer.question)
     return {outcome: tuple(questions) for outcome, questions in grouped.items()}
+
+
+# =====================================================================
+# The instrument's own variance — required by the falsifier (finding C.2)
+# =====================================================================
+
+@dataclass(frozen=True)
+class MethodVariance:
+    """Whether one reader method's outcome is a function of its argument."""
+
+    method: str
+    outcomes_observed: tuple[str, ...]
+
+    @property
+    def varies(self) -> bool:
+        return len(self.outcomes_observed) > 1
+
+
+def instrument_variance() -> tuple[MethodVariance, ...]:
+    """Publish how many of this instrument's own cells actually move.
+
+    `architecture-falsifier` returned this milestone's second BLOCKER: four
+    reader methods returned ``UNRECOVERABLE`` for **every possible argument**,
+    so a test asserting that outcome asserted nothing about the records. It
+    was the third consecutive Crafty milestone to earn that finding — master
+    context §67.3 and §68.3 record the two before it — and the first not to
+    have applied the published defence, which is to *measure the instrument*.
+
+    This function is that defence. Each method is exercised against two
+    deliberately different arguments and the distinct outcomes are reported.
+    A method whose ``varies`` is False is one whose answer is a property of
+    the reader, and any claim resting on it must say so.
+
+    Nothing here is a contract; it is the instrument reporting on itself.
+    """
+    from engcore.scientific.results.data_reference import (
+        ScientificDataReference,
+    )
+    from engcore.scientific.results.provenance import ProvenanceRecord
+    from engcore.scientific.results.result import ScientificResult
+    from engcore.scientific.ir.conditions import InitialCondition
+    from engcore.scientific.ir.problem import ScientificProblem
+    from engcore.scientific.ir.variables import (
+        ScientificVariable,
+        VariableRole,
+    )
+    from engcore.scientific.units.quantity import Quantity
+
+    reader = RecordsOnlyTemporalReader()
+    kelvin, second = "kelvin", "second"
+
+    def _result(*, inputs=None, parent=None, values=None) -> ScientificResult:
+        return ScientificResult(
+            result_id="variance",
+            values=values or {"T": Quantity(300.0, kelvin)},
+            provenance=ProvenanceRecord(
+                run_id="variance",
+                inputs=inputs or {},
+                parent_run_id=parent,
+            ),
+        )
+
+    bare = _result()
+    stamped = _result(inputs={"t_eval": Quantity(600.0, second)})
+    chained = _result(parent="earlier-run")
+    two_values = _result(
+        values={"T": Quantity(300.0, kelvin), "T_ss": Quantity(310.0, kelvin)}
+    )
+
+    variable = ScientificVariable(name="T", unit=kelvin, role=VariableRole.STATE)
+    empty_problem = ScientificProblem(problem_id="v0", variables=(variable,))
+    one_condition = ScientificProblem(
+        problem_id="v1",
+        variables=(variable,),
+        initial_conditions=(
+            InitialCondition("T", Quantity(300.0, kelvin), time=Quantity(0.0, second)),
+        ),
+    )
+    two_conditions = ScientificProblem(
+        problem_id="v2",
+        variables=(variable,),
+        initial_conditions=(
+            InitialCondition("T", Quantity(300.0, kelvin), time=Quantity(0.0, second)),
+            InitialCondition("T", Quantity(350.0, kelvin), time=Quantity(300.0, second)),
+        ),
+    )
+    timed_problem = ScientificProblem(
+        problem_id="v3",
+        variables=(variable,),
+        parameters=(
+            __import__(
+                "engcore.scientific.ir.variables", fromlist=["ScientificParameter"]
+            ).ScientificParameter(name="duration", value=Quantity(600.0, second)),
+        ),
+    )
+
+    values_reference = ScientificDataReference(
+        name="v", unit=kelvin, count=11, digest="aa" * 32
+    )
+    time_reference = ScientificDataReference(
+        name="t", unit=second, count=11, digest="bb" * 32
+    )
+
+    def _outcomes(*answers: TemporalAnswer) -> tuple[str, ...]:
+        return tuple(sorted({a.outcome.value for a in answers}))
+
+    return (
+        MethodVariance(
+            "is_time_dependent",
+            _outcomes(
+                reader.is_time_dependent(empty_problem),
+                reader.is_time_dependent(one_condition),
+            ),
+        ),
+        MethodVariance(
+            "physical_horizon",
+            _outcomes(
+                reader.physical_horizon(empty_problem),
+                reader.physical_horizon(timed_problem),
+            ),
+        ),
+        MethodVariance(
+            "time_level_of",
+            _outcomes(
+                reader.time_level_of(bare, "T"),
+                reader.time_level_of(stamped, "T"),
+                reader.time_level_of(bare, "absent"),
+            ),
+        ),
+        MethodVariance(
+            "same_quantity_different_time",
+            _outcomes(
+                reader.same_quantity_different_time(bare),
+                reader.same_quantity_different_time(two_values),
+            ),
+        ),
+        MethodVariance(
+            "sample_times",
+            _outcomes(
+                reader.sample_times(values_reference),
+                reader.sample_times(values_reference, (time_reference,)),
+            ),
+        ),
+        MethodVariance(
+            "independent_coordinate",
+            _outcomes(
+                reader.independent_coordinate((values_reference,)),
+                reader.independent_coordinate((values_reference, time_reference)),
+            ),
+        ),
+        MethodVariance(
+            "events",
+            _outcomes(
+                reader.events(one_condition),
+                reader.events(two_conditions),
+            ),
+        ),
+        MethodVariance(
+            "history",
+            _outcomes(reader.history(bare), reader.history(chained)),
+        ),
+        MethodVariance(
+            "wall_clock",
+            _outcomes(reader.wall_clock(bare)),
+        ),
+    )
