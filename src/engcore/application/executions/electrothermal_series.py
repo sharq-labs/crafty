@@ -39,6 +39,7 @@ misattributing its own result.
 
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass
 from typing import Any, Mapping
 
@@ -56,12 +57,14 @@ from ...systems.electrothermal import (
     run_fixed_point_coupling,
 )
 from ..contract import (
+    IDENTIFIER_PATTERN,
     MAX_ITERATION_BUDGET,
     MAX_STAGES,
     ExternalRequestRefused,
     RefusalCode,
     parse_quantity,
     require_exact_keys,
+    require_identifier,
     require_int,
     require_object,
     require_text,
@@ -69,6 +72,9 @@ from ..contract import (
 
 __all__ = [
     "EXECUTION_ID",
+    "PROFILES",
+    "provider_failure_types",
+    "request_fragment",
     "INPUT_KEYS",
     "COUPLING_KEYS",
     "PreparedExecution",
@@ -112,6 +118,89 @@ COUPLING_KEYS = frozenset(
 )
 
 
+# =====================================================================
+# The ways THIS execution can be executed. A closed, literal enumeration.
+# =====================================================================
+
+NATIVE_PROFILE = "native"
+PROVIDER_PROFILE = "ngspice"
+
+
+def _native() -> CircuitSolver:
+    """Crafty's own MNA solve. No process, no provider, no import."""
+    return native_circuit_solver
+
+
+def _external_provider() -> CircuitSolver:
+    """The real external provider in the electrical slot of the coupled loop.
+
+    Constructed here and **only** from module-level identities. This function
+    takes no argument at all, which is the structural reason no external string
+    can influence how the provider is invoked: there is nowhere for one to go.
+    Where the binary lives, and by which supported route it is reached, is
+    deployment configuration read before any request arrives — never a request
+    field.
+
+    The import is local so that a deployment serving only the native profile
+    never loads the provider module. That is asserted by a test in a fresh
+    interpreter, because "the native path does not touch the provider" is a
+    claim worth being able to check.
+    """
+    from ...domains.electrical import ngspice as provider
+
+    solver = provider.NgspiceDCSolver()
+
+    def solve(circuit, run_id: str):
+        return provider.solve_circuit_with_ngspice(
+            circuit, run_id=run_id, solver=solver
+        )
+
+    return solve
+
+
+#: name -> zero-argument resolver. Closed, literal, no fallthrough.
+#:
+#: One of the two genuinely reaches ``subprocess.run``, and that is deliberate:
+#: if the only rejectable profile name mapped to nothing that could ever spawn
+#: a process, then "an unknown profile is refused before any process launch"
+#: would be a restatement of ``KeyError`` rather than a security claim. A check
+#: whose only effect is a field nothing consults is not a guard.
+#:
+#: The provider is named rather than hidden because ``ProvenanceRecord``
+#: already reports ``solver_id`` and ``backend`` truthfully, so an opaque
+#: request-side name that provenance immediately de-anonymizes would be
+#: obfuscation rather than encapsulation. What is not exposed is every provider
+#: internal: the argv, the timeout, the deck, the analysis statement, the node
+#: naming and the version probe are all unreachable from a request.
+PROFILES: Mapping[str, Any] = {
+    NATIVE_PROFILE: _native,
+    PROVIDER_PROFILE: _external_provider,
+}
+
+
+def provider_failure_types() -> tuple[type[BaseException], ...]:
+    """The failure family meaning *an external provider broke*, for THIS
+    execution. Part of the execution-module protocol.
+
+    The domain deliberately made its provider errors **not**
+    ``ScientificCoreError``, so that "the provider was not installed" can never
+    be read as "the science does not hold". The boundary honours that split by
+    asking the execution rather than by knowing a provider's name: the
+    classifier in ``service.py`` must be able to say "the provider broke"
+    without any module above this one naming a provider.
+
+    Resolved from ``sys.modules`` rather than by importing, so a deployment
+    serving only the native profile still never loads the provider module. The
+    lookup uses ``getattr`` with a default because a concurrent first import
+    can expose a partially initialized module, and an ``AttributeError`` raised
+    inside the classifier would be the one path by which ``handle`` could raise
+    instead of classifying.
+    """
+    module = sys.modules.get("engcore.domains.electrical.ngspice")
+    family = getattr(module, "NgspiceProviderError", None) if module else None
+    return (family,) if isinstance(family, type) else ()
+
+
 @dataclass(frozen=True)
 class PreparedExecution:
     """Admitted, not executed. Nothing here has run a solver."""
@@ -135,9 +224,13 @@ def _stage(payload: Any, index: int) -> CoupledStage:
     body = require_object(payload, where)
     require_exact_keys(body, required=STAGE_KEYS, where=where)
 
-    component_id = require_text(body["component_id"], f"{where}.component_id")
+    component_id = require_identifier(
+        body["component_id"], f"{where}.component_id"
+    )
     values = {
-        name: parse_quantity(body[name], where=f"{where}.{name}", unit=unit)
+        name: parse_quantity(
+            body[name], where=f"{where}.{name}", unit=unit, difference=False
+        )
         for name, unit in STAGE_UNITS.items()
     }
     # Both declarations refuse their own invalid input. Neither refusal is
@@ -164,9 +257,19 @@ def _stage(payload: Any, index: int) -> CoupledStage:
 def prepare(
     inputs: Mapping[str, Any],
     coupling: Mapping[str, Any],
-    circuit_solver: CircuitSolver | None = None,
+    profile: str,
 ) -> PreparedExecution:
-    """Parse and admit. **Executes nothing.**"""
+    """Parse and admit. **Executes nothing.**
+
+    ``profile`` is the identity the envelope parser already validated against
+    :data:`PROFILES`. It is resolved here, by the module that knows what a
+    profile means for this execution, so the application layer never holds a
+    solver, a circuit or a provider of any kind.
+
+    It is a required positional argument with no default. An earlier form
+    accepted ``None`` and silently fell back to the native solver, which is a
+    default that selects which implementation computes the answer.
+    """
     require_exact_keys(inputs, required=INPUT_KEYS, where="request.inputs")
     require_exact_keys(coupling, required=COUPLING_KEYS, where="request.coupling")
 
@@ -190,6 +293,7 @@ def prepare(
             inputs["source_voltage"],
             where="request.inputs.source_voltage",
             unit="volt",
+            difference=False,
         ),
     )
 
@@ -228,10 +332,13 @@ def prepare(
     plan = nominal_plan(
         system,
         coupled_dependencies(system, problems, temperature_metric=metric),
+        # An absolute temperature: the first value the cut edge takes. `degC`
+        # is a legitimate spelling of one and converts correctly.
         seed=parse_quantity(
             coupling["seed_temperature"],
             where="request.coupling.seed_temperature",
             unit=lump.TEMPERATURE_UNIT,
+            difference=False,
         ),
         # A DIFFERENCE, not a temperature. See parse_quantity's own docstring
         # for the measurement that made this flag exist.
@@ -255,7 +362,103 @@ def prepare(
         )
 
     return PreparedExecution(
-        system=system,
-        plan=plan,
-        circuit_solver=circuit_solver or native_circuit_solver,
+        system=system, plan=plan, circuit_solver=PROFILES[profile]()
     )
+
+
+# =====================================================================
+# This execution's half of the published request contract
+# =====================================================================
+
+def request_fragment() -> dict[str, Any]:
+    """What ``inputs`` and ``coupling`` may contain, and which profiles exist.
+
+    Derived from the same constants :func:`prepare` enforces, so the published
+    contract cannot drift from the enforced one — and **per field**, not only
+    per field name. The first form published one shared quantity fragment
+    saying "any dimensionally compatible unit", which is false of ``tolerance``:
+    ``degC`` is dimensionally compatible with kelvin and is refused. That is the
+    exact distinction this milestone paid a measured 5.695253 K error to find,
+    and publishing it wrongly would have handed a fourth transport the bug.
+    """
+    from ..describe import quantity_fragment
+
+    stage = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": sorted(STAGE_KEYS),
+        "properties": {
+            "component_id": {
+                "type": "string",
+                "pattern": IDENTIFIER_PATTERN,
+                "maxLength": 64,
+                "description": (
+                    "Names one conductor and the thermal body it dissipates "
+                    "into; the two share this id by this system pack's own "
+                    "convention. It is a name, not free text: it is carried "
+                    "into problem ids, result ids and provenance keys."
+                ),
+            },
+            **{
+                name: quantity_fragment(unit)
+                for name, unit in sorted(STAGE_UNITS.items())
+            },
+        },
+    }
+
+    return {
+        "profiles": sorted(PROFILES),
+        "inputs": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": sorted(INPUT_KEYS),
+            "properties": {
+                "source_voltage": quantity_fragment("volt"),
+                "stages": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": MAX_STAGES,
+                    "items": stage,
+                },
+            },
+        },
+        "coupling": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": sorted(COUPLING_KEYS),
+            "properties": {
+                "transported_temperature": {
+                    "type": "string",
+                    "enum": sorted(TRANSPORTED_TEMPERATURES),
+                    "description": (
+                        "Which kelvin-valued thermal result is carried back "
+                        "into the conductor's state. Both members are kelvin, "
+                        "so no dimension check separates them, and the two "
+                        "converge to different temperatures. Only this name "
+                        "selects the physics."
+                    ),
+                },
+                "seed_temperature": quantity_fragment(
+                    lump.TEMPERATURE_UNIT,
+                    "The first value every cut coupling edge takes.",
+                ),
+                "tolerance": quantity_fragment(
+                    lump.TEMPERATURE_UNIT,
+                    "Coupling criterion: the largest change of any cut "
+                    "iterate between sweeps. Not the residual of any "
+                    "equation, and not any sub-solve's own tolerance.",
+                    difference=True,
+                ),
+                "max_iterations": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": MAX_ITERATION_BUDGET,
+                    "description": (
+                        "Sweep budget. Exhausting it is a legitimate outcome, "
+                        "reported as iteration_limit_reached, and is not an "
+                        "error."
+                    ),
+                },
+            },
+        },
+    }

@@ -376,7 +376,25 @@ def build_netlist(circuit: DCCircuit) -> _Netlist:
             "translation has not been exercised would be a guess"
         )
     names = _provider_names(circuit)
-    lines = [f"crafty {circuit.circuit_id}"]
+    # A CONSTANT title, and this is a security boundary rather than a cosmetic
+    # choice. `API-MCP-V0` found that an earlier form emitted
+    # `f"crafty {circuit.circuit_id}"` here — the one place in this module where
+    # a raw Crafty identifier reached deck text, in direct contradiction of
+    # `_provider_names`' own rule that "no Crafty identifier ever has to be
+    # SPICE-legal". A newline inside a component id propagates into
+    # `circuit_id` and terminates the title line, after which every remaining
+    # character is parsed by the provider as deck input. A `.control` block
+    # placed that way executes: the exploit was **reproduced**, creating a file
+    # on disk through a `shell` statement, and the run still reported
+    # `criterion_met` with every check passing and a `ProvenanceRecord`
+    # describing the circuit that was declared rather than the one solved.
+    #
+    # The repair removes the channel instead of filtering it, which is the same
+    # "assign, never escape" rule this module already applies to every node and
+    # element. The title carries no information any reader needs: the provider
+    # ignores it, and Crafty's own circuit identity travels on the prepared
+    # solve and in provenance, where it is checked.
+    lines = ["crafty circuit"]
 
     for source in sorted(circuit.voltage_sources, key=lambda c: c.component_id):
         lines.append(

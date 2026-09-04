@@ -49,12 +49,7 @@ call it directly — the direct consumer **is** the service, not a third adapter
 
 from __future__ import annotations
 
-from .catalog import (
-    EXECUTIONS,
-    PROFILES,
-    execution_identities,
-    profile_names,
-)
+from .catalog import EXECUTIONS, execution_identities, profile_names
 from .contract import (
     REQUEST_SCHEMA,
     RESPONSE_SCHEMA,
@@ -70,7 +65,6 @@ __all__ = [
     "EXECUTIONS",
     "ExecutionRequest",
     "ExternalRequestRefused",
-    "PROFILES",
     "REQUEST_SCHEMA",
     "RESPONSE_SCHEMA",
     "RefusalCode",

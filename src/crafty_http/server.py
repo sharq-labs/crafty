@@ -98,25 +98,39 @@ class _Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _routing_fault(self, status: int, detail: str) -> None:
+        """A protocol fault, and deliberately **not** a boundary response.
+
+        An earlier form answered 404 and 405 with a full
+        ``crafty_execution_response/1`` carrying ``status: "refused"`` and a
+        scientific taxonomy code — so "there is no route /healthz", a pure
+        transport fact, was published as an execution-boundary refusal. That
+        contradicts the rule the whole contract rests on, that transport
+        success lives outside the payload, and it was an *undeclared*
+        divergence from MCP, which correctly answers an unknown method with a
+        JSON-RPC error and no response envelope.
+
+        The body here carries no schema string and no refusal code. It is not a
+        boundary payload and does not pretend to be one.
+        """
+        self._write(status, {"error": detail})
+
     def do_GET(self) -> None:  # noqa: N802 - stdlib naming
-        self._write(
-            405 if self.path == RUN_PATH else 404,
-            decode_failure(
-                f"{RUN_PATH} accepts POST only"
-                if self.path == RUN_PATH
-                else f"no route {self.path!r}; this server exposes "
-                f"POST {RUN_PATH} and nothing else"
-            ),
-        )
+        if self.path == RUN_PATH:
+            self._routing_fault(405, f"{RUN_PATH} accepts POST only")
+        else:
+            self._routing_fault(
+                404,
+                f"no route {self.path!r}; this server exposes "
+                f"POST {RUN_PATH} and nothing else",
+            )
 
     def do_POST(self) -> None:  # noqa: N802 - stdlib naming
         if self.path != RUN_PATH:
-            self._write(
+            self._routing_fault(
                 404,
-                decode_failure(
-                    f"no route {self.path!r}; this server exposes "
-                    f"POST {RUN_PATH} and nothing else"
-                ),
+                f"no route {self.path!r}; this server exposes "
+                f"POST {RUN_PATH} and nothing else",
             )
             return
 

@@ -889,12 +889,12 @@ def test_h_no_universal_core_or_committed_evidence_was_modified():
             text=True,
             check=True,
         )
-        changed = (
+        changed = _excluding_api_mcp_v0(
             set(diff.stdout.split())
             - {_PORTABILITY_EXCEPTION}
             - _PLANNER_DISCOVERY_EXCEPTIONS
             - _FIELD_SUPPORT_FOUNDATION_EXCEPTIONS
-        - _API_MCP_V0_EXCEPTIONS
+            - _API_MCP_V0_EXCEPTIONS
         )
         assert changed == set(), f"{path} was modified: {sorted(changed)}"
     untracked = subprocess.run(

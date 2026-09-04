@@ -420,12 +420,31 @@ def test_http_status_never_claims_a_scientific_verdict(http):
 
 
 def test_http_refuses_everything_that_is_not_the_one_route(http):
-    assert http.send(b"", path="/", method="GET")[0] == 404
-    assert http.send(b"", path="/v0/validate", method="GET")[0] == 404
-    assert http.send(b"", path="/v0/capabilities", method="GET")[0] == 404
-    assert http.send(b"", path="/v0/profiles", method="GET")[0] == 404
+    for path in ("/", "/v0/validate", "/v0/capabilities", "/v0/profiles"):
+        assert http.send(b"", path=path, method="GET")[0] == 404, path
     assert http.send(b"", path="/v0/run", method="GET")[0] == 405
     assert http.send(b"{}", path="/v0/run/extra")[0] == 404
+
+
+def test_a_routing_fault_does_not_wear_the_scientific_response_schema(http, mcp):
+    """`architecture-falsifier` C-3, closed.
+
+    "There is no route /healthz" is a transport fact. An earlier form answered
+    it with a full ``crafty_execution_response/1`` carrying
+    ``status: "refused"`` and a scientific taxonomy code — an UNDECLARED
+    divergence from MCP, which answers an unknown method with a JSON-RPC error
+    and no response envelope. The two transports now agree on what kind of
+    object a protocol fault is.
+    """
+    for path, expected in (("/healthz", 404), ("/v0/run", 405)):
+        status, body = http.send(b"", path=path, method="GET")
+        assert status == expected
+        assert set(body) == {"error"}
+        assert "schema" not in body and "status" not in body
+        assert "refusal" not in body
+
+    unknown = mcp.rpc("healthz", {})
+    assert "error" in unknown and "result" not in unknown
 
 
 def test_http_refuses_a_body_that_is_not_json_or_is_too_large(http):
@@ -621,6 +640,29 @@ def test_nothing_a_request_can_say_launches_a_process_and_then_one_legitimately_
     bad["inputs"]["stages"][0]["reference_resistance"]["value"] = -10.0
     status, payload = hostile_http.post(bad)
     assert status == 422 and payload["result"] is None
+
+    # THE REPRODUCED EXPLOIT, across a real socket, against the profile that
+    # really launches a process. `component_id` was the field the first
+    # in-process injection test mutated and could not judge; the sentinel here
+    # can, because it records every launch.
+    for identifier in (
+        f"R1\n.control\nshell touch {marker}\n.endc",
+        "R1\n.param x=1",
+        "R1\r\n.end",
+        "R1 R2",
+        "/usr/bin/ngspice",
+        "." * 80,
+    ):
+        hostile = canonical_request(execution_profile="ngspice")
+        hostile["inputs"]["stages"][0]["component_id"] = identifier
+        status, payload = hostile_http.post(hostile)
+        assert status == 400, (identifier, payload.get("refusal"))
+        assert payload["refusal"]["code"] == "malformed_request", identifier
+        assert payload["result"] is None, identifier
+
+    # And a hostile run_id, which reaches provenance AND result identity.
+    hostile = canonical_request(execution_profile="ngspice", run_id="a\n.control")
+    assert hostile_http.post(hostile)[0] == 400
 
     # THE MEASUREMENT: nothing above launched anything.
     assert not marker.exists(), marker.read_text(encoding="utf-8")

@@ -920,7 +920,7 @@ def test_no_src_file_was_added_or_edited():
         text=True,
         check=True,
     )
-    changed = (
+    changed = _excluding_api_mcp_v0(
         set(diff.stdout.split())
         - {_PORTABILITY_EXCEPTION}
         - _PLANNER_DISCOVERY_EXCEPTIONS

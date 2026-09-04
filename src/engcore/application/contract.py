@@ -50,12 +50,13 @@ reported as *not assessed*, because the executed path does not assess it — and
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Mapping
 
 from ..coupling import CoupledRun, is_ratio_scale
-from ..scientific.errors import UnitCompatibilityError
+from ..scientific.errors import ScientificCoreError, UnitCompatibilityError
 from ..scientific.results.result import ScientificResult
 from ..scientific.results.uncertainty import Uncertainty
 from ..scientific.units.quantity import Quantity
@@ -69,8 +70,12 @@ __all__ = [
     "ExecutionRequest",
     "ExternalRequestRefused",
     "RefusalCode",
+    "IDENTIFIER_PATTERN",
     "parse_quantity",
     "parse_request",
+    "require_identifier",
+    "require_int",
+    "require_text",
     "project_run",
     "require_object",
     "require_exact_keys",
@@ -199,6 +204,46 @@ def _require_number(value: Any, where: str) -> float:
     return float(value)
 
 
+#: What an externally supplied Crafty identifier may contain.
+#:
+#: `API-MCP-V0` found, and **reproduced**, a remote code execution through an
+#: unconstrained one: a newline inside a component id propagated into
+#: ``DCCircuit.circuit_id``, which the external-provider adapter emitted into
+#: its deck's title line, where everything after the newline was parsed as
+#: provider input. A ``.control`` block placed that way executed a shell
+#: command, and the run still reported ``criterion_met`` with every check
+#: passing.
+#:
+#: The provider-side channel was removed (the deck's title is now a constant),
+#: which is the real repair. This is the second, independent one: an external
+#: identifier is a name, and a name has a shape. Both are kept, because a
+#: character class alone is a filter and filters are how this class of defect
+#: recurs, while a boundary alone would still let control characters into
+#: problem ids, result ids and provenance keys.
+IDENTIFIER_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$"
+#: Compiled with ``\A``/``\Z`` rather than ``^``/``$``, because Python's ``$``
+#: also matches immediately before a trailing newline — so the published
+#: pattern, read with JSON Schema's ECMA-262 semantics where ``$`` does not,
+#: would have been STRICTER than the enforced one. A trailing newline is
+#: exactly the character this class exists to refuse. A test asserts the two
+#: agree on every probe rather than trusting the equivalence.
+_IDENTIFIER = re.compile(r"\A[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}\Z")
+
+
+def require_identifier(value: Any, where: str) -> str:
+    """A caller-supplied name, constrained to a published shape."""
+    text = require_text(value, where)
+    if not _IDENTIFIER.match(text):
+        raise ExternalRequestRefused(
+            RefusalCode.MALFORMED_REQUEST,
+            f"{where} must match {IDENTIFIER_PATTERN} — an identifier this "
+            f"platform will carry into problem ids, result ids, provenance "
+            f"keys and, through an adapter, into an external provider's own "
+            f"input language. It is a name, not free text.",
+        )
+    return text
+
+
 def require_text(value: Any, where: str) -> str:
     if not isinstance(value, str):
         raise ExternalRequestRefused(
@@ -218,7 +263,7 @@ def require_int(value: Any, where: str) -> int:
 
 
 def parse_quantity(
-    value: Any, *, where: str, unit: str, difference: bool = False
+    value: Any, *, where: str, unit: str, difference: bool
 ) -> Quantity:
     """``{"value": <number>, "unit": <string>}`` -> a Quantity in ``unit``.
 
@@ -252,6 +297,13 @@ def parse_quantity(
     So the check is applied to the caller's unit **before** conversion, and it
     is the coupling package's own ``is_ratio_scale`` rather than a second
     implementation of the same rule.
+
+    ``difference`` is **required and has no default**, deliberately. The first
+    form defaulted it to ``False`` — which made the unsafe answer the silent
+    one, so every future field and every future execution module would have
+    been wrong until somebody remembered. Making it required forces each call
+    site to state which kind of quantity it is parsing, and a new field cannot
+    be added without answering the question.
     """
     payload = require_object(value, where)
     require_exact_keys(payload, required=frozenset({"value", "unit"}), where=where)
@@ -292,12 +344,22 @@ class ExecutionRequest:
 
 
 def parse_request(
-    payload: Any,
-    *,
-    known_executions: frozenset[str],
-    known_profiles: frozenset[str],
+    payload: Any, *, executions: Mapping[str, Any]
 ) -> ExecutionRequest:
-    """Envelope only. Raises :class:`ExternalRequestRefused` for A, B and D."""
+    """Envelope only. Raises :class:`ExternalRequestRefused` for A, B and D.
+
+    ``executions`` maps an execution identity to the module that implements it.
+    An execution module is required to publish three names — ``EXECUTION_ID``,
+    ``PROFILES`` and ``prepare`` — and that is the whole protocol.
+
+    **The profile is validated against the RESOLVED execution, never against a
+    global set.** The first form kept one platform-wide profile enumeration and
+    checked the two fields independently, which made
+    ``{"execution": <a fluid coupling>, "execution_profile": "ngspice"}`` a
+    perfectly acceptable request naming a circuit solver for a problem with no
+    circuit — and published a schema telling an agent that every combination was
+    legal. There is one execution today, so nothing was broken; the shape was.
+    """
     body = require_object(payload, "request")
 
     schema = body.get("schema")
@@ -309,17 +371,23 @@ def parse_request(
             f"somebody checked that this reader handles it.",
         )
 
+    # `run_id` is REQUIRED, and this is a preregistered deviation. §5.1.9
+    # justified an optional default on the grounds that the field "is used only
+    # as a provenance string". That is false: it also becomes
+    # ``ScientificResult.result_id``, so every caller who omitted it would mint
+    # results whose scientific identity is one shared literal. Requiring a
+    # field is a narrowing that cannot be applied after publication.
     require_exact_keys(
         body,
         required=frozenset(
-            {"schema", "execution", "execution_profile", "inputs", "coupling"}
+            {"schema", "execution", "execution_profile", "inputs", "coupling",
+             "run_id"}
         ),
-        optional=frozenset({"run_id"}),
         where="request",
     )
 
     execution = require_text(body["execution"], "request.execution")
-    if execution not in known_executions:
+    if execution not in executions:
         # The refusal names the admissible set. That is this deployment's
         # discovery affordance, and it is why no /capabilities endpoint and no
         # crafty_capabilities tool exists: a second surface restating this
@@ -327,26 +395,24 @@ def parse_request(
         raise ExternalRequestRefused(
             RefusalCode.UNKNOWN_EXECUTION,
             f"unknown execution {execution!r}; this deployment exposes "
-            f"{sorted(known_executions)}",
+            f"{sorted(executions)}",
         )
 
+    known_profiles = frozenset(executions[execution].PROFILES)
     profile = require_text(
         body["execution_profile"], "request.execution_profile"
     )
     if profile not in known_profiles:
         raise ExternalRequestRefused(
             RefusalCode.UNKNOWN_EXECUTION_PROFILE,
-            f"unknown execution profile {profile!r}; this deployment exposes "
-            f"{sorted(known_profiles)}. An execution profile is a Crafty "
-            f"identity drawn from a closed enumeration; it is never a path, "
-            f"a command, or an argument to one.",
+            f"unknown execution profile {profile!r} for execution "
+            f"{execution!r}, which exposes {sorted(known_profiles)}. An "
+            f"execution profile is a Crafty identity drawn from a closed "
+            f"enumeration owned by the execution that gives it meaning; it is "
+            f"never a path, a command, or an argument to one.",
         )
 
-    run_id = require_text(body.get("run_id", "crafty-v0"), "request.run_id")
-    if not run_id.strip():
-        raise ExternalRequestRefused(
-            RefusalCode.MALFORMED_REQUEST, "request.run_id must be non-empty"
-        )
+    run_id = require_identifier(body["run_id"], "request.run_id")
 
     return ExecutionRequest(
         execution=execution,
@@ -425,6 +491,22 @@ def project_run(run: CoupledRun) -> dict[str, Any]:
     final = run.final
     outputs: list[dict[str, Any]] = []
     for result in sorted(final.results, key=lambda r: r.problem_id):
+        # `crafty_execution_response/1` has NO representation for bulk data,
+        # and a projection that quietly skipped `data_references` would emit a
+        # well-formed response understating what was computed. DATA-BOUNDARY0
+        # bumped `scientific_result` to /2 for exactly this reason and recorded
+        # the rule: loud failure is recoverable, silent understatement of a
+        # scientific claim is not. This function is domain-neutral, so it
+        # cannot rely on the currently wired consumer being scalar.
+        if result.data_references:
+            raise ScientificCoreError(
+                f"result {result.result_id!r} of problem "
+                f"{result.problem_id!r} carries "
+                f"{len(result.data_references)} bulk data reference(s), and "
+                f"{RESPONSE_SCHEMA} has no representation for them. Refusing "
+                f"rather than emitting a response that understates the "
+                f"computation."
+            )
         for name in sorted(result.values):
             outputs.append(
                 {

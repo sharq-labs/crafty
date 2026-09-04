@@ -409,6 +409,10 @@ def test_d2_an_unknown_field_is_refused_and_never_dropped():
 def test_d3_a_missing_field_is_not_defaulted():
     """No default anywhere in ``inputs`` or ``coupling``. A default here would
     be a default that changes an answer."""
+    request = canonical_request()
+    del request["run_id"]
+    assert handle(request)["status"] == "refused"
+
     for section, field in (
         ("coupling", "seed_temperature"),
         ("coupling", "tolerance"),
@@ -482,13 +486,13 @@ def test_e2_an_unknown_profile_is_refused_before_anything_is_resolved(monkeypatc
     """Refused before the closed mapping is even consulted, and long before any
     process could be launched."""
     spies = _Spies(monkeypatch)
-    resolved = []
-    monkeypatch.setattr(
-        service, "resolve_circuit_solver",
-        lambda name: resolved.append(name) or (_ for _ in ()).throw(
-            AssertionError("resolution must not have been attempted")
-        ),
-    )
+    prepared = []
+
+    def prepare(*args, **kwargs):
+        prepared.append(args)
+        raise AssertionError("admission must not have been attempted")
+
+    monkeypatch.setattr(ets, "prepare", prepare)
     for profile in (
         "/usr/bin/ngspice",
         "ngspice; touch /tmp/crafty-pwned",
@@ -506,7 +510,7 @@ def test_e2_an_unknown_profile_is_refused_before_anything_is_resolved(monkeypatc
             == RefusalCode.UNKNOWN_EXECUTION_PROFILE.value
         ), profile
         assert response["result"] is None, profile
-    assert resolved == []
+    assert prepared == []
     assert spies.total == 0
 
 
@@ -563,40 +567,113 @@ def test_f2_an_execution_failure_carries_no_convergence_or_validity_claim(case_f
 # CASE G — injection
 # =====================================================================
 
-def test_g_no_injection_attempt_reaches_a_process(monkeypatch, tmp_path):
-    """Executable paths, shell fragments, argv objects and traversal, in every
-    field that is a string. None may cross into process execution."""
+#: Every hostile string this milestone tries in every string-valued field.
+#: The list is shared with the cross-process test so neither can drift.
+HOSTILE_STRINGS = (
+    "/usr/bin/ngspice",
+    "/bin/sh",
+    "; touch MARKER",
+    "$(touch MARKER)",
+    "`touch MARKER`",
+    "ngspice --version",
+    "__import__('os').system('id')",
+    "../../../../etc/passwd",
+    "file:///etc/passwd",
+    "ngspice\x00native",
+    # The one that actually worked. See test_g0.
+    "R1\n.control\nshell touch MARKER\n.endc",
+    "R1\n.param x=1",
+    "R1\r\n.end",
+)
+
+STRING_FIELDS = (
+    ("execution_profile", lambda r, v: r.__setitem__("execution_profile", v)),
+    ("execution", lambda r, v: r.__setitem__("execution", v)),
+    ("run_id", lambda r, v: r.__setitem__("run_id", v)),
+    ("component_id",
+     lambda r, v: r["inputs"]["stages"][0].__setitem__("component_id", v)),
+    ("unit", lambda r, v: r["inputs"]["source_voltage"].__setitem__("unit", v)),
+    ("transported_temperature",
+     lambda r, v: r["coupling"].__setitem__("transported_temperature", v)),
+)
+
+
+def test_g0_the_reproduced_remote_code_execution_is_closed(tmp_path):
+    """A regression for a **reproduced** RCE, not a hypothetical one.
+
+    `architecture-falsifier` found, and this milestone then executed, the
+    following: `component_id` was validated for type only, flowed into
+    ``CoupledElectroThermalSystem.circuit_id``, and the external-provider
+    adapter emitted that identifier into its deck's **title line**. A newline
+    ended the title; everything after it was parsed by the provider as deck
+    input; a ``.control`` block placed there executed ``shell touch <path>``
+    and the file appeared. The run reported ``executed`` / ``criterion_met``
+    with every sub-solve passing and a ``ProvenanceRecord`` describing the
+    circuit that was *declared* rather than the one that was solved.
+
+    Two independent repairs, and this test exercises the request half of both:
+    the identifier is constrained to a published character class here, and the
+    provider adapter no longer emits any Crafty identifier into deck text.
+    """
+    marker = tmp_path / "rce"
+    payload = f"R1\n.control\nshell touch {marker}\n.endc"
+    for profile in ("native", "ngspice"):
+        request = canonical_request(execution_profile=profile)
+        request["inputs"]["stages"][0]["component_id"] = payload
+        response = handle(request)
+        assert response["status"] == "refused", profile
+        assert (
+            response["refusal"]["code"] == RefusalCode.MALFORMED_REQUEST.value
+        ), profile
+        assert response["result"] is None, profile
+    assert not marker.exists()
+
+
+def test_g0b_an_identifier_is_a_name_and_not_free_text():
+    for value in (
+        "R1\n", "R1 R2", "R1;R2", "R1/R2", "R1\tX", "", " R1", "R1\x00",
+        "_R1", "R" * 65, ".control", "R1$(id)",
+    ):
+        for field in ("run_id",):
+            request = canonical_request()
+            request[field] = value
+            assert handle(request)["status"] == "refused", (field, value)
+        request = canonical_request()
+        request["inputs"]["stages"][0]["component_id"] = value
+        assert handle(request)["status"] == "refused", value
+    # And ordinary names still work.
+    request = canonical_request()
+    request["inputs"]["stages"][0]["component_id"] = "R1.a:b-c_d"
+    assert handle(request)["status"] == "executed"
+
+
+def test_g_no_injection_attempt_is_admitted_or_reaches_a_process(
+    monkeypatch, tmp_path
+):
+    """Executable paths, shell fragments, deck fragments, argv objects and
+    traversal, in **every** string-valued field.
+
+    The assertion is ``spies.total == 0``, not ``result is None``. The first
+    form asserted the latter and was **vacuous**: ``_Spies`` makes the coupling
+    loop raise, so an *admitted* hostile request also produced ``result is
+    None`` and the test passed while the request was in fact accepted. That is
+    how the RCE in ``test_g0`` survived a test written to catch it.
+    """
     marker = tmp_path / "crafty-pwned"
     spies = _Spies(monkeypatch)
-    hostile = [
-        "/usr/bin/ngspice",
-        "/bin/sh",
-        f"; touch {marker}",
-        f"$(touch {marker})",
-        f"`touch {marker}`",
-        "ngspice --version",
-        "__import__('os').system('id')",
-        "../../../../etc/passwd",
-        "file:///etc/passwd",
-        "ngspice\x00native",
-    ]
-    for value in hostile:
-        for mutate in (
-            lambda r, v: r.__setitem__("execution_profile", v),
-            lambda r, v: r.__setitem__("execution", v),
-            lambda r, v: r.__setitem__("run_id", v),
-            lambda r, v: r["inputs"]["stages"][0].__setitem__("component_id", v),
-            lambda r, v: r["inputs"]["source_voltage"].__setitem__("unit", v),
-            lambda r, v: r["coupling"].__setitem__("transported_temperature", v),
-        ):
+    for raw in HOSTILE_STRINGS:
+        value = raw.replace("MARKER", str(marker))
+        for name, mutate in STRING_FIELDS:
             request = canonical_request()
             mutate(request, value)
             response = handle(request)
-            # Every one is refused. The only field where a hostile-looking
-            # string could legitimately survive is `run_id`, which is a
-            # provenance label and reaches nothing but a string field.
-            assert response["result"] is None or request["run_id"] == value
-    assert spies.process == 0
+            assert response["status"] in {"refused", "execution_failed"}, (
+                name, value,
+            )
+            assert response["result"] is None, (name, value)
+    # Nothing above was admitted: not one request reached the loop, a circuit
+    # solve, or a process.
+    assert (spies.loop, spies.native_solve, spies.process) == (0, 0, 0)
     assert not marker.exists()
 
 
@@ -691,8 +768,8 @@ def test_g6_no_external_string_reaches_a_process_argument_construction():
     """
     forbidden_calls = {
         "system", "popen", "spawn", "spawnl", "spawnv", "execv", "execve",
-        "eval", "exec", "compile", "__import__", "import_module",
-        "check_output", "check_call", "getattr", "setattr", "loads_pickle",
+        "eval", "exec", "__import__", "import_module",
+        "check_output", "check_call", "setattr", "loads_pickle",
     }
     for directory in (APPLICATION_DIR, HTTP_DIR, MCP_DIR):
         for path, source in _sources(directory):
@@ -841,7 +918,7 @@ def test_the_projection_is_far_smaller_than_the_internal_record(case_a):
     from engcore.scientific.serialization import to_json
 
     request = canonical_request()
-    prepared = ets.prepare(request["inputs"], request["coupling"])
+    prepared = ets.prepare(request["inputs"], request["coupling"], "native")
     internal = len(to_json(prepared.run("api-v0-case-a")))
     external = len(json.dumps(case_a, sort_keys=True))
     assert external < internal / 10
@@ -867,31 +944,95 @@ def test_no_bulk_data_crosses_the_boundary(case_a):
 # Architecture fitness
 # =====================================================================
 
-def test_universal_core_coupling_domains_and_the_other_pack_are_untouched():
-    """Fail conditions 1 and 2 of the preregistration."""
+#: The preregistration's fail condition 1 named `src/engcore/domains/` as
+#: byte-unchanged, and **it was triggered**. `architecture-falsifier` found a
+#: remote code execution through the external-provider adapter's deck title
+#: line; the milestone reproduced it, and closing it required one line of
+#: `ngspice.py`. The alternative was to publish an API with a reproduced RCE
+#: behind it and record the fail condition as honoured. Recorded as deviation
+#: D-1 in docs/api-mcp-v0-evidence.md rather than quietly absorbed.
+_RCE_REPAIR = "src/engcore/domains/electrical/ngspice.py"
+
+
+def test_universal_core_coupling_and_the_other_pack_are_untouched():
+    """Fail conditions 1 and 2 of the preregistration, with one exception."""
     for path in (
         "src/engcore/scientific/",
         "src/engcore/coupling/",
-        "src/engcore/domains/",
         "src/engcore/systems/fluidthermal/",
     ):
         assert _diff(path) == "", path
+    assert set(_diff("src/engcore/domains/").split()) == {_RCE_REPAIR}
 
 
-def test_the_only_pre_existing_source_file_edited_is_the_one_seam():
-    changed = set(_diff("src/").split())
-    new = {
-        line
-        for line in subprocess.run(
-            ["git", "ls-files", "--others", "--exclude-standard", "src/"],
+def test_the_provider_adapter_change_is_the_rce_repair_and_nothing_else():
+    """One line, and it removes a channel rather than filtering it."""
+    diff = subprocess.run(
+        ["git", "diff", "-U0", "3f2e6dd", "--", _RCE_REPAIR],
+        cwd=str(REPO_ROOT), capture_output=True, text=True, check=True,
+    ).stdout
+    removed = [
+        line for line in diff.splitlines()
+        if line.startswith("-") and not line.startswith("---")
+    ]
+    added = [
+        line for line in diff.splitlines()
+        if line.startswith("+") and not line.startswith("+++")
+    ]
+    assert removed == ['-    lines = [f"crafty {circuit.circuit_id}"]'], removed
+    code = [line for line in added if not line.lstrip("+").lstrip().startswith("#")]
+    assert code == ['+    lines = ["crafty circuit"]'], code
+
+    # No Crafty identifier can reach deck text any more.
+    from engcore.domains.electrical import ngspice as provider
+    from engcore.domains.electrical.dc import (
+        DCCircuit, DCVoltageSource, ElectricalNode, Resistor,
+    )
+    from engcore.scientific.units.quantity import Quantity
+
+    circuit = DCCircuit(
+        circuit_id="R1\n.control\nshell true\n.endc",
+        nodes=(ElectricalNode("a"), ElectricalNode("gnd", is_reference=True)),
+        resistors=(Resistor("R1", "a", "gnd", Quantity(10.0, "ohm")),),
+        voltage_sources=(
+            DCVoltageSource("V1", "a", "gnd", Quantity(5.0, "volt")),
+        ),
+    )
+    netlist = provider.build_netlist(circuit).text
+    assert "shell" not in netlist
+    assert circuit.circuit_id not in netlist
+    assert netlist.splitlines()[0] == "crafty circuit"
+
+
+#: The preregistration commit — the tree as it stood before one line of this
+#: milestone's implementation existed.
+PREREG_COMMIT = "3f2e6dd"
+
+#: The three trees this milestone ADDS. New code, importing inward only.
+NEW_TREES = (
+    "src/engcore/application/", "src/crafty_http/", "src/crafty_mcp/",
+)
+
+
+def test_exactly_three_pre_existing_source_files_were_edited():
+    """Everything else under `src/` is new, and every edit is accounted for."""
+    changed = set(
+        subprocess.run(
+            ["git", "diff", "--name-only", PREREG_COMMIT, "--", "src/"],
             cwd=str(REPO_ROOT), capture_output=True, text=True, check=True,
         ).stdout.split()
+    )
+    edited = {
+        path for path in changed
+        if not any(path.startswith(tree) for tree in NEW_TREES)
     }
-    assert changed - new == {"src/engcore/systems/electrothermal/coupled.py"} or \
-        changed - new == {
-            "src/engcore/systems/electrothermal/coupled.py",
-            "src/engcore/systems/electrothermal/__init__.py",
-        }, sorted(changed - new)
+    assert edited == {
+        # the additive execution seam
+        "src/engcore/systems/electrothermal/coupled.py",
+        "src/engcore/systems/electrothermal/__init__.py",
+        # the RCE repair
+        _RCE_REPAIR,
+    }, sorted(edited)
 
 
 def test_the_seam_changed_no_number():
@@ -1062,14 +1203,49 @@ def test_no_core_schema_string_moved():
 # The catalog is closed, and the published contract cannot drift
 # =====================================================================
 
-def test_the_catalog_is_two_literal_dicts_with_no_fallthrough():
+def test_the_catalog_is_a_literal_dict_with_no_fallthrough():
     assert set(catalog.EXECUTIONS) == {EXECUTION}
-    assert set(catalog.PROFILES) == {"native", "ngspice"}
+    assert set(ets.PROFILES) == {"native", "ngspice"}
     for name in ("Ngspice", "ngspice ", " native", "native\n"):
-        assert name not in catalog.PROFILES
+        assert name not in ets.PROFILES
     source = (APPLICATION_DIR / "catalog.py").read_text(encoding="utf-8")
     for forbidden in ("startswith", "lower()", "strip()", "get(", "setdefault"):
         assert forbidden not in source, forbidden
+
+
+def test_the_application_layer_names_no_solver_circuit_or_provider():
+    """The falsifier's C-2. A platform-wide profile enumeration made the
+    universal layer import ``CircuitSolver`` and ``native_circuit_solver`` —
+    so a layer that must not know what it is executing named a *circuit* — and
+    validated the two enumerations independently, which would have admitted a
+    circuit solver for a fluid problem the moment a second execution existed.
+    Profiles now belong to the execution that gives them meaning."""
+    universal = ("circuit", "CircuitSolver", "native_circuit_solver",
+                 "ngspice", "resistance", "kelvin", "watt", "ohm")
+    for name in ("catalog.py", "contract.py", "service.py", "describe.py"):
+        code = _code_only((APPLICATION_DIR / name).read_text(encoding="utf-8"))
+        for word in universal:
+            assert word not in code, (name, word)
+    # `catalog.py` legitimately names the execution MODULE it exposes — that is
+    # its entire job — so the domain-word scan excludes it and applies to the
+    # three modules that must know nothing about what they are executing.
+    for name in ("contract.py", "service.py", "describe.py"):
+        code = _code_only((APPLICATION_DIR / name).read_text(encoding="utf-8"))
+        for word in ("thermal", "electro", "fluid", "kinetic"):
+            assert word not in code, (name, word)
+
+
+def test_a_profile_is_validated_against_the_resolved_execution():
+    """There is no platform-wide profile set to validate against."""
+    assert catalog.profile_names(EXECUTION) == frozenset({"native", "ngspice"})
+    assert not hasattr(catalog, "PROFILES")
+    schema = describe.request_json_schema()
+    # The relation between the two enumerations is published, not implied.
+    (clause,) = schema["allOf"]
+    assert clause["if"]["properties"]["execution"]["const"] == EXECUTION
+    assert clause["then"]["properties"]["execution_profile"]["enum"] == [
+        "native", "ngspice",
+    ]
 
 
 def test_the_profile_resolvers_take_no_caller_input():
@@ -1077,7 +1253,7 @@ def test_the_profile_resolvers_take_no_caller_input():
     invocation: the resolver has nowhere to put one."""
     import inspect
 
-    for name, resolver in catalog.PROFILES.items():
+    for name, resolver in ets.PROFILES.items():
         assert inspect.signature(resolver).parameters == {}, name
 
 
@@ -1086,26 +1262,35 @@ def test_the_published_schema_cannot_drift_from_the_validator():
     one. Derived from the same constants, and checked to be so."""
     schema = describe.request_json_schema()
     assert schema["properties"]["execution"]["enum"] == sorted(catalog.EXECUTIONS)
-    assert schema["properties"]["execution_profile"]["enum"] == sorted(
-        catalog.PROFILES
-    )
     assert schema["properties"]["schema"]["const"] == contract.REQUEST_SCHEMA
-    assert set(schema["properties"]["inputs"]["required"]) == set(ets.INPUT_KEYS)
-    assert set(schema["properties"]["coupling"]["required"]) == set(
-        ets.COUPLING_KEYS
-    )
-    stage = schema["properties"]["inputs"]["properties"]["stages"]["items"]
+    assert set(schema["required"]) == {
+        "schema", "execution", "execution_profile", "inputs", "coupling",
+        "run_id",
+    }
+    (clause,) = schema["allOf"]
+    body = clause["then"]["properties"]
+    assert set(body["inputs"]["required"]) == set(ets.INPUT_KEYS)
+    assert set(body["coupling"]["required"]) == set(ets.COUPLING_KEYS)
+    stage = body["inputs"]["properties"]["stages"]["items"]
     assert set(stage["required"]) == set(ets.STAGE_KEYS)
     assert (
-        schema["properties"]["coupling"]["properties"]["transported_temperature"][
-            "enum"
-        ]
+        body["coupling"]["properties"]["transported_temperature"]["enum"]
         == sorted(ets.TRANSPORTED_TEMPERATURES)
     )
+    # The published identifier pattern is the enforced one, not a copy.
+    assert stage["properties"]["component_id"]["pattern"] == (
+        contract.IDENTIFIER_PATTERN
+    )
+    assert schema["properties"]["run_id"]["pattern"] == contract.IDENTIFIER_PATTERN
     # additionalProperties: False everywhere a mapping is described.
     def closed(node) -> None:
         if isinstance(node, dict):
-            if node.get("type") == "object":
+            # Only where properties are declared. The two top-level `inputs`
+            # and `coupling` placeholders stay open deliberately: JSON Schema
+            # evaluates `additionalProperties` against the SAME schema object's
+            # own `properties`, so closing them in the base would reject the
+            # very fields the conditional clause adds.
+            if node.get("type") == "object" and "properties" in node:
                 assert node.get("additionalProperties") is False, node.get("title")
             for child in node.values():
                 closed(child)
@@ -1114,6 +1299,117 @@ def test_the_published_schema_cannot_drift_from_the_validator():
                 closed(child)
 
     closed(schema)
+
+
+def test_the_published_identifier_pattern_agrees_with_the_enforced_one():
+    """Python's ``$`` also matches before a trailing newline; JSON Schema's does
+    not. The enforced regex is anchored with ``\\A``/``\\Z`` for that reason,
+    and this asserts the two agree rather than assuming it."""
+    import re as _re
+
+    published = _re.compile(contract.IDENTIFIER_PATTERN)
+    probes = [
+        "R1", "a", "R1.a:b-c_d", "R" * 64, "R" * 65, "", " R1", "R1 ", "_R1",
+        "R1\n", "R1\nx", "R1\r", "R1\x00", ".control", "R1;x", "R1/x",
+    ]
+    for probe in probes:
+        enforced_ok = True
+        try:
+            contract.require_identifier(probe, "probe")
+        except contract.ExternalRequestRefused:
+            enforced_ok = False
+        json_schema_ok = bool(
+            published.match(probe) and "\n" not in probe and "\r" not in probe
+        )
+        assert enforced_ok == json_schema_ok, probe
+
+
+def test_the_published_schema_states_the_difference_constraint(monkeypatch):
+    """The falsifier's C-5, and the drift guard that could not have caught it.
+
+    The first form published one shared quantity fragment saying "any
+    dimensionally compatible unit" — false of ``tolerance``, where a
+    dimensionally compatible affine unit is refused. A name-level drift check
+    is structurally unable to see a wrong *constraint*, so this one reads the
+    call sites: every ``parse_quantity(..., difference=True)`` must have a
+    schema entry that says so, and every ``difference=False`` must not.
+    """
+    import ast as _ast
+
+    source = (APPLICATION_DIR / "executions" / "electrothermal_series.py").read_text(
+        encoding="utf-8"
+    )
+    differences = set()
+    values = set()
+    for node in _ast.walk(_ast.parse(source)):
+        if isinstance(node, _ast.Call) and getattr(node.func, "id", "") == (
+            "parse_quantity"
+        ):
+            flag = next(
+                (k.value.value for k in node.keywords if k.arg == "difference"),
+                None,
+            )
+            where = next(
+                (k.value for k in node.keywords if k.arg == "where"), None
+            )
+            label = getattr(where, "value", "")
+            (differences if flag else values).add(label)
+    # Exactly one difference-valued field exists, and it is the tolerance.
+    assert differences == {"request.coupling.tolerance"}
+    assert values
+
+    body = describe.request_json_schema()["allOf"][0]["then"]["properties"]
+    tolerance = body["coupling"]["properties"]["tolerance"]
+    assert "REFUSED" in tolerance["properties"]["unit"]["description"]
+    assert "ratio-scale" in tolerance["properties"]["unit"]["description"]
+    seed = body["coupling"]["properties"]["seed_temperature"]
+    assert "REFUSED" not in seed["properties"]["unit"]["description"]
+
+
+def test_a_difference_field_cannot_be_added_without_answering_the_question():
+    """``parse_quantity``'s ``difference`` has no default, so the unsafe answer
+    is never the silent one."""
+    import inspect
+
+    parameter = inspect.signature(contract.parse_quantity).parameters["difference"]
+    assert parameter.default is inspect.Parameter.empty
+    assert parameter.kind is inspect.Parameter.KEYWORD_ONLY
+
+
+def test_the_projection_refuses_to_understate_a_computation():
+    """The falsifier's C-4. ``project_run`` is domain-neutral and reads only a
+    ``CoupledRun``, so it cannot rely on the wired consumer being scalar. A
+    result carrying bulk data has no representation in this response, and
+    DATA-BOUNDARY0's own rule is that loud failure beats silent understatement.
+    """
+    from engcore.scientific.errors import ScientificCoreError
+    from engcore.scientific.results.data_reference import ScientificDataReference
+    from engcore.scientific.results.result import ScientificResult
+    import dataclasses
+
+    request = canonical_request()
+    prepared = ets.prepare(request["inputs"], request["coupling"], "native")
+    run = prepared.run("bulk-probe")
+    assert project_run_ok(run)
+
+    reference = ScientificDataReference(
+        name="phi", unit="kelvin", count=4096, dtype="float64",
+        digest="0" * 64, digest_algorithm="sha256",
+    )
+    victim = run.final.results[0]
+    poisoned = dataclasses.replace(victim, data_references=(reference,))
+    iteration = dataclasses.replace(
+        run.final,
+        results=(poisoned,) + tuple(run.final.results[1:]),
+    )
+    doctored = dataclasses.replace(run, iterations=run.iterations[:-1] + (iteration,))
+    with pytest.raises(ScientificCoreError, match="bulk data"):
+        contract.project_run(doctored)
+
+
+def project_run_ok(run) -> bool:
+    contract.project_run(run)
+    return True
 
 
 # =====================================================================
@@ -1201,6 +1497,62 @@ def test_the_http_status_map_is_total_over_the_taxonomy():
     assert set(STATUS_FOR_CODE) == {member.value for member in RefusalCode}
     # And a non-convergent run has no entry, because it is not a refusal.
     assert 200 not in STATUS_FOR_CODE.values()
+
+
+def test_the_provider_profile_resolves_to_a_callable_without_running_anything(
+    monkeypatch,
+):
+    """Resolution must not be a latent import error — and must not execute.
+
+    This caught a real defect: the resolver's relative import was one level
+    too deep, so every provider request classified as
+    ``unclassified_internal_failure`` with ``ImportError`` instead of running.
+    The cross-process test would have found it; nothing in-process would have.
+    """
+    spies = _Spies(monkeypatch)
+    solver = ets.PROFILES["ngspice"]()
+    assert callable(solver)
+    assert spies.process == 0
+
+
+def test_a_provider_failure_is_classified_as_one_not_as_a_crafty_defect(
+    monkeypatch,
+):
+    """(E) in the taxonomy, in process and without launching anything.
+
+    The domain deliberately made provider errors NOT ScientificCoreError, so
+    "the provider was not installed" can never read as "the science does not
+    hold". The boundary honours that split by asking the execution which
+    failures mean a provider broke — it names no provider itself.
+    """
+    from engcore.domains.electrical import ngspice as provider
+
+    def explode(self, netlist):
+        raise provider.NgspiceExecutionFailure("the provider exited 1")
+
+    monkeypatch.setattr(provider.NgspiceInvocation, "run", explode)
+    monkeypatch.setattr(
+        provider.NgspiceInvocation, "probe_version", lambda self: "42"
+    )
+    response = handle(canonical_request(execution_profile="ngspice"))
+    assert response["status"] == "execution_failed"
+    assert (
+        response["refusal"]["code"] == RefusalCode.PROVIDER_EXECUTION_FAILED.value
+    )
+    assert response["refusal"]["error_type"] == "NgspiceExecutionFailure"
+    # Not a scientific verdict of any kind.
+    assert response["result"] is None
+    text = json.dumps(response)
+    for forbidden in ("criterion_met", "outcome", "validation_status"):
+        assert forbidden not in text, forbidden
+
+
+def test_the_universal_layer_names_no_provider_when_classifying():
+    """The classifier asks the execution; it does not know a provider's name."""
+    code = _code_only((APPLICATION_DIR / "service.py").read_text(encoding="utf-8"))
+    assert "ngspice" not in code
+    assert "sys.modules" not in code
+    assert callable(ets.provider_failure_types)
 
 
 def test_the_native_profile_never_imports_the_provider_module():

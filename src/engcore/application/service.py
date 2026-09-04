@@ -36,8 +36,7 @@ import traceback
 from typing import Any, Mapping
 
 from ..scientific.errors import ScientificCoreError
-from .catalog import EXECUTIONS, execution_identities, profile_names, \
-    resolve_circuit_solver
+from .catalog import EXECUTIONS
 from .contract import (
     RESPONSE_SCHEMA,
     ExternalRequestRefused,
@@ -82,35 +81,26 @@ def _refusal(
     }
 
 
-def _provider_error_classes() -> tuple[type[BaseException], ...]:
-    """The external-provider failure family, imported only if it was loaded.
+def _provider_error_classes(module: Any) -> tuple[type[BaseException], ...]:
+    """*Ask* the resolved execution which failures mean "a provider broke".
 
-    A provider failure is structurally distinct from a scientific refusal — the
-    domain deliberately made its provider errors *not* ``ScientificCoreError``,
-    so that "the provider was not installed" can never be read as "the science
-    does not hold". This classifier honours that split by asking the same
-    question the domain answers, and it does so **without importing the
-    provider module** when nothing loaded it: a deployment serving only the
-    native profile classifies a native failure without pulling in a provider.
+    This layer must be able to classify a provider failure without naming a
+    provider, and the first form named one — it read a module path out of
+    ``sys.modules`` right here, which is a domain fact in a layer that must not
+    hold one. An execution knows what runs underneath it; nothing above it
+    does. Part of the execution-module protocol, and empty is a real answer.
     """
-    import sys
-
-    module = sys.modules.get("engcore.domains.electrical.ngspice")
-    if module is None:
-        return ()
-    return (module.NgspiceProviderError,)
+    ask = getattr(module, "provider_failure_types", None)
+    return tuple(ask()) if callable(ask) else ()
 
 
 def execute(payload: Any) -> dict[str, Any]:
     """Run one external request. Returns a response payload; never raises."""
     stage = _REQUEST
     execution = profile = run_id = ""
+    module: Any = None
     try:
-        request = parse_request(
-            payload,
-            known_executions=execution_identities(),
-            known_profiles=profile_names(),
-        )
+        request = parse_request(payload, executions=EXECUTIONS)
         execution, profile, run_id = (
             request.execution,
             request.execution_profile,
@@ -119,10 +109,12 @@ def execute(payload: Any) -> dict[str, Any]:
 
         stage = _ADMISSION
         module = EXECUTIONS[request.execution]
+        # The profile travels as the identity `parse_request` already validated
+        # against THIS execution's own enumeration, and the execution resolves
+        # it. This layer therefore names no solver, no circuit and no provider,
+        # and cannot: it has no type from any of them.
         prepared = module.prepare(
-            request.inputs,
-            request.coupling,
-            resolve_circuit_solver(request.execution_profile),
+            request.inputs, request.coupling, request.execution_profile
         )
 
         stage = _EXECUTION
@@ -169,7 +161,7 @@ def execute(payload: Any) -> dict[str, Any]:
         )
 
     except BaseException as exc:  # noqa: BLE001 - the classifier must be total
-        if isinstance(exc, _provider_error_classes()):
+        if isinstance(exc, _provider_error_classes(module)):
             return _refusal(
                 RefusalCode.PROVIDER_EXECUTION_FAILED,
                 _EXECUTION,

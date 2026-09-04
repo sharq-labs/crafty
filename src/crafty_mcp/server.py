@@ -42,6 +42,7 @@ import sys
 from typing import Any, Mapping, TextIO
 
 from engcore.application import handle
+from engcore.application.contract import MAX_REQUEST_BYTES
 from engcore.application.describe import request_json_schema
 
 __all__ = ["PROTOCOL_VERSION", "TOOLS", "main", "respond", "serve"]
@@ -168,6 +169,18 @@ def serve(stdin: TextIO, stdout: TextIO) -> None:
     for line in stdin:
         line = line.strip()
         if not line:
+            continue
+        if len(line.encode("utf-8")) > MAX_REQUEST_BYTES:
+            # The same bound HTTP applies, from the same constant. It was a
+            # real HTTP/MCP asymmetry that only one transport enforced it.
+            stdout.write(
+                json.dumps(
+                    _error(None, _INVALID_REQUEST, "frame exceeds the size limit"),
+                    sort_keys=True,
+                )
+                + "\n"
+            )
+            stdout.flush()
             continue
         try:
             message = json.loads(line)
