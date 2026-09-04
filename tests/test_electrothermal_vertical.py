@@ -161,6 +161,36 @@ def _code_only(source: str) -> str:
     return ast.unparse(tree)
 
 
+def _string_literals(source: str) -> set[str]:
+    """Every string constant that is NOT a docstring.
+
+    The dual of :func:`_code_only`, and it exists because `_code_only` is the
+    wrong instrument for one question. A schema name can only ever appear as a
+    string literal — ``schema_string("electrothermal_coupled_run")`` — so a
+    scan that blanks every string constant is structurally incapable of finding
+    one, and `architecture-falsifier` caught exactly that: the old form of
+    `test_o3`'s repo-wide sweep could not fail. Docstrings are still excluded,
+    because prose that *explains* a rename legitimately names the old string.
+    """
+    tree = ast.parse(source)
+    docstrings = set()
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef,
+                             ast.AsyncFunctionDef)):
+            body = getattr(node, "body", None)
+            if body and isinstance(body[0], ast.Expr) and isinstance(
+                body[0].value, ast.Constant
+            ) and isinstance(body[0].value.value, str):
+                docstrings.add(id(body[0].value))
+    return {
+        node.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Constant)
+        and isinstance(node.value, str)
+        and id(node) not in docstrings
+    }
+
+
 # =====================================================================
 # GATE G0 — is the declared dependency set executable as declared?
 # =====================================================================
@@ -1706,23 +1736,37 @@ def test_o3_no_existing_schema_version_moved():
     # /2 would imply a /1 of these names once existed and was readable.
     assert cpl.TORN_ENDPOINT_SCHEMA == "coupling_torn_endpoint/1"
     assert cpl.FIXED_POINT_PLAN_SCHEMA == "coupling_fixed_point_plan/1"
-    assert cpl.COUPLED_ITERATION_SCHEMA == "coupling_iteration/1"
-    assert cpl.COUPLED_RUN_SCHEMA == "coupling_run/1"
+    assert cpl.COUPLED_ITERATION_SCHEMA == "coupling_fixed_point_iteration/1"
+    assert cpl.COUPLED_RUN_SCHEMA == "coupling_fixed_point_run/1"
 
-    # and no executable statement anywhere under src/ still emits or accepts
-    # one of the four names they replaced. Measured over code with every
-    # string constant blanked: the docstrings that *explain* the rename name
-    # the old strings, which is what a docstring is for, and a scan that could
-    # not tell prose from code would be measuring the comments.
+    # …and no statement anywhere under src/ still emits or accepts one of the
+    # four names they replaced. Measured over the actual STRING LITERALS,
+    # docstrings excluded — a schema name can only ever appear as a literal, so
+    # the obvious `_code_only` sweep (which blanks every string constant) would
+    # have been a guard that could not fail. `architecture-falsifier` caught
+    # that; the assertion below is the repaired one.
+    replaced = (
+        "electrothermal_torn_endpoint", "electrothermal_fixed_point_plan",
+        "electrothermal_coupled_iteration", "electrothermal_coupled_run",
+    )
     for path in (REPO_ROOT / "src").rglob("*.py"):
         if "__pycache__" in path.parts:
             continue
-        code = _code_only(path.read_text(encoding="utf-8"))
-        for old_name in (
-            "electrothermal_torn_endpoint", "electrothermal_fixed_point_plan",
-            "electrothermal_coupled_iteration", "electrothermal_coupled_run",
-        ):
-            assert old_name not in code, (old_name, path)
+        literals = _string_literals(path.read_text(encoding="utf-8"))
+        for old_name in replaced:
+            assert not any(old_name in text for text in literals), (
+                old_name, path
+            )
+
+    # The repaired guard must be able to fail. Proved on a synthetic source
+    # rather than trusted: an emitter of an old name is caught, and prose that
+    # merely explains the rename is not.
+    emitter = 'X = schema_string("electrothermal_coupled_run")'
+    assert any("electrothermal_coupled_run" in t
+               for t in _string_literals(emitter))
+    prose = '''"""It used to be electrothermal_coupled_run/1."""'''
+    assert not any("electrothermal_coupled_run" in t
+                   for t in _string_literals(prose))
 
 
 # =====================================================================

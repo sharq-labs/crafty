@@ -61,6 +61,14 @@ from .execution import (
     CoupledRun,
     run_fixed_point,
 )
+# `cycle_edges` is published with a measurement attached rather than silently:
+# it has ZERO production callers — neither system pack invokes it, and
+# `run_fixed_point` does not — and exactly one caller in the whole repository,
+# a Fluid-Thermal test asserting the declared cycle really is a 4-cycle. It is
+# kept published because it is one of three readers of the same graph and
+# splitting the trio would be churn, but it does NOT meet this milestone's own
+# promotion rule (prereg §17.1, "both production consumers use it"). Recorded
+# in docs/coupling-pack-relocation-evidence.md §D.
 from .graph import cycle_edges, edge_key, execution_order
 from .plan import (
     FIXED_POINT_PLAN_SCHEMA,

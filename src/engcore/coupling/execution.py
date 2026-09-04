@@ -73,8 +73,20 @@ __all__ = [
     "run_fixed_point",
 ]
 
-COUPLED_ITERATION_SCHEMA = schema_string("coupling_iteration")
-COUPLED_RUN_SCHEMA = schema_string("coupling_run")
+#: These two name the SCHEME, not just the concept, and deliberately so.
+#: `CoupledRun.from_dict` requires a `FixedPointCouplingPlan` by containment,
+#: and `CoupledIteration.largest_iterate_change` is a *sweep* quantity with no
+#: meaning under a time-windowed or accelerated scheme. A bare
+#: ``coupling_run/1`` would therefore be a name broader than the record's
+#: actual semantics — the same class of error `COUPLING-PACK-RELOCATION`
+#: exists to remove, one order smaller. `architecture-decision-reviewer`
+#: required the correction; it costs two string literals today and an
+#: unbounded migration after the first payload is stored.
+#:
+#: `TORN_ENDPOINT_SCHEMA` stays scheme-neutral on purpose: a cut edge paired
+#: with a seed is what *any* iterative coupling scheme needs, not only Picard.
+COUPLED_ITERATION_SCHEMA = schema_string("coupling_fixed_point_iteration")
+COUPLED_RUN_SCHEMA = schema_string("coupling_fixed_point_run")
 
 
 @dataclass(frozen=True)
@@ -98,6 +110,17 @@ class CoupledIteration:
     ``.to()`` on it with an affine target and get nonsense. The plan's
     ratio-scale refusal is what keeps this field convertible; the limitation is
     stated here because the type cannot state it.
+
+    **This record is NOT byte-reproducible, and must not be described as
+    digest-stable or content-addressable.** ``results`` carries whole
+    :class:`ScientificResult` records, and ``ScientificResult.metadata`` is an
+    untyped mapping a *participant* owns. One shipped participant writes
+    per-executor wall-clock into it, so two serializations of the same coupling
+    on the same inputs differ. That is a property of the participant, not of
+    this record — it was measured on the baseline commit before this package
+    existed, by serializing one case twice and diffing — and the comparison
+    that proved the relocation changed no number had to normalize those keys
+    for that reason. Nothing here reads or branches on them.
     """
 
     index: int

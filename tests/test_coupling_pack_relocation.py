@@ -80,6 +80,34 @@ def _code_only(source: str) -> str:
     return ast.unparse(tree)
 
 
+def _string_literals(source: str) -> set[str]:
+    """Every string constant that is NOT a docstring.
+
+    The dual of :func:`_code_only`, and the reason both exist. A schema name
+    can only ever appear as a string literal, so a sweep that blanks every
+    string constant cannot find one — `architecture-falsifier` caught that as
+    a guard incapable of failing. Docstrings stay excluded, because prose that
+    *explains* the rename legitimately names the old strings.
+    """
+    tree = ast.parse(source)
+    docstrings = set()
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef,
+                             ast.AsyncFunctionDef)):
+            body = getattr(node, "body", None)
+            if body and isinstance(body[0], ast.Expr) and isinstance(
+                body[0].value, ast.Constant
+            ) and isinstance(body[0].value.value, str):
+                docstrings.add(id(body[0].value))
+    return {
+        node.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Constant)
+        and isinstance(node.value, str)
+        and id(node) not in docstrings
+    }
+
+
 # =====================================================================
 # §R — universal scientific Core gained nothing
 # =====================================================================
@@ -252,19 +280,37 @@ def test_p3_no_field_mesh_or_transfer_concept_entered_the_package():
 def test_e_the_four_coupling_schemas_are_the_renamed_generic_family():
     assert cpl.TORN_ENDPOINT_SCHEMA == "coupling_torn_endpoint/1"
     assert cpl.FIXED_POINT_PLAN_SCHEMA == "coupling_fixed_point_plan/1"
-    assert cpl.COUPLED_ITERATION_SCHEMA == "coupling_iteration/1"
-    assert cpl.COUPLED_RUN_SCHEMA == "coupling_run/1"
+    assert cpl.COUPLED_ITERATION_SCHEMA == "coupling_fixed_point_iteration/1"
+    assert cpl.COUPLED_RUN_SCHEMA == "coupling_fixed_point_run/1"
 
 
 def test_e2_the_packs_declare_no_coupling_schema_of_their_own():
-    """One family, one owner. Neither pack mints a coupling schema string."""
+    """One family, one owner. Neither pack mints a coupling schema string.
+
+    Measured over string LITERALS, docstrings excluded — the same repair
+    `architecture-falsifier` required for `test_o3`: a schema name exists only
+    as a literal, so the `_code_only` form of this sweep could not fail.
+    """
+    forbidden = ("torn_endpoint", "fixed_point_plan", "coupled_iteration",
+                 "coupled_run", "coupling_fixed_point_run",
+                 "coupling_fixed_point_iteration")
     for pack in ("electrothermal", "fluidthermal"):
         for path in sorted((REPO_ROOT / "src/engcore/systems" / pack).glob("*.py")):
-            code = _code_only(path.read_text(encoding="utf-8"))
-            for forbidden in ("torn_endpoint", "fixed_point_plan",
-                              "coupled_iteration", "coupled_run",
-                              "coupling_run", "coupling_iteration"):
-                assert forbidden not in code, (path, forbidden)
+            source = path.read_text(encoding="utf-8")
+            literals = _string_literals(source)
+            for token in forbidden:
+                assert not any(token in text for text in literals), (path, token)
+            # and no pack mints a schema string at all
+            tree = ast.parse(source)
+            called = {
+                node.func.id for node in ast.walk(tree)
+                if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+            }
+            assert "schema_string" not in called, path
+
+    # The guard must be able to fail.
+    assert any("coupled_run" in t
+               for t in _string_literals('X = schema_string("coupled_run")'))
 
 
 # =====================================================================
@@ -279,7 +325,8 @@ def test_f_no_stored_payload_carries_a_coupling_schema_string():
     fails and the compatibility question becomes live again.
     """
     tokens = ("torn_endpoint", "fixed_point_plan", "coupled_iteration",
-              "coupled_run", "coupling_run", "coupling_torn_endpoint")
+              "coupled_run", "coupling_fixed_point_run",
+              "coupling_fixed_point_iteration", "coupling_torn_endpoint")
     offenders: list[tuple[str, str]] = []
     for path in REPO_ROOT.rglob("*"):
         if not path.is_file() or path.suffix not in {".json", ".jsonl", ".yaml", ".yml"}:
@@ -467,7 +514,7 @@ def test_l_a_fluid_thermal_record_no_longer_calls_itself_electrothermal(ft_case)
     assert "electrical" not in text
 
     payload = json.loads(text)
-    assert payload["schema"] == "coupling_run/1"
+    assert payload["schema"] == "coupling_fixed_point_run/1"
     assert payload["outcome"] in {"criterion_met", "iteration_limit_reached"}
     participants = {
         r["problem_id"]
@@ -512,11 +559,19 @@ payload = json.loads(sys.stdin.read())
 from engcore.coupling import FixedPointCouplingPlan, execution_order
 
 plan = FixedPointCouplingPlan.from_dict(payload["plan"])
+# The participant set is RECOVERED from the run record, not handed in. Every
+# participant is solved in every sweep, so the first iteration's results
+# enumerate them. `architecture-falsifier` C-6: an injected node list would
+# have left prereg §14's "from the records alone" unproven.
+recovered_ids = sorted({
+    r["problem_id"] for r in payload["run"]["iterations"][0]["results"]
+})
 print(json.dumps({
     "plan_id": plan.plan_id,
     "schema": plan.to_dict()["schema"],
     "torn": [list(e) for e in plan.torn_endpoints],
-    "order": list(execution_order(payload["problem_ids"], plan.uncut)),
+    "order": list(execution_order(recovered_ids, plan.uncut)),
+    "recovered_ids": recovered_ids,
     "tolerance": [plan.absolute_tolerance.magnitude, plan.absolute_tolerance.units],
     "budget": plan.max_iterations,
     "edges": sorted(
@@ -563,12 +618,12 @@ def test_k_the_generic_records_reconstruct_in_a_genuinely_fresh_interpreter(
         etc.coupled_problems(system, {"R1": Quantity(10.0, "ohm")})
         if which == "et" else ft_pack.coupled_problems(system)
     )
-    fresh = _fresh({
-        "plan": plan_.to_dict(),
-        "run": run.to_dict(),
-        "problem_ids": [p.problem_id for p in problems],
-    })
+    fresh = _fresh({"plan": plan_.to_dict(), "run": run.to_dict()})
 
+    # The node set was recovered inside the fresh interpreter, and it is the
+    # composition's own — proved against the pack-built problems here, in the
+    # parent, where they exist.
+    assert fresh["recovered_ids"] == sorted(p.problem_id for p in problems)
     assert fresh["plan_id"] == plan_.plan_id
     assert fresh["schema"] == "coupling_fixed_point_plan/1"
     assert [tuple(e) for e in fresh["torn"]] == list(plan_.torn_endpoints)
