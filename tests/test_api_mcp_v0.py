@@ -1017,6 +1017,24 @@ _COMPOSITE_SYSTEM0_ADDITIONS = frozenset(
     }
 )
 
+#: `PROPULSION0`'s additions, excluded for exactly the reason above and by
+#: exactly the same repair — this is the FIFTH time the repository carries it.
+#: Named individually, so an unexpected addition under `src/engcore/domains/`
+#: is still loud, and every one of them is a NEW file: nothing pre-existing is
+#: excluded here, and the assertion that only the RCE repair edited a
+#: pre-existing file under `src/engcore/domains/` is unweakened.
+_PROPULSION0_ADDITIONS = frozenset(
+    {
+        "src/engcore/domains/mechanical_rotational.py",
+        "src/engcore/systems/propulsion/__init__.py",
+        "src/engcore/systems/propulsion/materials.py",
+        "src/engcore/systems/propulsion/models.py",
+        "src/engcore/systems/propulsion/drive.py",
+    }
+)
+
+_LATER_MILESTONE_ADDITIONS = _COMPOSITE_SYSTEM0_ADDITIONS | _PROPULSION0_ADDITIONS
+
 
 def test_universal_core_coupling_and_the_other_pack_are_untouched():
     """Fail conditions 1 and 2 of the preregistration, with one exception."""
@@ -1027,7 +1045,7 @@ def test_universal_core_coupling_and_the_other_pack_are_untouched():
     ):
         assert _diff(path) == "", path
     assert set(_diff("src/engcore/domains/").split()) - (
-        _COMPOSITE_SYSTEM0_ADDITIONS
+        _LATER_MILESTONE_ADDITIONS
     ) == {_RCE_REPAIR}
 
 
@@ -1087,7 +1105,7 @@ def test_exactly_three_pre_existing_source_files_were_edited():
     edited = {
         path for path in changed
         if not any(path.startswith(tree) for tree in NEW_TREES)
-    } - _COMPOSITE_SYSTEM0_ADDITIONS
+    } - _LATER_MILESTONE_ADDITIONS
     assert edited == {
         # the additive execution seam
         "src/engcore/systems/electrothermal/coupled.py",

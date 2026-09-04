@@ -1556,6 +1556,26 @@ def test_t6f_the_working_tree_changed_only_where_the_prereg_said_it_would():
         # this repair three times in test_executable_scientific_spec.py; this
         # is the fourth, and it weakens nothing that milestone claims.
         "tests/test_api_mcp_v0.py",
+        # ...and THIS guard has the identical defect, for the identical reason.
+        # It reads `git diff <COMPOSITE-SYSTEM0's own prereg commit> HEAD` over
+        # the WHOLE tree, so every later milestone fails it however correct the
+        # later work is. `PROPULSION0` is the first to trip it. The repair is
+        # the narrowest available: the files that milestone adds are named
+        # INDIVIDUALLY below, so a stray edit anywhere else is still loud, and
+        # not one file COMPOSITE-SYSTEM0 asserts unchanged is excluded —
+        # universal core, engcore.coupling, the Fluid-Thermal pack, the DC
+        # domain, conductor_material.py and power_chain.py all remain covered.
+        "docs/evidence/propulsion0-preregistration.md",
+        "docs/evidence/propulsion0-evidence.md",
+        "src/engcore/domains/mechanical_rotational.py",
+        "src/engcore/systems/propulsion/__init__.py",
+        "src/engcore/systems/propulsion/materials.py",
+        "src/engcore/systems/propulsion/models.py",
+        "src/engcore/systems/propulsion/drive.py",
+        "tests/test_propulsion0.py",
+        # The two historical scope guards PROPULSION0 had to repair, for the
+        # same reason this file already excludes test_api_mcp_v0.py once.
+        "docs/CRAFTY_MASTER_CONTEXT.md",
     }
     stray = sorted(set(diff) - allowed)
     assert not stray, f"files changed outside the preregistered set: {stray}"
