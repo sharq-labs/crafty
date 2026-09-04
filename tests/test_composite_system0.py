@@ -1359,12 +1359,17 @@ def test_t6_no_material_name_appears_outside_the_catalogue_data():
     names = set(cmat.known_material_names())
     source = _source(NEW_FILES[0])
     tree = ast.parse(source)
+    # The catalogue's variable names are DERIVED from the module, never
+    # transcribed: a hardcoded list would itself be a line that has to change
+    # when a material is added, which is the very cost this test measures.
+    catalogue_names = {
+        name for name, value in vars(cmat).items()
+        if isinstance(value, cmat.ConductorMaterial)
+    } | {"MATERIAL_CATALOGUE"}
     catalogue_lines = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.Assign) and any(
-            isinstance(t, ast.Name)
-            and t.id in {"COPPER", "ALUMINIUM", "SILVER", "TUNGSTEN",
-                         "MATERIAL_CATALOGUE"}
+            isinstance(t, ast.Name) and t.id in catalogue_names
             for t in node.targets
         ):
             catalogue_lines.update(range(node.lineno, (node.end_lineno or 0) + 1))
