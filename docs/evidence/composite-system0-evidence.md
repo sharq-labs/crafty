@@ -18,7 +18,7 @@ promoted, and §12 states plainly what this milestone did *not* prove.
 | `dab4e1e` | **preregistration, committed alone** |
 | `871abdb` | implementation: two new source files, one `__init__` export list, one test module |
 | `37633e3` | two pre-existing test guards repaired (documented defects — §11) |
-| `5d45f56` | this evidence document, the catalogue-name derivation in the new test module |
+| `38614d9` | this evidence document, the catalogue-name derivation in the new test module |
 
 ## 2. Test counts
 
