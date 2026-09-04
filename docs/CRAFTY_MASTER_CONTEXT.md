@@ -2290,6 +2290,7 @@ not in the tables above, the claim is too strong.
 | HETERO-NGSPICE — real external provider substitution: the adapter boundary | `PROPOSED` | `L1 EXERCISED`; the preregistered scoped `L2` was **withdrawn** — see §66 |
 | HOSTILE-CORE-STRESS — which distinctions a hostile PDE consumer forces | **none — freezes nothing** | `L0 REASONED` + measured gaps; `L1` for the probe only — see §67 |
 | CROSS-DOMAIN-COVERAGE — which gaps are universal across domain families | **none — freezes nothing** | `L0 REASONED` + a measured coverage matrix; `L1` for the probes only — see §68 |
+| API-MCP-V0 — the external application boundary: one request/response contract for Direct, HTTP and MCP | `PROPOSED` | `L1 EXERCISED`; `L2` **excluded by preregistration** — see §69 |
 
 ---
 
@@ -3240,3 +3241,145 @@ Regression: **FULL 1825 → 1867**, FAST 1303 → 1345. No pre-existing test edi
 `src/engcore/scientific/`, `domains/thermal/`, `domains/electrical/`,
 `thermal_lumped.py` and `experiments/hostile_core_stress/` all byte-unchanged,
 asserted by tests rather than claimed.
+
+---
+
+# 69. API-MCP-V0 — completed
+
+```text
+Decision status:        PROPOSED
+Evidence:               L1 EXERCISED (the boundary and the external contract)
+                        L2 EXCLUDED BY PREREGISTRATION
+Milestone execution:    COMPLETE
+```
+
+Full record: `docs/api-mcp-v0-prereg.md` (immutable, committed before any
+implementation file existed) and `docs/api-mcp-v0-evidence.md`. **Not a freeze.**
+
+**The first time existing Crafty scientific execution was reachable from outside
+the process.** `architecture-decision-reviewer` compared seven boundaries and
+selected one thin transport-neutral application service — `engcore.application`,
+occupying the top layer the architecture map has named since before any of this
+existed and which had zero occupants — with the response as a **versioned
+projection**, not the internal `CoupledRun` verbatim. Publishing
+`coupling_fixed_point_run/1` externally would have fired
+`COUPLING-PACK-RELOCATION` reversal trigger 1 by construction.
+
+## 69.1 What was demonstrated
+
+The electro-thermal vertical, unchanged, reached three ways: Direct Python in
+process, HTTP over a **real TCP socket to a separate OS process**, and MCP over
+a **real stdio pipe to a separate OS process**. Both transports are stdlib only
+— no FastAPI, no Pydantic, no MCP SDK installed or imported anywhere — and both
+live outside `engcore`, so the core gains no transport dependency at any level.
+
+* `ET-VERTICAL` CASE A reproduced exactly through all three: 10 iterations,
+  `T* = 338.5770175652607 K`, `R* = 11.785281808946952 Ω`,
+  `P* = 2.1212899619439667 W`. **Differential: worst relative difference `0.0`
+  across all 13 quantities**, identical units, coupling outcome, per-participant
+  verdicts and the 5 provenance bindings over 3 solvers and 2 realizations.
+* **A run that exhausts its budget is `status: executed`,
+  `outcome: iteration_limit_reached`, HTTP 200** — with every sub-solve still
+  reporting success. Five distinctions stay apart externally: transport success,
+  execution success, numerical convergence, coupling convergence, validity.
+* **Zero universal-core change.** `scientific/`, `coupling/`,
+  `systems/fluidthermal/` byte-unchanged. One additive `circuit_solver` keyword
+  on the electro-thermal entry point lets a **closed** execution-profile
+  enumeration substitute real `ngspice-42` into the coupled loop; it agrees with
+  the native profile to `1.8e-15` with an identical iteration count.
+* **Nine endpoints and tools were considered and six deleted**, each with a
+  reason. `/v0/validate` would report `NOT_RUN` as `PASS`, because
+  `unsupplied()` is "reported, never refused". `/v0/capabilities` would publish
+  discovery no caller can act on. Both are additive later.
+
+## 69.2 Falsified once, on a reproduced remote code execution
+
+`architecture-falsifier` returned **FALSIFIED** in round one — one `BLOCKER`,
+six `BREAKING-RISK` — then **SURVIVES WITH REQUIRED CHANGES** in round two.
+All closed before the evidence document was written.
+
+The `BLOCKER` is the milestone's headline. An external request field,
+`component_id`, was type-checked only; it flowed into `DCCircuit.circuit_id` and
+the provider adapter emitted that identifier into its deck's **title line** —
+the one place in a module whose own rule is *"no Crafty identifier ever has to
+be SPICE-legal"* where a raw identifier reached deck text. A newline ended the
+title, a `.control` block after it executed `shell touch <path>`, **the file was
+created**, and the run returned `criterion_met` with every check passing and a
+`ProvenanceRecord` describing the circuit that was *declared* rather than the one
+solved. Closed by removing the channel (a constant title — the module's own
+"assign, never escape" rule) plus a published identifier character class.
+
+**The process lesson is the one to carry: the test written to catch this could
+not have.** It asserted `result is None` while the spies made the loop raise, so
+an *admitted* hostile request passed too. A security claim was stated at
+architectural strength on the basis of a test structurally incapable of
+falsifying it. Round two then found the fix for one finding placed *outside* the
+failure classifier, and a defect introduced by another fix that only a
+cross-process test could see.
+
+## 69.3 Two defects found in the existing platform, not in the API
+
+* **A canonicalizing boundary can starve a downstream guard.** A tolerance of
+  `1e-6 degC` was converted to `273.150001 kelvin`; the run converged in **one**
+  iteration, **5.695253 K** from the truth, every sub-solve passing.
+  `engcore.coupling.scales.is_ratio_scale` exists to refuse exactly this and
+  **never ran**, because conversion happened first. Repaired by checking the
+  caller's unit before conversion — the existing contract, not a second copy.
+* **The executed coupled path assesses no model applicability.**
+  `assess_resistance_validity` exists and `ET-VERTICAL` CASE F showed it returns
+  `OUTSIDE_VALIDATED_DOMAIN` on a converged run — but nothing in the loop calls
+  it, so no transport can report one. The response says `assessed: false`
+  (`NOT_RUN != PASS`) rather than inventing a verdict. **A
+  converged-but-out-of-domain run is externally indistinguishable from a
+  converged-and-in-domain one.**
+
+## 69.4 What it did **not** establish
+
+* **`L2` was excluded by preregistration, before any result existed.** Two
+  transports written by one author on one day against one interface are exactly
+  what §54.1 excludes. Real socket and pipe boundaries earn that the boundary
+  survives a process boundary — not two materially different consumers. And
+  whole-payload equality is close to tautological: both transports serialize the
+  same object with the same call.
+* **The external response is deliberately lossy.** 162 594 bytes internally,
+  7 711 externally; per-iteration participant results are unreachable in v0. The
+  reviewer permitted a disclaimed passthrough key and it was **not built**.
+* **One execution, one system pack, one scalar consumer.** Every execution v0
+  can expose is an iterative coupling — `project_run` takes a `CoupledRun` — so
+  a single-solve execution needs `crafty_execution_response/2`. Said before
+  publication rather than discovered after.
+* **Nothing about concurrency, scale, latency, persistence, auth, restart or
+  hostile network conditions.** `project_run` **refuses** a result carrying
+  `data_references`, loudly and by design: there is no field-valued external
+  representation, and that refusal is the concrete trigger for deciding what one
+  is.
+* **`ScientificTwin` gains zero evidence here either** — nothing on the
+  external path builds or reads one, continuing the run §68.4 tracked at four.
+  No existing holding moved.
+
+**Two preregistered deviations, both recorded rather than absorbed.** Fail
+condition 1 (`domains/` byte-unchanged) was **triggered** to close the RCE —
+preserving it would have meant publishing an API with a reproduced remote code
+execution behind it, which is §59.1's warning exactly. And `run_id` became
+required, because the preregistration's justification for its default ("only a
+provenance string") was factually false: it is also `ScientificResult.result_id`.
+
+## 69.5 Next milestone
+
+**`MIN-FOUNDATION-PDE`** — unchanged in name from §67.5 and §68.5, entry
+condition unchanged and binding: a **real** consumer, not a probe. This
+milestone adds one input to it: the projection's `data_references` refusal is
+where a field-valued external response has to be decided.
+
+Regression: **FULL 2205 → 2306**, FAST 1602 → 1681. Four pre-existing test files
+edited, all mechanically: one tier label, and a documented exception set plus a
+new-tree filter in the two `src/`-untouched guards that already carry the same
+pattern for three earlier milestones. No assertion changed, no tolerance
+loosened. `src/engcore/scientific/`, `engcore/coupling/` and
+`engcore/systems/fluidthermal/` byte-unchanged, asserted by tests rather than
+claimed; `engcore/domains/` was **not**, and §69.4 says why.
+
+**`API-MCP-V1` is not next and should not be.** The three gaps v0 measured — an
+external representation of model applicability, a second execution shape that is
+not an iterative coupling, and anything about concurrency — should each wait for
+a second real consumer to force their shape.

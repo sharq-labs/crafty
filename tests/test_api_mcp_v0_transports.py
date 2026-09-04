@@ -447,18 +447,50 @@ def test_a_routing_fault_does_not_wear_the_scientific_response_schema(http, mcp)
     assert "error" in unknown and "result" not in unknown
 
 
-def test_http_refuses_a_body_that_is_not_json_or_is_too_large(http):
+def test_http_refuses_a_body_that_is_not_json(http):
+    """An undecodable body DID reach the boundary, so it gets a boundary
+    refusal — the one thing ``decode_failure`` is reserved for."""
     status, payload = http.send(b"{not json at all")
     assert status == 400
+    assert payload["schema"] == RESPONSE_SCHEMA
     assert payload["refusal"]["code"] == "malformed_request"
     assert payload["result"] is None
 
     status, payload = http.send(b"[]")
     assert status == 400
+    assert payload["refusal"]["code"] == "malformed_request"
 
-    status, payload = http.send(b"x" * 300_000)
+
+def test_both_transports_agree_that_a_size_fault_is_a_transport_fault(http, mcp):
+    """`architecture-falsifier` N-2, closed.
+
+    An oversize body never reaches the boundary — it is not read at all — so
+    answering it with a ``crafty_execution_response/1`` carrying a scientific
+    taxonomy code was the C-3 defect surviving on one route. Worse, the MCP
+    frame guard added in the same round answered the identical fact with a
+    JSON-RPC error, creating a **second, undeclared** divergence rather than
+    closing one. Both are transport faults now, on both transports.
+    """
+    status, body = http.send(b"x" * 300_000)
     assert status == 413
-    assert payload["result"] is None
+    assert set(body) == {"error"}
+    assert "schema" not in body and "refusal" not in body
+
+    # The MCP counterpart, which had no test at all — the same category as the
+    # relative-import defect this milestone found the hard way.
+    oversize = mcp.rpc(
+        "", raw=json.dumps({"jsonrpc": "2.0", "id": 99, "method": "tools/call",
+                            "params": {"name": "crafty_run",
+                                       "arguments": {"pad": "x" * 300_000}}})
+    )
+    assert "error" in oversize and "result" not in oversize
+    assert oversize["error"]["code"] == -32600
+
+    # And the server is still alive and correct afterwards.
+    assert http.post(canonical_request())[0] == 200
+    assert mcp.call(canonical_request())["structuredContent"]["status"] == (
+        "executed"
+    )
 
 
 def test_mcp_publishes_exactly_one_tool_and_its_enforced_schema(mcp):

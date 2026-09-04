@@ -16,24 +16,30 @@ Every refusal below comes from somewhere else. A non-positive reference
 resistance is refused by the conductor's own ``__post_init__``; a wrong
 dimension by ``require_compatible``; a seed on an endpoint a declared initial
 condition already determines by ``FixedPointCouplingPlan.check_against``; a
-composition nothing can order by ``run_fixed_point``. This module adds **two**
-refusals of its own, and both are about the *size of the request* rather than
-about any science:
+composition nothing can order by ``run_fixed_point``; an affine unit for a
+quantity that is a *difference* by ``engcore.coupling.scales.is_ratio_scale``.
 
-* a stage count bound, and
-* an iteration-budget bound,
+This module adds **three** refusals of its own, and none is a scientific
+judgement:
 
-because an external caller may not choose an unbounded amount of work. Both are
-refusals rather than clamps: silently reducing a caller's budget would change
-the question being asked without saying so.
+* a stage-count bound and an iteration-budget bound, because an external caller
+  may not choose an unbounded amount of work — refusals rather than clamps,
+  since silently reducing a caller's budget would change the question being
+  asked without saying so; and
+* the transported-temperature **enumeration**, which is a selection among two
+  metrics the thermal problem already publishes, not a new fact about either.
 
 Where the split between admission and execution lies
 ----------------------------------------------------
-:func:`prepare` does everything up to and including plan construction.
-:meth:`PreparedExecution.run` is the first line that can execute a solver. That
-boundary is not a comment — the service classifies failures by *which side of
-it* they were raised on, because ``InvalidScientificProblem`` is raised both by
-a caller's malformed declaration and, inside the loop, by an executor
+:func:`prepare` does everything up to and including plan construction, and its
+**last** statement resolves the execution profile — so an inadmissible request
+never reaches profile resolution, and not even a solver object is constructed
+for it. :meth:`PreparedExecution.run` is the first line that can execute
+anything.
+
+That boundary is not a comment — the service classifies failures by *which side
+of it* they were raised on, because ``InvalidScientificProblem`` is raised both
+by a caller's malformed declaration and, inside the loop, by an executor
 misattributing its own result.
 """
 

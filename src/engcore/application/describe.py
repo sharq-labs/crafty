@@ -36,7 +36,7 @@ from __future__ import annotations
 from typing import Any
 
 from .catalog import EXECUTIONS
-from .contract import IDENTIFIER_PATTERN, REQUEST_SCHEMA
+from .contract import IDENTIFIER_PATTERN, MAX_REQUEST_BYTES, REQUEST_SCHEMA
 
 __all__ = ["quantity_fragment", "request_json_schema"]
 
@@ -92,6 +92,18 @@ def request_json_schema() -> dict[str, Any]:
     return {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "title": REQUEST_SCHEMA,
+        # Two refusals that JSON Schema cannot express, published as prose
+        # rather than left to be discovered. They are loud when they fire, so
+        # a consumer built from this document works and is merely surprised;
+        # it should not have to be.
+        "description": (
+            f"A Crafty execution request. Both transports additionally refuse "
+            f"a serialized request larger than {MAX_REQUEST_BYTES} bytes. "
+            f"Identifiers that must be unique within one request (for example, "
+            f"stage component ids) are refused as a scientific admission "
+            f"failure when they collide, because a duplicate would alias every "
+            f"endpoint that names it."
+        ),
         "type": "object",
         "additionalProperties": False,
         "required": sorted(

@@ -26,12 +26,31 @@ it can be executed, because it is the only thing that knows what one means.
 
 The execution-module protocol
 -----------------------------
-Three published names, and no base class::
+Five published names, and no base class::
 
     EXECUTION_ID: str
     PROFILES:     Mapping[str, Callable[[], Any]]   # closed, literal
-    prepare(inputs, coupling, profile) -> PreparedExecution
+    prepare(inputs, coupling, profile) -> object with .run(run_id) -> CoupledRun
     request_fragment() -> Mapping[str, Any]         # its half of the schema
+    provider_failure_types() -> tuple[type[BaseException], ...]
+
+The requirement inside ``prepare``'s return type is the load-bearing one and
+an earlier form of this list omitted it: ``service.execute`` projects whatever
+``run`` returns through ``project_run``, whose argument is a ``CoupledRun``. So
+**every execution this deployment can expose is an iterative coupling**, and
+``crafty_execution_response/1``'s ``result`` is coupling-shaped for that reason
+— ``coupling.outcome``, ``coupling.iterate_changes`` and ``torn_endpoints`` are
+properties of a torn fixed-point iteration, not of "a Crafty execution".
+
+A single-solve execution therefore does **not** fit v0, and that is stated here
+rather than discovered by whoever writes one. It requires
+``crafty_execution_response/2``, which the response schema's exact-string
+reading makes a loud, additive step. No result-shape abstraction is built for
+it now: there is one execution, one shape, and no second consumer, and the
+projection's independent identity is precisely what buys the escape hatch.
+A sibling project had to break its public *configuration* format to repair a
+conflation of this kind after publication; the cost of avoiding that here is
+this paragraph.
 """
 
 from __future__ import annotations

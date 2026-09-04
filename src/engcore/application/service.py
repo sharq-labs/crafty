@@ -13,11 +13,19 @@ result attributed to the wrong problem — which is a Crafty defect. Class alone
 would report that defect as a caller error.
 
 So the classifier reads two things: the exception's **class object** (never its
-message text) and the **stage** it was raised on. Everything raised before
-:meth:`PreparedExecution.run` is entered is caller-facing; everything raised
-inside it is an execution failure, whatever its class.
+message text) and the **stage** it was raised on. There are four stages, and
+each answers a different question::
 
-The classifier is total. Its default is its own code,
+    request     is this document a request?          -> the caller's answer
+    admission   is this science admissible?          -> the caller's answer
+    execution   did the execution succeed?           -> not a refusal
+    projection  can a response even be formed?       -> a defect of THIS layer
+
+The fourth was missing at first, and its absence is recorded below where the
+constant is defined, because the repair it exists to carry escaped the boundary
+entirely.
+
+The classifier is total over all four. Its default is its own code,
 ``unclassified_internal_failure`` — never a collapse into "error", and never a
 silent success.
 
@@ -33,7 +41,7 @@ did not converge* is a scientific finding, not a failure of this boundary.
 from __future__ import annotations
 
 import traceback
-from typing import Any, Mapping
+from typing import Any
 
 from ..scientific.errors import ScientificCoreError
 from .catalog import EXECUTIONS
@@ -48,9 +56,18 @@ from .contract import (
 __all__ = ["decode_failure", "execute", "handle"]
 
 #: Stages, in order. The classifier reads which one was current.
+#:
+#: ``_PROJECTION`` is the fourth, and it was missing. The first form evaluated
+#: ``project_run(run)`` in the success ``return``, **outside** every ``except``
+#: — so the refusal added to stop the projection silently understating a
+#: computation escaped ``handle`` entirely, contradicting this module's own
+#: "the classifier is total" and prereg §4's "it never raises". On HTTP that is
+#: a dropped connection; on MCP the server loop terminates. The test that added
+#: the refusal called ``project_run`` directly and could not see it.
 _REQUEST = "request"
 _ADMISSION = "admission"
 _EXECUTION = "execution"
+_PROJECTION = "projection"
 
 
 def _refusal(
@@ -67,7 +84,9 @@ def _refusal(
         "schema": RESPONSE_SCHEMA,
         # Never "success", never a boolean. Three enumerated words, and the
         # only one that means anything happened makes no scientific claim.
-        "status": "refused" if stage != _EXECUTION else "execution_failed",
+        "status": (
+            "refused" if stage in (_REQUEST, _ADMISSION) else "execution_failed"
+        ),
         "execution": execution,
         "execution_profile": profile,
         "run_id": run_id,
@@ -120,6 +139,12 @@ def execute(payload: Any) -> dict[str, Any]:
         stage = _EXECUTION
         run = prepared.run(request.run_id)
 
+        # Inside the try, and under its own stage. A response the boundary
+        # cannot form is a Crafty defect, not a scientific verdict, and the
+        # caller must be told which.
+        stage = _PROJECTION
+        result = project_run(run)
+
     except ExternalRequestRefused as exc:
         # A refusal about the document itself. On the admission stage it may
         # still be a scientific refusal — the plan check raises it with the
@@ -140,6 +165,19 @@ def execute(payload: Any) -> dict[str, Any]:
     except ScientificCoreError as exc:
         # Crafty refused the science. Which side of the split decides whether
         # that is the caller's answer or Crafty's own defect.
+        if stage is _PROJECTION:
+            # The science ran and the response could not be formed. Neither a
+            # refusal of the request nor a failure of the execution: a defect
+            # of this boundary, said out loud rather than dressed as either.
+            return _refusal(
+                RefusalCode.UNCLASSIFIED_INTERNAL_FAILURE,
+                _PROJECTION,
+                str(exc),
+                error_type=type(exc).__name__,
+                execution=execution,
+                profile=profile,
+                run_id=run_id,
+            )
         if stage is _EXECUTION:
             return _refusal(
                 RefusalCode.SUBSOLVER_EXECUTION_FAILED,
@@ -196,7 +234,7 @@ def execute(payload: Any) -> dict[str, Any]:
         "execution": execution,
         "execution_profile": profile,
         "run_id": run_id,
-        "result": project_run(run),
+        "result": result,
         "refusal": None,
     }
 

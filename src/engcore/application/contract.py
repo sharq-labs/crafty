@@ -46,6 +46,21 @@ envelope, **outside this payload**. Numerical convergence is per participant.
 Coupling convergence is one field the loop alone writes. Scientific validity is
 reported as *not assessed*, because the executed path does not assess it — and
 ``NOT_RUN != PASS``.
+
+The scope of ``result``, said before publication rather than after
+------------------------------------------------------------------
+``result.coupling`` and ``result.torn_endpoints`` are present **because every
+execution v0 exposes is an iterative coupling**: :func:`project_run` takes a
+``CoupledRun``, and that is a published requirement of the execution-module
+protocol rather than an accident. They are properties of a torn fixed-point
+iteration, not of "a Crafty execution", so a consumer must not read
+``result.coupling.outcome`` as a universal field.
+
+A non-coupled execution — one solve, one result — has no honest value for
+``outcome``, and ``torn_endpoints: []`` would not mean "none" but "the question
+does not apply". Such an execution requires ``crafty_execution_response/2``,
+which this schema's exact-string reading makes a loud and additive step. No
+result-shape abstraction is built for it now, on one consumer.
 """
 
 from __future__ import annotations

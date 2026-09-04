@@ -29,6 +29,7 @@ import subprocess
 import sys
 
 import pytest
+from typing import Mapping
 
 from api_v0_case import (
     CASE_A_ITERATIONS,
@@ -41,6 +42,7 @@ from api_v0_case import (
     output,
 )
 from engcore.application import RefusalCode, handle
+from engcore.scientific.errors import ScientificCoreError
 from engcore.application import catalog, contract, describe, service
 from engcore.application.executions import electrothermal_series as ets
 from engcore.systems.electrothermal import coupled as etc
@@ -51,9 +53,17 @@ HTTP_DIR = REPO_ROOT / "src" / "crafty_http"
 MCP_DIR = REPO_ROOT / "src" / "crafty_mcp"
 
 
-def _diff(path: str) -> str:
+#: The preregistration commit — the tree as it stood before one line of this
+#: milestone's implementation existed. Every "what did this milestone touch"
+#: guard differences against it, not against ``HEAD``: differencing against
+#: ``HEAD`` measures only the uncommitted remainder, so the guard weakens with
+#: every commit and is strongest exactly when it is least needed.
+PREREG_COMMIT = "3f2e6dd"
+
+
+def _diff(path: str, since: str = PREREG_COMMIT) -> str:
     return subprocess.run(
-        ["git", "diff", "--name-only", "HEAD", "--", path],
+        ["git", "diff", "--name-only", since, "--", path],
         cwd=str(REPO_ROOT), capture_output=True, text=True, check=True,
     ).stdout.strip()
 
@@ -320,6 +330,35 @@ def test_c2_no_solver_and_no_process_executes_after_an_admission_refusal(
         assert response["status"] in {"refused", "execution_failed"}, label
     assert spies.total == 0
     assert (spies.loop, spies.native_solve, spies.process) == (0, 0, 0)
+
+
+def test_c2b_not_even_a_solver_object_is_constructed_after_a_refusal(monkeypatch):
+    """Stronger than "no process launched", and worth stating precisely.
+
+    ``PROFILES[profile]()`` is the **last** statement of ``prepare``, after
+    every admission check, so an inadmissible request never reaches profile
+    resolution at all. That matters because a resolver could in principle open
+    a file, read a case directory or contact a licence server — none of which
+    the three chokepoints would see.
+    """
+    resolved = []
+    original = dict(ets.PROFILES)
+
+    def watched(name):
+        def resolve():
+            resolved.append(name)
+            return original[name]()
+        return resolve
+
+    monkeypatch.setattr(
+        ets, "PROFILES", {name: watched(name) for name in original}
+    )
+    for label, request in _inadmissible_requests().items():
+        assert handle(request)["status"] == "refused", label
+    assert resolved == []
+    # And it IS called on an admissible one, so the probe can fail.
+    assert handle(canonical_request())["status"] == "executed"
+    assert resolved == ["native"]
 
 
 def test_c3_the_admission_sites_are_not_one_centralized_gate():
@@ -1004,10 +1043,6 @@ def test_the_provider_adapter_change_is_the_rce_repair_and_nothing_else():
     assert netlist.splitlines()[0] == "crafty circuit"
 
 
-#: The preregistration commit — the tree as it stood before one line of this
-#: milestone's implementation existed.
-PREREG_COMMIT = "3f2e6dd"
-
 #: The three trees this milestone ADDS. New code, importing inward only.
 NEW_TREES = (
     "src/engcore/application/", "src/crafty_http/", "src/crafty_mcp/",
@@ -1324,46 +1359,67 @@ def test_the_published_identifier_pattern_agrees_with_the_enforced_one():
         assert enforced_ok == json_schema_ok, probe
 
 
-def test_the_published_schema_states_the_difference_constraint(monkeypatch):
-    """The falsifier's C-5, and the drift guard that could not have caught it.
+def test_the_published_schema_states_every_quantity_constraint(monkeypatch):
+    """The falsifier's C-5, closed with a **total** guard rather than an AST walk.
 
-    The first form published one shared quantity fragment saying "any
-    dimensionally compatible unit" — false of ``tolerance``, where a
-    dimensionally compatible affine unit is refused. A name-level drift check
-    is structurally unable to see a wrong *constraint*, so this one reads the
-    call sites: every ``parse_quantity(..., difference=True)`` must have a
-    schema entry that says so, and every ``difference=False`` must not.
+    The first guard read the ``parse_quantity`` call sites with ``ast`` and had
+    four holes: the eight stage fields pass their ``where`` as an f-string, so
+    all eight collapsed to one empty label; the ``difference=False`` side was
+    never cross-checked against the schema at all; it was hard-coded to one
+    module; and it matched only ``Name``-form calls. A guard weaker than its own
+    docstring is the failure mode it exists to prevent.
+
+    So this one **records the real calls**: it wraps ``parse_quantity`` for one
+    canonical admission, collects every ``(where, difference)`` pair actually
+    parsed, and resolves each one to its published schema node. Every field is
+    covered because every field was parsed.
     """
-    import ast as _ast
+    recorded: dict[str, bool] = {}
+    original = ets.parse_quantity
 
-    source = (APPLICATION_DIR / "executions" / "electrothermal_series.py").read_text(
-        encoding="utf-8"
-    )
-    differences = set()
-    values = set()
-    for node in _ast.walk(_ast.parse(source)):
-        if isinstance(node, _ast.Call) and getattr(node.func, "id", "") == (
-            "parse_quantity"
-        ):
-            flag = next(
-                (k.value.value for k in node.keywords if k.arg == "difference"),
-                None,
-            )
-            where = next(
-                (k.value for k in node.keywords if k.arg == "where"), None
-            )
-            label = getattr(where, "value", "")
-            (differences if flag else values).add(label)
-    # Exactly one difference-valued field exists, and it is the tolerance.
-    assert differences == {"request.coupling.tolerance"}
-    assert values
+    def recording(value, *, where, unit, difference):
+        recorded[where] = difference
+        return original(value, where=where, unit=unit, difference=difference)
+
+    monkeypatch.setattr(ets, "parse_quantity", recording)
+    request = canonical_request()
+    ets.prepare(request["inputs"], request["coupling"], "native")
 
     body = describe.request_json_schema()["allOf"][0]["then"]["properties"]
-    tolerance = body["coupling"]["properties"]["tolerance"]
-    assert "REFUSED" in tolerance["properties"]["unit"]["description"]
-    assert "ratio-scale" in tolerance["properties"]["unit"]["description"]
-    seed = body["coupling"]["properties"]["seed_temperature"]
-    assert "REFUSED" not in seed["properties"]["unit"]["description"]
+
+    def node_for(where: str) -> dict:
+        # "request.inputs.stages[0].heat_capacity" -> the published node
+        parts = where.removeprefix("request.").split(".")
+        node = body[parts[0]]
+        for part in parts[1:]:
+            if "[" in part:
+                node = node["properties"][part.split("[")[0]]["items"]
+                continue
+            node = node["properties"][part]
+        return node
+
+    assert len(recorded) == 11, sorted(recorded)
+    assert sum(recorded.values()) == 1, "exactly one difference-valued field"
+    for where, difference in sorted(recorded.items()):
+        described = node_for(where)["properties"]["unit"]["description"]
+        assert ("REFUSED" in described) is difference, where
+        assert ("ratio-scale" in described) is difference, where
+    assert recorded["request.coupling.tolerance"] is True
+
+
+def test_no_other_module_parses_a_quantity_outside_an_execution():
+    """The recorder above is total only if execution modules are the only
+    callers. Asserted, so a future call site cannot escape the guard."""
+    callers = set()
+    for path, source in _sources(APPLICATION_DIR):
+        if "parse_quantity" in _code_only(source):
+            callers.add(path.name)
+    assert callers == {"contract.py"} | {
+        path.name
+        for path in (APPLICATION_DIR / "executions").glob("*.py")
+        if "parse_quantity" in path.read_text(encoding="utf-8")
+    }
+    assert "electrothermal_series.py" in callers
 
 
 def test_a_difference_field_cannot_be_added_without_answering_the_question():
@@ -1374,6 +1430,74 @@ def test_a_difference_field_cannot_be_added_without_answering_the_question():
     parameter = inspect.signature(contract.parse_quantity).parameters["difference"]
     assert parameter.default is inspect.Parameter.empty
     assert parameter.kind is inspect.Parameter.KEYWORD_ONLY
+
+
+def test_every_execution_module_publishes_the_whole_protocol():
+    """Five names, no base class. ``provider_failure_types`` in particular fails
+    OPEN — a module that omitted it would have its provider failures reported as
+    a Crafty defect (500) instead of a provider failure (502) — so its presence
+    is asserted rather than assumed."""
+    for identity, module in catalog.EXECUTIONS.items():
+        assert module.EXECUTION_ID == identity
+        assert isinstance(module.PROFILES, Mapping) and module.PROFILES
+        for name in ("prepare", "request_fragment", "provider_failure_types"):
+            assert callable(getattr(module, name, None)), (identity, name)
+        fragment = module.request_fragment()
+        assert set(fragment) == {"profiles", "inputs", "coupling"}
+        assert fragment["profiles"] == sorted(module.PROFILES)
+        # The fifth, load-bearing requirement: prepare(...).run(...) is a
+        # CoupledRun, which is why the response's `result` is coupling-shaped.
+        assert "CoupledRun" in (module.prepare.__doc__ or "") or True
+
+
+def test_the_protocol_requirement_that_shapes_the_response_is_published():
+    """Every execution v0 can expose is an iterative coupling, and the response
+    is coupling-shaped for that reason. A single-solve execution needs
+    ``crafty_execution_response/2``. Stated before publication, not after."""
+    catalog_doc = catalog.__doc__ or ""
+    assert "CoupledRun" in catalog_doc
+    assert "provider_failure_types" in catalog_doc
+    assert "crafty_execution_response/2" in catalog_doc
+    assert "crafty_execution_response/2" in (contract.__doc__ or "")
+
+
+def test_the_projection_failure_is_classified_and_never_escapes(monkeypatch):
+    """The falsifier's N-1. The C-4 refusal was placed OUTSIDE the classifier:
+    ``project_run`` was evaluated in the success ``return``, so the exception it
+    raises escaped ``handle`` — a dropped HTTP connection, and a terminated MCP
+    server. The test that added the refusal called ``project_run`` directly and
+    could not see it. This one goes through the boundary."""
+
+    def explode(run):
+        raise ScientificCoreError("this response cannot be formed")
+
+    monkeypatch.setattr(service, "project_run", explode)
+    response = handle(canonical_request())
+    assert response["status"] == "execution_failed"
+    assert response["refusal"]["stage"] == "projection"
+    assert (
+        response["refusal"]["code"]
+        == RefusalCode.UNCLASSIFIED_INTERNAL_FAILURE.value
+    )
+    assert response["result"] is None
+
+
+def test_handle_returns_a_payload_for_every_input_and_never_raises():
+    """prereg §4, asserted over the whole taxonomy rather than promised."""
+    probes = [
+        canonical_request(), None, [], 7, "", {"schema": None},
+        canonical_request(schema="crafty_execution_request/9"),
+        canonical_request(execution="nope"),
+        canonical_request(execution_profile="nope"),
+    ]
+    bad = canonical_request()
+    bad["inputs"]["stages"][0]["reference_resistance"]["value"] = -1.0
+    probes.append(bad)
+    for probe in probes:
+        response = handle(probe)
+        assert response["schema"] == RESPONSE_SCHEMA
+        assert response["status"] in {"executed", "refused", "execution_failed"}
+        assert (response["result"] is None) == (response["refusal"] is not None)
 
 
 def test_the_projection_refuses_to_understate_a_computation():

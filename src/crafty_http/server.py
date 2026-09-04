@@ -90,15 +90,22 @@ class _Handler(BaseHTTPRequestHandler):
     def log_message(self, *args: Any) -> None:  # pragma: no cover - noise
         return
 
-    def _write(self, status: int, payload: dict[str, Any]) -> None:
+    def _write(
+        self, status: int, payload: dict[str, Any], *, close: bool = False
+    ) -> None:
         body = json.dumps(payload, sort_keys=True).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
+        if close:
+            self.send_header("Connection", "close")
+            self.close_connection = True
         self.end_headers()
         self.wfile.write(body)
 
-    def _routing_fault(self, status: int, detail: str) -> None:
+    def _routing_fault(
+        self, status: int, detail: str, *, close: bool = False
+    ) -> None:
         """A protocol fault, and deliberately **not** a boundary response.
 
         An earlier form answered 404 and 405 with a full
@@ -113,7 +120,7 @@ class _Handler(BaseHTTPRequestHandler):
         The body here carries no schema string and no refusal code. It is not a
         boundary payload and does not pretend to be one.
         """
-        self._write(status, {"error": detail})
+        self._write(status, {"error": detail}, close=close)
 
     def do_GET(self) -> None:  # noqa: N802 - stdlib naming
         if self.path == RUN_PATH:
@@ -138,16 +145,25 @@ class _Handler(BaseHTTPRequestHandler):
             length = int(self.headers.get("Content-Length", "0"))
         except ValueError:
             length = -1
+        # Both are TRANSPORT faults, and neither reached the boundary: on an
+        # unreadable Content-Length there is no body, and on an oversize one
+        # the body is never read. An earlier form answered both with a full
+        # `crafty_execution_response/1` carrying a scientific taxonomy code,
+        # which is the same defect as answering a 404 that way — and it left
+        # HTTP and MCP disagreeing about what kind of object a size fault is,
+        # an asymmetry the preregistration does not declare.
+        #
+        # Connection: close, because the undrained body would otherwise be
+        # parsed as the next request on a keep-alive connection.
         if length < 0:
-            self._write(400, decode_failure("unreadable Content-Length"))
+            self._routing_fault(400, "unreadable Content-Length", close=True)
             return
         if length > MAX_REQUEST_BYTES:
-            self._write(
+            self._routing_fault(
                 413,
-                decode_failure(
-                    f"request body of {length} bytes exceeds the "
-                    f"{MAX_REQUEST_BYTES}-byte limit"
-                ),
+                f"request body of {length} bytes exceeds the "
+                f"{MAX_REQUEST_BYTES}-byte limit",
+                close=True,
             )
             return
 
