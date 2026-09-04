@@ -27,3 +27,6 @@ Thumbs.db
 # Agent/IDE host tooling: LM router, MCP host-tool manifests, SDK logs, task
 # graph. Machine-local scaffolding, not project content.
 .discovery/
+
+# Test scratch dirs (COMPOSITE-SYSTEM0)
+.pytest_tmp_*/
