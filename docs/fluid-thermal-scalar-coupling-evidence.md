@@ -24,7 +24,17 @@ second coupled pair is evidence for a decision, not the decision.
 
 Both were diagnosed by `docs/temporal-semantics-stress-evidence.md` §15.3 as
 **domain defects, not contract residues**, and both are repaired in the domain
-that owns them. Neither repair changed a universal record; both problems still
+that owns them.
+
+> **Where that document lives.** It is on the sibling branch
+> `origin/temporal-semantics-stress`, which is a *descendant* of this branch's
+> baseline and is therefore not in this working tree. Read it with
+> `git show origin/temporal-semantics-stress:docs/temporal-semantics-stress-evidence.md`.
+> The same is true of `docs/fluid-thermal-preparation.md` and
+> `experiments/fluid_thermal_prep/coupling_probe.py`, cited throughout this
+> document, which are on `origin/fluid-thermal-preparation`. Neither branch was
+> merged or cherry-picked here: this milestone's tree contains only its own
+> work, so that "no core file changed" is measurable against a clean baseline. Neither repair changed a universal record; both problems still
 serialize under `scientific_problem/2`.
 
 ### A.1 DEFECT A — the CSTR misreported itself as steady
@@ -829,7 +839,34 @@ answer as physics rather than as discretization error.
 
 ---
 
-## U. Performance
+## U. Regression counts, and performance
+
+### U.1 Test tiers, before and after
+
+| Tier | Before (baseline `6caa1139`) | After | Delta |
+|---|---|---|---|
+| FAST (`-m "not expensive"`) | 1537 passed, 565 deselected | **1585 passed, 592 deselected** | +48 |
+| **FULL** (no selection) | **2102 passed, 0 failed, 0 errors** | **2177 passed, 0 failed, 0 errors** (983 s) | **+75** |
+
+**No test was weakened, skipped or xfailed.** Two existing assertions were
+adapted and both became *stronger*: `tests/test_electrothermal_vertical.py`'s
+single-initial-condition unpack now selects the `STATE` condition by name,
+asserts the exact condition set, and additionally asserts that the coupled
+`heat_input` still carries no declared value (§A.2); and
+`tests/domains/fluids/test_transport2d.py`'s fresh-interpreter comparison now
+compares each metric in **its own** declared unit rather than assuming every
+metric of the domain is dimensionless, and additionally asserts the metric sets
+match (§P).
+
+One environment note, recorded because it cost a false failure at the start:
+the suite's fresh-interpreter tests launch `sys.executable` with `cwd=REPO_ROOT`
+and rely on `engcore` being importable there. `pyproject.toml`'s
+`pythonpath = ["src", "."]` applies to the pytest process, not to a subprocess,
+so a bare virtualenv without the package installed fails
+`test_g1_fresh_process_reconstructs_and_reports_no_issues` for a purely
+environmental reason. Resolved by putting `src/` on the interpreter's path.
+
+### U.2 Performance
 
 Measured on this machine, `n_cells` as stated, cross-check on (the production
 configuration — with it off the fluid result is inadmissible and the coupling
@@ -849,3 +886,33 @@ The PDE leg is 76–99 % of every sweep. The other three legs are dominated by
 each — not by their arithmetic, which is why they are milliseconds and not
 microseconds. That is a measurement worth keeping: at this problem size the
 platform's own bookkeeping is the same order as a 16×16 PDE solve.
+
+---
+
+## V. Post-milestone strength delta
+
+Per the mission's exact scope — **these six dimensions only**, same 0–5 scale
+as the prior audits. No other dimension was re-scored, and no score moves on
+an argument that is not measured in §A–§U.
+
+| Dimension | Before | After | Evidence |
+|---|---|---|---|
+| **Coupling Readiness** | 3/5 | **4/5** | A second, materially different coupled pair **executed** against `run_fixed_point` / `FixedPointCouplingPlan` / `TornEndpoint` / `CoupledRun` **unedited** — measured by `git diff` against the baseline on `src/engcore/systems/electrothermal/` (empty) and by object identity, with an AST scan proving no domain vocabulary entered the loop body (§Q, PR1/PR2). Three things are genuinely new to this platform's coupling evidence: a **closed-form reference for the *coupled* result**, independent by AST and by root-finding method, agreed with at three grids at the participant's own order (§D, §H.1); an executed **non-convergence case in which both subsolvers stay valid in all forty sweeps**, kept undamped and reported as `ITERATION_LIMIT_REACHED` (§H.1/§H.2); and **admission gating a transported value in both directions** (§I). **Held at 4, not 5**, on three measurements, not on caution: `architecture-decision-reviewer` returned **DEFER** on promotion because the four facts a records-only reader cannot recover are the *same four* the first consumer measured; the plan shape **breaks for four of six** structurally different systems named in Crafty's own roadmap (2:1 fan-in refused by design, runtime-determined direction, mixed-dimension tears, time windows); and the two consumers, while differing in physics, **agree in exchange topology** — both scalar-only, single kelvin tear, one scalar tolerance, single-process — so they are one data point about the exchange contract, not two. |
+| **Fluid Multiphysics Readiness** | 1/5 | **3/5** | The Fluid domain now *participates* in an executed two-way coupling with a second real production domain, which it never had. Concretely it gained: a declared, versioned reduction (`phi_D:wall`, model version 0.1.0 → 0.2.0) computed from the solved discrete field over the boundary faces the assembly itself recorded (§E.2); four `BoundaryOrientation` records making "positive means efflux" a checked fact rather than a comment, verified against each solve's own per-side numbers; a declared `wall_efflux_orientation` admission requirement; and a guarded reader that **refuses to publish** the transported flux when the fluid result fails its own declared requirements — exercised on three real failures (§I). **Held at 3, not higher**, on the milestone's own sharpest finding: the exchange is scalar-only, and the exact coupled fixed point contains **no advective physics at all** — the manufactured source absorbs both `D` and `ω`, so at the exact level the PDE participant is the map `D ↦ 8D`, and a 10× change in `ω` moves the executed answer by 6.7 K while the exact answer does not move at all (§H.3). Field-valued exchange remains unexpressible, and its endpoint check leaks (§K). The PDE's *interior* physics does not yet reach a coupled answer as physics. |
+| **Domain Extensibility** | 4/5 | **4/5 (unchanged)** | The new coupling is an additive pack; **no existing domain was forced to change in order to be coupled** — the thermal participant is used exactly as shipped, and the fluid participant's changes are one new reduction and its supporting records, not a coupling interface. The two domain edits in this milestone are **defect repairs** (§A), not extensibility work, and were required before coupling rather than by it. Nothing is raised, and one measured friction argues against raising it: a new coupled pack must import a **domain-named** system pack (`systems/electrothermal`) to reach the loop, which inverts "domain modules depend inward". That is a real packaging defect this milestone exposed, it is the subject of the next milestone (§T), and until it is fixed a third coupled pack inherits it. Recorded, not scored away. |
+| **Core Stability** | 5/5 | **5/5 (unchanged)** | **Zero files changed under `src/engcore/scientific/`**, measured twice — against the baseline `6caa1139` and against `HEAD` — and asserted by a test. Zero files changed under `src/engcore/systems/electrothermal/` and under the byte- and set-pinned `src/engcore/domains/thermal/`. **No new schema string, no schema version moved, no new universal record, no new core enum member** (asserted). FULL regression green with **no test weakened, skipped or xfailed**; the two existing assertions that were adapted (one ET initial-condition unpack, one fluid per-metric unit comparison) each became *stronger*, and both adaptations are stated in §A.2 and §P. The one identity that moved is `TRANSPORT2D_MODEL.version` 0.1.0 → 0.2.0, deliberately and for a stated reason: the model now declares a second output, and a stored result citing 0.1.0 still names a model that really did produce only `c`. Stability was preserved through discipline, not through avoidance of change — 2 835 lines were added under `src/`. |
+| **Admission Safety** | 3/5 | **4/5** | This is the first composition in which admission gates a **transported** value rather than a locally consumed one, and the enforcement point was chosen from a measurement rather than by preference: `run_fixed_point` transports `result.values[...]` itself and explicitly does not catch a refusing sub-solve, so the guard had to sit with the **producer**. Every executor reads its own result through an admission-guarded reader before returning it; a failure raises out of the loop and **no coupled result is produced** (§I). Proven on three *real* in-loop failures — the benchmark's own `admissibility_bound` at `n = 8`, a requirement that was `NOT_RUN` because the cross-check was off ("we did not check" is not "it passed"), and an out-of-envelope `ω` — plus a fault injection on the thermal leg, giving both directions. The unguarded reader is kept and tested to show the guard is load-bearing rather than decorative. A new declared requirement (`wall_efflux_orientation`) checks the transported quantity's **sign** against the solve's own numbers, because a sign error in a coupled loop turns cooling into heating and both converge. **Held at 4, not 5**, on three named gaps: the thermal participant publishes no requirements at all, so the consumer must **invent** what it demands — weaker evidence than a producer-published requirement, and labelled as such; the **demanded** set does not survive serialization, so a stored `CoupledRun` shows which checks ran but not which were required (§I, falsifier C-6); and the cross-check solver whose output *gates* admission is absent from provenance (§L.1). |
+| **Provenance / Reproducibility** | 4/5 | **4/5 (unchanged)** | Real gains, and they are measured: a serialized `CoupledRun` round-trips and yields all four exchange identities with their endpoints and units, the outcome, the sweep count, every participant's model/realization/solver, and each participant's typed inputs (§L); a genuinely fresh interpreter rebuilds the system and the plan from JSON alone, recomputes the execution order from the records, and re-executes to `1e-9 K` (§M); `cross_check` moved from an unrecorded execution keyword onto the serialized declaration precisely because it decides an admission outcome (falsifier C-5); and the two domain repairs put onto universal records facts that were previously absent — the CSTR's horizon and initial state, the lumped body's imposed control values, both **enforced** against contradiction (§A). **Not raised**, because the gaps that hold it at 4 are unchanged or newly measured, not closed: the torn-endpoint **seed is recoverable from no record** (the first consumer's finding, unchanged); the execution mapping `problem_id → callable` is not a record and could not be one today; demanded admission sets are unserialized; the cross-check solver that gates admission is not in provenance; per-executor cost lives in the untyped `ScientificResult.metadata` bag that this platform rejected by name elsewhere, used here under a stated restriction and a stated objection (§L.5); and — the one this milestone *added* — **a fluid–thermal run serializes under `electrothermal_coupled_run/1`**, so the record's own schema name misattributes it to a different domain pair (falsifier C-4). That last one is the cheapest-now/expensive-later item in the milestone and is the subject of §T. |
+
+**Overall reading.** The two dimensions that moved are the two the milestone
+targeted, and each moved by exactly what was executed rather than by what was
+built: **Coupling Readiness** 3 → 4 on a second executed pair with an
+independent coupled reference and an honest non-convergence, held below 5 by a
+reviewer's DEFER and a shape that breaks for four of six named next systems;
+**Fluid Multiphysics Readiness** 1 → 3 on the Fluid domain's first real
+participation in a coupling, held at 3 by its own measurement that the exact
+coupled answer contains none of its advective physics. **Admission Safety**
+3 → 4 on the first admission gate placed on a transported value, in both
+directions, on real failures. The three unchanged dimensions are unchanged for
+stated, measured reasons — including one, Domain Extensibility, where a new
+packaging friction was found and deliberately not scored away.
