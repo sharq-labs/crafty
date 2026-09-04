@@ -62,12 +62,14 @@ from .errors import (
 )
 from .problem import (
     CA_FINAL_METRIC,
+    CA_STATE,
     CONCENTRATION_UNIT,
     CONVERSION_METRIC,
     CSTR_MODEL,
     CSTR_MODELS,
     DENSITY_UNIT,
     DIMENSIONLESS,
+    END_TIME_PARAMETER,
     FLOW_UNIT,
     HEAT_CAPACITY_UNIT,
     KINETICS_CSTR_NONISOTHERMAL,
@@ -80,6 +82,7 @@ from .problem import (
     T_AT_MAX_METRIC,
     T_FINAL_METRIC,
     T_MAX_METRIC,
+    T_STATE,
     TEMPERATURE_UNIT,
     TIME_UNIT,
     UA_UNIT,
@@ -89,6 +92,7 @@ from .problem import (
     ReactorOperation,
     ReactorRun,
     build_cstr_problem,
+    verify_problem_matches_run,
 )
 from .reference import (
     INVARIANT_EXPRESSION,
@@ -137,6 +141,10 @@ __all__ = [
     "ReactorRun",
     # problem statement
     "build_cstr_problem",
+    "verify_problem_matches_run",
+    "CA_STATE",
+    "T_STATE",
+    "END_TIME_PARAMETER",
     "CSTR_MODEL",
     "CSTR_MODELS",
     "KINETICS_CSTR_NONISOTHERMAL",

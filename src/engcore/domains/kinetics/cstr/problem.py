@@ -81,6 +81,7 @@ import math
 from dataclasses import dataclass, field
 from typing import Any, Mapping
 
+from ....scientific.ir.conditions import InitialCondition
 from ....scientific.ir.problem import ModelReference, ScientificProblem
 from ....scientific.ir.variables import (
     ScientificParameter,
@@ -855,6 +856,23 @@ class ReactorRun:
 # The universal problem statement
 # =====================================================================
 
+#: The two evolving STATE variables. Named distinctly from every metric below:
+#: ``C_A`` is the tank concentration *as it evolves*, ``C_A:final`` is its value
+#: at the end of the horizon. One name means one thing.
+CA_STATE = "C_A"
+T_STATE = "T"
+
+#: The integration horizon, as a declared parameter of the problem.
+#:
+#: TEMPORAL-DEFECT-A. Before this was declared, the only ``[time]``-dimensioned
+#: parameter on a CSTR problem record was ``residence_time`` (V/q). A reader
+#: taking "the [time] parameter" to be the horizon was silently wrong by the
+#: ratio of the two — 200 s against 400 s for this domain's own reference runs.
+#: The two are different physical facts and both are now on the record, under
+#: distinct names, exactly as the sibling ``thermal/conduction1d`` problem
+#: declares its ``end_time``.
+END_TIME_PARAMETER = "end_time"
+
 CA_FINAL_METRIC = "C_A:final"
 T_FINAL_METRIC = "T:final"
 T_MAX_METRIC = "T:max"
@@ -880,8 +898,46 @@ def build_cstr_problem(
     The integration declaration travels as metadata, not as a parameter: the
     method and tolerance are properties of how the problem is being solved, not
     of the problem being posed.
+
+    **TEMPORAL-DEFECT-A, repaired here.** An earlier form of this function
+    declared neither the evolving states nor the horizon. Because
+    ``ScientificProblem.is_time_dependent`` is ``bool(initial_conditions)``, a
+    genuinely transient stiff integration over ``[0, 400 s]`` reported
+    ``is_time_dependent is False``, and the only ``[time]`` parameter on the
+    record was ``residence_time`` (200 s) — so a reader taking that parameter
+    for the horizon was wrong by a factor of two with nothing to warn it. Both
+    facts were already declared on :class:`ReactorRun`; neither reached the
+    universal record. They do now:
+
+    * ``C_A`` and ``T`` are declared ``STATE`` variables,
+    * each carries an :class:`InitialCondition` at ``t = 0 s`` holding the
+      run's declared initial state, so ``is_time_dependent`` is ``True``,
+    * ``end_time`` is a declared parameter, distinct from ``residence_time``.
+
+    This is a **domain** repair. No universal temporal contract was added, and
+    the residue that needs one is unchanged and recorded: a ``[time]``
+    parameter named ``end_time`` and one named ``residence_time`` are still
+    indistinguishable *by dimension*, and only their enumerated names separate
+    them.
     """
     variables = (
+        # The two evolving states. Declaring them is what makes "this problem
+        # integrates something over time" a typed fact of the record rather
+        # than a property of the solver that happens to be attached to it.
+        ScientificVariable(
+            name=CA_STATE,
+            unit=CONCENTRATION_UNIT,
+            role=VariableRole.STATE,
+            description=(
+                "Concentration of A in the tank; evolves over the horizon."
+            ),
+        ),
+        ScientificVariable(
+            name=T_STATE,
+            unit=TEMPERATURE_UNIT,
+            role=VariableRole.STATE,
+            description="Tank temperature; evolves over the horizon.",
+        ),
         ScientificVariable(
             name=CA_FINAL_METRIC,
             unit=CONCENTRATION_UNIT,
@@ -937,6 +993,29 @@ def build_cstr_problem(
             value=Quantity(run.operation.residence_time_s, TIME_UNIT),
             description="V/q",
         ),
+        ScientificParameter(
+            name=END_TIME_PARAMETER,
+            value=run.operation.end_time,
+            description=(
+                "End of the integration horizon, measured from t = 0. NOT the "
+                "residence time: V/q is a property of the tank's throughput, "
+                "this is how long the transient is followed for."
+            ),
+        ),
+    )
+    initial_conditions = (
+        InitialCondition(
+            variable=CA_STATE,
+            value=run.initial_concentration,
+            time=Quantity(0.0, TIME_UNIT),
+            description="Tank concentration of A at the start of the horizon.",
+        ),
+        InitialCondition(
+            variable=T_STATE,
+            value=run.initial_temperature,
+            time=Quantity(0.0, TIME_UNIT),
+            description="Tank temperature at the start of the horizon.",
+        ),
     )
     return ScientificProblem(
         problem_id=problem_id or f"kinetics-cstr-{run.run_label}",
@@ -948,6 +1027,7 @@ def build_cstr_problem(
         ),
         variables=variables,
         parameters=parameters,
+        initial_conditions=initial_conditions,
         models=tuple(
             ModelReference(model.model_id, model.version) for model in CSTR_MODELS
         ),
@@ -968,13 +1048,20 @@ def build_cstr_problem(
             "integration_method": run.integration.method,
             "rtol": repr(run.integration.rtol),
             "residence_time_s": repr(run.operation.residence_time_s),
+            "end_time_s": repr(run.operation.end_time_s),
             "adiabatic": str(run.operation.is_adiabatic),
         },
     )
 
 
 def verify_problem_matches_run(problem: ScientificProblem, run: ReactorRun) -> None:
-    """Refuse a problem/run pairing that describes different physics."""
+    """Refuse a problem/run pairing that describes different physics.
+
+    The declared initial state and horizon are checked as well as the physics
+    fingerprint. A record that states an initial state it is not integrated
+    from is worse than one that states nothing, so the repair of
+    TEMPORAL-DEFECT-A is enforced rather than merely written down.
+    """
     declared = problem.metadata.get("physics_fingerprint")
     actual = run.physics_fingerprint()
     if declared and declared != actual:
@@ -982,4 +1069,30 @@ def verify_problem_matches_run(problem: ScientificProblem, run: ReactorRun) -> N
             f"problem {problem.problem_id!r} declares physics fingerprint "
             f"{str(declared)[:12]}… but was paired with {actual[:12]}…; the "
             f"problem and the run describe different reactors"
+        )
+    conditions = {c.variable: c for c in problem.initial_conditions}
+    for name, expected in (
+        (CA_STATE, run.initial_concentration),
+        (T_STATE, run.initial_temperature),
+    ):
+        condition = conditions.get(name)
+        if condition is None:
+            raise ReactorConfigurationError(
+                f"problem {problem.problem_id!r} declares no initial condition "
+                f"on {name!r}; a transient integration whose record states no "
+                f"state to start from is not a statement of the problem solved"
+            )
+        if condition.value.compare(expected) != 0.0:
+            raise ReactorConfigurationError(
+                f"problem {problem.problem_id!r} starts {name!r} at "
+                f"{condition.value} but the bound run declares {expected}"
+            )
+    horizon = problem.parameter(END_TIME_PARAMETER).value
+    if not isinstance(horizon, Quantity) or horizon.compare(
+        run.operation.end_time
+    ) != 0.0:
+        raise ReactorConfigurationError(
+            f"problem {problem.problem_id!r} states {END_TIME_PARAMETER} = "
+            f"{horizon} but the bound run integrates to "
+            f"{run.operation.end_time}"
         )
