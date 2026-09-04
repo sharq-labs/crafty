@@ -217,8 +217,8 @@ provenance records the same `t0`, so it is coupling and not time marching
 ```
 ConductorMaterial(copper)                       declared record, with its source
   → rho_ref, alpha, T_ref as ScientificParameters   provenance.inputs
-  → LINEAR_RESISTIVITY_MODEL @ T                ExecutionBinding(model, realization, solver)
-  → resistivity  1.7231726e-8 ohm*m             result metric, transported by a declared edge
+  → LINEAR_RESISTIVITY_MODEL @ T = 340.532448 K  ExecutionBinding(model, realization, solver)
+  → resistivity  1.990465449e-8 ohm*m           result metric, transported by a declared edge
   → GEOMETRIC_RESISTANCE_MODEL with L, A        ExecutionBinding, L and A in provenance.inputs
   → R_wire_A     0.0159237236 ohm               transported to the electrical problem's R:wire_A
   → ELECTRICAL_DC_LINEAR (MNA)                  I = 22.5628610 A
