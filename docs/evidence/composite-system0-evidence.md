@@ -24,9 +24,9 @@ promoted, and §12 states plainly what this milestone did *not* prove.
 
 | Tier | Before | After | Delta |
 |---|---|---|---|
-| Focused (`tests/test_composite_system0.py`) | — | **76 passed** | +76 |
-| FAST (`-m "not expensive"`) | **1681 passed / 625 deselected** | **1757 passed / 625 deselected** | +76 |
-| FULL (no marker, sequential, single process) | **2306 passed / 0 failed / 0 errors** (`f1ed553`) | **2382 passed / 0 failed / 0 errors** | +76 |
+| Focused (`tests/test_composite_system0.py`) | — | **78 passed** | +78 |
+| FAST (`-m "not expensive"`) | **1681 passed / 625 deselected** | **1759 passed / 625 deselected** | +78 |
+| FULL (no marker, sequential, single process) | **2306 passed / 0 failed / 0 errors** (`f1ed553`) | **2384 passed / 0 failed / 0 errors** | +78 |
 
 The FULL figure was measured **once, at the end, sequentially**, on the final
 tree, in a single uninterrupted process.
@@ -46,7 +46,7 @@ baseline above is measured *after* that repair.
 | `src/engcore/domains/electrical/conductor_material.py` | **new** | 1727 |
 | `src/engcore/systems/electrothermal/power_chain.py` | **new** | 1173 |
 | `src/engcore/systems/electrothermal/__init__.py` | export list only | +36 |
-| `tests/test_composite_system0.py` | **new** | 1574 |
+| `tests/test_composite_system0.py` | **new** | 1600 |
 | `tests/test_api_mcp_v0.py` | guard repair (§11) | +31 / −8 |
 | `tests/test_coupling_pack_relocation.py` | guard repair (§11) | +53 / −8 |
 | `.gitignore` | `.pytest_tmp_*/` | +3 |
@@ -333,7 +333,7 @@ rather than after — `require_schema` is exact-match with no migration route.
 
 ## 9. Admission — detection is not enforcement
 
-**17 negative cases**, each asserted to raise, each with a spy over *every*
+**19 negative cases**, each asserted to raise, each with a spy over *every*
 solver this milestone can reach (`LinearResistivitySolver`,
 `QuadraticResistivitySolver`, `GeometricResistanceSolver`,
 `LumpedThermalSolver`, `ElectricalDCSolver`, `ResistancePropertySolver`)
@@ -346,9 +346,15 @@ asserting **zero solve calls after the refusal**:
 `unit_mismatch_length`, `unit_mismatch_seed`,
 `temperature_outside_applicability`, `unresolved_connection`,
 `duplicated_identity`, `invalid_serialized_version`, `chain_with_no_wire`,
-`material_with_no_provenance`, `material_reference_outside_its_own_range`.
+`material_with_no_provenance`, `material_reference_outside_its_own_range`,
+`unstated_property_is_not_defaulted`, `unstated_second_order_coefficient`.
 
-Three properties beyond the raw list:
+Four properties beyond the raw list:
+
+* **An unstated property stays unstated.** Neither coefficient field carries a
+  default. A `LinearResistivityMaterial` declared without a temperature
+  coefficient would otherwise have become a *silently invented* zero-TCR
+  material; construction fails instead.
 
 * **The gate is on the executed path.** `run_power_chain` and `compose` both
   call `admit_power_chain` themselves (`test_e3`). A gate a caller can skip is
@@ -458,7 +464,7 @@ architecture pass.
   all, works identically.
 * Material identity selects the *model* that is evaluated, from data, and a
   second functional form changes the answer by 14.9 K.
-* Invalid configuration stops before any solver executes, across 17 cases,
+* Invalid configuration stops before any solver executes, across 19 cases,
   proven with spies.
 * Existing API/MCP semantics and every existing number are unchanged.
 * Two concrete limitations of the existing contracts were *measured*:

@@ -435,9 +435,15 @@ class ConductorMaterial:
 
 @dataclass(frozen=True)
 class LinearResistivityMaterial(ConductorMaterial):
-    """``rho(T) = rho_ref (1 + a (T - T_ref))``."""
+    """``rho(T) = rho_ref (1 + a (T - T_ref))``.
 
-    temperature_coefficient: Quantity = Quantity(0.0, TCR_UNIT)
+    The coefficient carries **no default**. A material declared without one
+    would silently become a zero-TCR material — a property invented on the
+    caller's behalf, which is the one thing a property mechanism must never
+    do. An unstated property stays unstated, and construction fails.
+    """
+
+    temperature_coefficient: Quantity
 
     def __post_init__(self) -> None:
         super().__post_init__()
@@ -500,10 +506,15 @@ class QuadraticResistivityMaterial(ConductorMaterial):
     built only on it could not disagree with what is already on the record.
     A second-order term makes the claim, and the fixed-point map it induces,
     genuinely different.
+
+    Neither coefficient carries a default, for the reason
+    :class:`LinearResistivityMaterial` states: a second-order coefficient
+    defaulting to zero would quietly turn this record back into the linear
+    form while still claiming the quadratic model.
     """
 
-    temperature_coefficient: Quantity = Quantity(0.0, TCR_UNIT)
-    second_order_coefficient: Quantity = Quantity(0.0, TCR2_UNIT)
+    temperature_coefficient: Quantity
+    second_order_coefficient: Quantity
 
     def __post_init__(self) -> None:
         super().__post_init__()

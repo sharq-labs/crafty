@@ -802,6 +802,32 @@ def _reference_outside_range(_):
     )
 
 
+@_register("unstated_property_is_not_defaulted")
+def _missing_coefficient(_):
+    """An unstated property stays unstated; it is never invented as zero."""
+    cmat.LinearResistivityMaterial(
+        name="silent",
+        reference_resistivity=Quantity(1e-8, "ohm * meter"),
+        reference_temperature=Quantity(293.15, KELVIN),
+        minimum_temperature=Quantity(200.0, KELVIN),
+        maximum_temperature=Quantity(450.0, KELVIN),
+        source="probe",
+    )
+
+
+@_register("unstated_second_order_coefficient")
+def _missing_second_order(_):
+    cmat.QuadraticResistivityMaterial(
+        name="silent-quadratic",
+        reference_resistivity=Quantity(1e-8, "ohm * meter"),
+        temperature_coefficient=Quantity(4e-3, "1/kelvin"),
+        reference_temperature=Quantity(293.15, KELVIN),
+        minimum_temperature=Quantity(200.0, KELVIN),
+        maximum_temperature=Quantity(450.0, KELVIN),
+        source="probe",
+    )
+
+
 @_register("non_positive_reference_resistivity")
 def _negative_rho(_):
     cmat.LinearResistivityMaterial(
@@ -821,7 +847,7 @@ def test_e1_every_invalid_configuration_is_refused(case, monkeypatch):
     prepared = setup()
     spy = _Spy(monkeypatch)
     with pytest.raises((InvalidScientificProblem, ScientificCoreError,
-                        UnitCompatibilityError)):
+                        UnitCompatibilityError, TypeError)):
         action(prepared)
     assert spy.calls == [], (
         f"{case}: {len(spy.calls)} solver call(s) ran despite the refusal — "
