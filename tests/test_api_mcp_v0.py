@@ -992,6 +992,31 @@ def test_no_bulk_data_crosses_the_boundary(case_a):
 #: D-1 in docs/api-mcp-v0-evidence.md rather than quietly absorbed.
 _RCE_REPAIR = "src/engcore/domains/electrical/ngspice.py"
 
+#: Files added by a LATER milestone, excluded from this milestone's own
+#: scope guards.
+#:
+#: These two guards read ``git diff <this milestone's prereg commit>``, so they
+#: describe "what changed since API-MCP-V0 began" and not "what API-MCP-V0
+#: changed". Every subsequent milestone that adds a file under
+#: ``src/engcore/domains/`` or ``src/engcore/systems/electrothermal/``
+#: therefore fails them, however correct it is. That is a defect in the guard,
+#: not in the later work, and the repository already carries the repair three
+#: times over in ``tests/test_executable_scientific_spec.py``
+#: (``_PLANNER_DISCOVERY_EXCEPTIONS``, ``_FIELD_SUPPORT_FOUNDATION_EXCEPTIONS``,
+#: ``_API_MCP_V0_EXCEPTIONS``); this is the fourth, following that precedent.
+#:
+#: Nothing this milestone actually claims is weakened. Universal core, the
+#: coupling package and the Fluid-Thermal pack are still asserted byte-for-byte
+#: untouched, and the set of PRE-EXISTING files edited is still exactly three.
+#: Only NEW files added later are excluded, and they are named individually so
+#: an unexpected addition is still loud.
+_COMPOSITE_SYSTEM0_ADDITIONS = frozenset(
+    {
+        "src/engcore/domains/electrical/conductor_material.py",
+        "src/engcore/systems/electrothermal/power_chain.py",
+    }
+)
+
 
 def test_universal_core_coupling_and_the_other_pack_are_untouched():
     """Fail conditions 1 and 2 of the preregistration, with one exception."""
@@ -1001,7 +1026,9 @@ def test_universal_core_coupling_and_the_other_pack_are_untouched():
         "src/engcore/systems/fluidthermal/",
     ):
         assert _diff(path) == "", path
-    assert set(_diff("src/engcore/domains/").split()) == {_RCE_REPAIR}
+    assert set(_diff("src/engcore/domains/").split()) - (
+        _COMPOSITE_SYSTEM0_ADDITIONS
+    ) == {_RCE_REPAIR}
 
 
 def test_the_provider_adapter_change_is_the_rce_repair_and_nothing_else():
@@ -1060,7 +1087,7 @@ def test_exactly_three_pre_existing_source_files_were_edited():
     edited = {
         path for path in changed
         if not any(path.startswith(tree) for tree in NEW_TREES)
-    }
+    } - _COMPOSITE_SYSTEM0_ADDITIONS
     assert edited == {
         # the additive execution seam
         "src/engcore/systems/electrothermal/coupled.py",

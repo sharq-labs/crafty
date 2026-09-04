@@ -1475,6 +1475,13 @@ def test_t6f_the_working_tree_changed_only_where_the_prereg_said_it_would():
         # COUPLING record family, and the replacement is stronger. Documented
         # in docs/evidence/composite-system0-evidence.md.
         "tests/test_coupling_pack_relocation.py",
+        # ...and one historical scope guard, which read
+        # `git diff <its own prereg commit>` and therefore failed for every
+        # LATER milestone that adds a file under src/engcore/domains/ or
+        # src/engcore/systems/electrothermal/. The repository already carries
+        # this repair three times in test_executable_scientific_spec.py; this
+        # is the fourth, and it weakens nothing that milestone claims.
+        "tests/test_api_mcp_v0.py",
     }
     stray = sorted(set(diff) - allowed)
     assert not stray, f"files changed outside the preregistered set: {stray}"
