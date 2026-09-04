@@ -51,6 +51,18 @@ DOMAIN_VOCABULARY = (
     "structural", "stress", "reaction",
 )
 
+#: The coupling record family, read from the package that owns it rather than
+#: transcribed. `COMPOSITE-SYSTEM0`; see `test_e2` for why.
+_COUPLING_SCHEMA_NAMES = frozenset(
+    name.split("/")[0]
+    for name in (
+        cpl.COUPLED_RUN_SCHEMA,
+        cpl.COUPLED_ITERATION_SCHEMA,
+        cpl.FIXED_POINT_PLAN_SCHEMA,
+        cpl.TORN_ENDPOINT_SCHEMA,
+    )
+)
+
 #: Prereg §12(b). Nothing speculative about acceleration entered the package.
 RELAXATION_VOCABULARY = (
     "omega", "relax", "damp", "aitken", "anderson", "rollback", "checkpoint",
@@ -300,17 +312,46 @@ def test_e2_the_packs_declare_no_coupling_schema_of_their_own():
             literals = _string_literals(source)
             for token in forbidden:
                 assert not any(token in text for text in literals), (path, token)
-            # and no pack mints a schema string at all
+            # ...and no pack mints a name from the COUPLING record family.
+            #
+            # `COMPOSITE-SYSTEM0` narrowed this clause, and the reason is
+            # recorded rather than assumed. It read
+            # ``assert "schema_string" not in called``, i.e. *no system pack
+            # may mint any schema string at all* — which is broader than this
+            # test's own stated claim ("One family, one owner. Neither pack
+            # mints a **coupling** schema string") and broader than the
+            # relocation it guards. It cost nothing when written, because no
+            # pack then owned a record of its own; it became wrong the moment
+            # one did. A system pack owning the serialization of *its own
+            # composition declaration* is the same ownership the DC domain
+            # already has over ``electrical_dc_circuit/1`` — the opposite of
+            # the false ownership `COUPLING-PACK-RELOCATION` removed.
+            #
+            # The replacement is **stronger** in the two directions that
+            # matter. The forbidden set is derived from the coupling package's
+            # published constants instead of a hand-written token list, so it
+            # cannot rot when a coupling schema is renamed; and a computed
+            # (non-literal) schema name is now refused outright, which the
+            # blanket form never checked because it stopped at the call name.
             tree = ast.parse(source)
-            called = {
-                node.func.id for node in ast.walk(tree)
-                if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
-            }
-            assert "schema_string" not in called, path
+            for node in ast.walk(tree):
+                if not (isinstance(node, ast.Call)
+                        and isinstance(node.func, ast.Name)
+                        and node.func.id == "schema_string"):
+                    continue
+                assert node.args and isinstance(node.args[0], ast.Constant), (
+                    f"{path}: a schema name must be a readable literal"
+                )
+                minted = node.args[0].value
+                assert minted not in _COUPLING_SCHEMA_NAMES, (path, minted)
+                for token in forbidden:
+                    assert token not in minted, (path, minted, token)
 
     # The guard must be able to fail.
     assert any("coupled_run" in t
                for t in _string_literals('X = schema_string("coupled_run")'))
+    assert _COUPLING_SCHEMA_NAMES, "the forbidden set must not be empty"
+    assert "coupling_fixed_point_run" in _COUPLING_SCHEMA_NAMES
 
 
 # =====================================================================

@@ -39,8 +39,32 @@ from .coupled import (
     stage_problems,
     run_fixed_point_coupling,
 )
+# `COMPOSITE-SYSTEM0`. A second, materially heterogeneous composition in this
+# pack: wire segments whose resistance is *computed* from a declared material
+# property set and a declared geometry, in series with fixed loads. It reuses
+# `engcore.coupling` unedited and edits nothing above. Its own
+# ``DEPENDENCY_*`` labels are deliberately NOT re-exported: two modules in one
+# pack legitimately name similar edges, and collapsing them into one name here
+# would make which module a label came from unreadable. Import them from
+# ``power_chain`` directly.
+from .power_chain import (
+    CHAIN_SCHEMA,
+    FixedLoad,
+    PowerChain,
+    WireSegment,
+    admit_power_chain,
+    assess_run_applicability,
+    build_chain_twin,
+    chain_dependencies,
+    chain_plan,
+    chain_problems,
+    initial_resistances,
+    run_power_chain,
+    wire_problems,
+)
 
 __all__ = [
+    "CHAIN_SCHEMA",
     "CircuitSolver",
     "CoupledElectroThermalSystem",
     "CoupledStage",
@@ -48,18 +72,30 @@ __all__ = [
     "DEPENDENCY_RESISTANCE",
     "DEPENDENCY_TEMPERATURE",
     "ElectroThermalResistor",
+    "FixedLoad",
     "OpenLoopPass",
+    "PowerChain",
+    "WireSegment",
+    "admit_power_chain",
+    "assess_run_applicability",
+    "build_chain_twin",
     "build_coupled_twin",
     "build_electrical_problem",
     "build_twin",
     "candidate_sources",
+    "chain_dependencies",
+    "chain_plan",
+    "chain_problems",
     "coupled_dependencies",
     "coupled_problems",
     "electrothermal_dependencies",
     "electrothermal_problems",
+    "initial_resistances",
     "native_circuit_solver",
     "nominal_plan",
     "run_fixed_point_coupling",
     "run_open_loop_pass",
+    "run_power_chain",
     "stage_problems",
+    "wire_problems",
 ]
