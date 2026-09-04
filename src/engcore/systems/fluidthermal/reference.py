@@ -9,9 +9,20 @@ same voice as ``fluids/transport2d/reference.py``'s own "never imports
 solver.py" discipline.
 
 Every physical constant arrives as an explicit argument. Nothing here reads a
-module-level declaration that the numerical path also reads, so a typo in one
-of this system's declarations cannot cancel out between the two sides of the
-comparison — which is exactly the failure a shared constant would hide.
+module-level declaration that the numerical path also reads, so the two sides
+of the comparison cannot silently share an implementation.
+
+**What that does and does not buy, stated precisely because an earlier draft
+overclaimed it.** It removes a shared *code path*. It does **not** remove a
+shared *value*: a caller that feeds one declared constant to both the system
+and this reference — which is exactly what the test module does, from one
+frozen table — would move both sides together, so a mistyped ``D_ref`` would
+cancel. What actually closes that hole is elsewhere and is worth naming: the
+test module pins the reference's absolute output (348.163813 K and
+481.835346 K) against the preregistration, which was written before the
+implementation existed. And one degeneracy survives even that: ``rho_cp`` and
+``d`` appear only as a product, here and in the wall model, so doubling one
+and halving the other is undetectable by every check in this milestone.
 
 WHAT IS BEING SOLVED
 --------------------

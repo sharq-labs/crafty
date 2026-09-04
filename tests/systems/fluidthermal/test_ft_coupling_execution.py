@@ -61,6 +61,20 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 def run_case(*, n_cells: int, heat_w: float, max_iterations: int = 40,
              cross_check: bool = True, seed_k: float | None = None):
     system = make_system(n_cells=n_cells, heat_w=heat_w)
+    if not cross_check:
+        system = ft.FluidThermalSystem(
+            slice=ft.FluidSlice(
+                slice_id=system.slice.slice_id,
+                side=system.slice.side,
+                angular_rate=system.slice.angular_rate,
+                grid=system.slice.grid,
+                cross_check=False,
+            ),
+            medium=system.medium,
+            wall=system.wall,
+            body=system.body,
+            system_id=system.system_id,
+        )
     dependencies = ft.coupled_dependencies(system)
     plan = ft.nominal_plan(
         system,
@@ -70,10 +84,7 @@ def run_case(*, n_cells: int, heat_w: float, max_iterations: int = 40,
     )
     started = time.perf_counter()
     run = ft.run_fluid_thermal_coupling(
-        system,
-        plan,
-        run_id=f"ft-{heat_w:g}-{n_cells}",
-        cross_check=cross_check,
+        system, plan, run_id=f"ft-{heat_w:g}-{n_cells}"
     )
     return system, run, time.perf_counter() - started
 
@@ -259,18 +270,80 @@ def test_case_a_the_loop_converges_and_lands_on_the_preregistered_value():
     assert run.final_iterate_change.magnitude_in("kelvin") <= 1e-4
 
 
-def test_case_a_pc1_the_loop_composes_exactly_what_the_records_say():
-    """The composition claim, separate from accuracy.
+def test_case_a_pc1_as_preregistered_is_an_identity_and_cannot_fail():
+    """PC1, executed exactly as preregistered — and reported as what it is.
 
-    At convergence the reported temperature must satisfy the coupled relation
-    formed from the *discrete* efflux the fluid actually produced. Recomputed
-    here from the participants' own reported metrics, not from the loop.
+    ``architecture-falsifier`` landed this as finding C-1 and it is right. PC1
+    compares the reported temperature against the coupled relation formed from
+    the efflux of the SAME sweep. Within one Gauss-Seidel sweep the order is
+    diffusivity -> fluid -> wall -> thermal, so the thermal evaluation consumes
+    exactly that efflux and the two sides are one closed form evaluated twice.
+    The residual is round-off by construction, for any run, converged or not.
+
+    The criterion is preregistered and immutable, so it is executed and
+    reported rather than edited — and the next test states the non-trivial
+    claim PC1 was meant to make. Recorded as a preregistration divergence in
+    the evidence document, section G.
     """
     system, run, _ = run_case(n_cells=32, heat_w=6.0)
     temperature = coupled_temperature(system, run)
     phi, _ = final_efflux_and_diffusivity(system, run)
     predicted = T_AMB + 6.0 / (RHO_CP * DEPTH * phi)
     assert abs(temperature - predicted) <= 1e-3
+
+    # The demonstration that it cannot fail: one sweep, nowhere near the fixed
+    # point, an outcome of ITERATION_LIMIT_REACHED — and PC1 still passes.
+    one_sweep_system, one_sweep, _ = run_case(
+        n_cells=16, heat_w=6.0, max_iterations=1
+    )
+    assert one_sweep.outcome is et.CouplingOutcome.ITERATION_LIMIT_REACHED
+    unconverged = coupled_temperature(one_sweep_system, one_sweep)
+    phi1, _ = final_efflux_and_diffusivity(one_sweep_system, one_sweep)
+    assert abs(unconverged - (T_AMB + 6.0 / (RHO_CP * DEPTH * phi1))) <= 1e-3
+    # …and it is 45 K away from where the loop eventually settles.
+    assert abs(unconverged - coupled_temperature(system, run)) > 20.0
+
+
+def test_case_a_pc1_prime_the_fixed_point_residual_across_two_sweeps():
+    """The claim PC1 was meant to make, stated so it CAN fail.
+
+    A fixed point is a statement relating two consecutive sweeps, not one. The
+    coupled relation is therefore formed from the PREVIOUS sweep's efflux and
+    compared against the final temperature: that residual is zero only when the
+    iteration has actually stopped moving, and the one-sweep control below
+    shows it is large when it has not.
+    """
+    system, run, _ = run_case(n_cells=32, heat_w=6.0)
+    assert run.outcome is et.CouplingOutcome.CRITERION_MET
+    final_t = coupled_temperature(system, run)
+    previous = run.iterations[-2]
+    previous_phi = previous.result_for(system.fluid_problem_id).value(
+        fluid.PHI_D_METRIC
+    ).magnitude_in("m**2/s")
+    residual = abs(final_t - (T_AMB + 6.0 / (RHO_CP * DEPTH * previous_phi)))
+    tolerance = run.plan.absolute_tolerance.magnitude_in("kelvin")
+    assert residual <= tolerance
+
+    # The control: the same residual on a deliberately truncated run is orders
+    # of magnitude larger, so the criterion above is doing real work. (Case B
+    # at its full 40-sweep budget gives ~82x the tolerance — already a clear
+    # failure of PC1', and a measure of how close to converged it is.)
+    system_b, run_b, _ = run_case(n_cells=16, heat_w=40.0, max_iterations=4)
+    assert run_b.outcome is et.CouplingOutcome.ITERATION_LIMIT_REACHED
+    final_b = coupled_temperature(system_b, run_b)
+    previous_b = run_b.iterations[-2].result_for(
+        system_b.fluid_problem_id
+    ).value(fluid.PHI_D_METRIC).magnitude_in("m**2/s")
+    residual_b = abs(final_b - (T_AMB + 40.0 / (RHO_CP * DEPTH * previous_b)))
+    assert residual_b > 1000.0 * tolerance
+
+    system_c, run_c, _ = run_case(n_cells=32, heat_w=40.0)
+    final_c = coupled_temperature(system_c, run_c)
+    previous_c = run_c.iterations[-2].result_for(
+        system_c.fluid_problem_id
+    ).value(fluid.PHI_D_METRIC).magnitude_in("m**2/s")
+    residual_c = abs(final_c - (T_AMB + 40.0 / (RHO_CP * DEPTH * previous_c)))
+    assert residual_c > 50.0 * tolerance
 
 
 def test_case_a_pc2_agreement_with_the_independent_closed_form_at_n32():
@@ -368,6 +441,69 @@ def test_pc4_the_coupled_error_is_the_participants_flux_error_transported():
         )
 
 
+def test_the_exact_coupled_answer_contains_no_advective_physics_at_all():
+    """Falsifier finding C-2, measured. The scope of what was proven.
+
+    The Fluid participant's manufactured source absorbs both ``D`` and
+    ``omega``, so its exact solution — and therefore the exact wall efflux
+    ``8D`` — is independent of the velocity field. The closed-form coupled
+    fixed point contains no ``omega`` term anywhere. So at the EXACT level the
+    PDE participant of this composition is the map ``D -> 8D``, and everything
+    the executed loop reports about the advective physics is discretization
+    error.
+
+    That is the ``c:centre`` lesson (N1) recurring one level up, and it is
+    recorded here rather than discovered later. What survives it is real and is
+    the reason ``phi_D:wall`` was chosen: its ``D``-dependence is exact
+    physics, and ``D`` is the only thing the thermal side actually varies.
+
+    The one genuinely reassuring half: the operating points where the
+    advective error would dominate are **refused**, not silently transported.
+    """
+    exact = ft.coupled_fixed_point(heat_w=6.0, **REFERENCE_CONSTANTS)
+
+    def system_at(omega: float, n_cells: int):
+        base = make_system(n_cells=n_cells, heat_w=6.0)
+        return ft.FluidThermalSystem(
+            slice=ft.FluidSlice(
+                slice_id=base.slice.slice_id,
+                side=base.slice.side,
+                angular_rate=Quantity(omega, "1/s"),
+                grid=base.slice.grid,
+            ),
+            medium=base.medium,
+            wall=base.wall,
+            body=base.body,
+            system_id=base.system_id,
+        )
+
+    executed = {}
+    for omega in (0.1, 1.0):
+        system = system_at(omega, 32)
+        run = ft.run_fluid_thermal_coupling(
+            system,
+            ft.nominal_plan(system, ft.coupled_dependencies(system)),
+            run_id=f"omega-{omega:g}",
+        )
+        executed[omega] = coupled_temperature(system, run) - exact
+
+    # A 10x change in the advective physics moves the EXECUTED answer by ~6.7 K
+    # while the EXACT answer does not move at all.
+    assert executed[0.1] == pytest.approx(0.81, abs=0.2)
+    assert executed[1.0] == pytest.approx(7.50, abs=0.5)
+    assert executed[1.0] - executed[0.1] > 5.0
+
+    # And at 100x, the fluid participant leaves its own declared admissibility
+    # and the coupling REFUSES rather than transporting the error.
+    system = system_at(100.0, 32)
+    with pytest.raises(ScientificValidationError, match="admission refused"):
+        ft.run_fluid_thermal_coupling(
+            system,
+            ft.nominal_plan(system, ft.coupled_dependencies(system)),
+            run_id="omega-100",
+        )
+
+
 # =====================================================================
 # Case B — coupling non-convergence with both subsolvers valid
 # =====================================================================
@@ -420,6 +556,47 @@ def test_case_b_the_iterate_contracts_geometrically_at_the_picard_gain():
     gain = abs(ft.picard_gain(exact, ambient_k=T_AMB, exponent=EXPONENT))
     assert all(0.5 < r < 0.95 for r in ratios), ratios
     assert sum(ratios) / len(ratios) == pytest.approx(gain, abs=0.15)
+
+
+def test_case_b_diagnostic_the_budget_was_exhausted_not_the_contraction():
+    """SPIKE, required by ``architecture-decision-reviewer`` after case B.
+
+    Case B is preregistered at a 40-sweep budget and is reported exactly as it
+    executed: ``ITERATION_LIMIT_REACHED``. This is a **separate, additional**
+    diagnostic case that changes ``max_iterations`` and nothing else — no
+    relaxation, no damping, no tolerance change — to answer one question the
+    preregistered case cannot: was the map contracting, or genuinely
+    non-convergent?
+
+    **Answer: contracting.** The same criterion is met at sweep 56. So the
+    existing typed ``max_iterations`` field already expresses the whole
+    situation, no execution concept is missing, and relaxation is **not forced
+    by any executed evidence**. That is the reviewer's stopping condition (i),
+    and it is why no relaxation factor was added.
+
+    It also measures something the closed form does not predict: the observed
+    contraction ratio is ~0.756, not the exact-fixed-point gain of 0.660. The
+    difference is real and is a property of the DISCRETE map — the fluid's
+    flux error is itself a function of D, so the discrete efflux grows slightly
+    faster than linearly in D and the effective exponent exceeds 1.75. The
+    coupled loop contracts more slowly than the exact physics would.
+    """
+    system = make_system(n_cells=32, heat_w=40.0)
+    plan = ft.nominal_plan(
+        system, ft.coupled_dependencies(system), max_iterations=200
+    )
+    run = ft.run_fluid_thermal_coupling(system, plan, run_id="ft-spike-b-200")
+    assert run.outcome is et.CouplingOutcome.CRITERION_MET
+    assert 40 < run.iterations_run <= 80
+    exact = ft.coupled_fixed_point(heat_w=40.0, **REFERENCE_CONSTANTS)
+    assert coupled_temperature(system, run) - exact == pytest.approx(
+        12.16, abs=0.5
+    )
+    changes = [c.magnitude_in("kelvin") for c in run.iterate_changes]
+    ratios = [changes[i + 1] / changes[i] for i in range(-6, -1)]
+    assert all(r == pytest.approx(0.756, abs=0.02) for r in ratios), ratios
+    gain = abs(ft.picard_gain(exact, ambient_k=T_AMB, exponent=EXPONENT))
+    assert sum(ratios) / len(ratios) > gain
 
 
 def test_case_b_no_relaxation_factor_exists_anywhere_to_reach_for():

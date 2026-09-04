@@ -273,9 +273,20 @@ POWER_LAW_DIFFUSIVITY_MODEL = ScientificModelDefinition(
 _W_ASSUMPTIONS = (
     "the two-dimensional transport field is a slice of uniform depth d, and "
     "every extensive quantity scales linearly with that depth",
-    "the dimensionless field is the normalized excess (T - T_amb)/(T_w - T_amb) "
-    "of the transported scalar, so its wall efflux is a conductance once the "
-    "volumetric heat capacity restores the scale",
+    "the supplied field is INTERPRETED as a normalized excess "
+    "(T - T_amb)/(T_w - T_amb) of the transported scalar. This is an "
+    "interpretive convention of this claim, NOT a property established of any "
+    "supplier: nothing in the composition defines the normalization reference "
+    "(T_w - T_amb), nothing reconciles it with the body's own excess "
+    "(T_body - T_amb), and no record could carry that reconciliation today",
+    "no conservation is claimed ACROSS the interface. This model relates a "
+    "wall efflux to a conductance; it does not assert that the energy leaving "
+    "the body equals the energy entering the transport slice, and the two "
+    "participants' sources are unrelated",
+    "the supplying field may be a manufactured-solution benchmark whose "
+    "interior is pinned by a non-physical volumetric source term. Only the "
+    "wall efflux is used, and only its dependence on the transport "
+    "coefficient is load-bearing",
     "constant volumetric heat capacity over the temperature range considered",
     "the whole wall efflux enters the body; no bypass and no second path",
     "no radiation and no phase change",
@@ -974,13 +985,23 @@ class WallConductanceSolver:
     def validate(
         self, prepared: PreparedSolve, raw: RawSolverOutput
     ) -> ValidationReport:
-        """Check the product against a dimensionally independent recomputation.
+        """Check the product against a recomputation through the unit algebra.
 
         The product is re-formed from the typed :class:`Quantity` declarations
-        rather than from the floats the solve used, so the check exercises the
-        unit algebra as well as the arithmetic: a depth mistakenly declared in
-        millimetres, or a heat capacity per kilogram rather than per cubic
-        metre, does not survive it.
+        rather than from the floats the solve used, so a unit-conversion defect
+        between the declaration and the base-unit accessors would not survive
+        it.
+
+        **What it does NOT catch, stated because an earlier draft claimed
+        otherwise.** It cannot catch a *mis-declared* constant. Both sides read
+        the same two declarations, so a depth declared as one metre when one
+        millimetre was meant moves both sides identically and the residual is
+        zero. Worse, ``rho_cp`` and ``d`` enter only as a product on both sides
+        and in the closed-form reference, so doubling one and halving the other
+        is undetectable by any check in this milestone. Both are declaration
+        risks with no home in any contract here, and they are recorded rather
+        than papered over. Like its sibling ``power_law_identity``, this check
+        ``establishes`` nothing.
         """
         evaluation: PreparedConductanceEvaluation = prepared.payload
         coupling = evaluation.coupling

@@ -94,10 +94,8 @@ from ...scientific.units.quantity import Quantity
 # See the module docstring: this import is the preregistered promotion test.
 from ..electrothermal.coupled import (
     CoupledRun,
-    CouplingOutcome,
     FixedPointCouplingPlan,
     TornEndpoint,
-    execution_order,
     run_fixed_point,
 )
 from . import properties as prop
@@ -151,6 +149,17 @@ class FluidSlice:
     side: Quantity
     angular_rate: Quantity
     grid: Transport2DGrid
+    #: Whether the fluid leg also runs its independent-assembly dense
+    #: cross-check. It is a NUMERICAL declaration, beside ``grid`` and not
+    #: beside ``side``, and it is on this record rather than an execution
+    #: keyword because it **decides a scientific admission outcome**: the fluid
+    #: problem declares ``sparse_dense_assembly_agreement`` as a requirement,
+    #: so with the cross-check off that requirement is ``NOT_RUN``, the result
+    #: is inadmissible, and the coupling refuses. Two identical declarations
+    #: that differed only in an unrecorded keyword would therefore produce
+    #: either a coupled answer or a refusal, with nothing on the record to say
+    #: which — the same class of defect as an unrecorded control value.
+    cross_check: bool = True
 
     def __post_init__(self) -> None:
         slice_id = str(self.slice_id).strip()
@@ -186,6 +195,7 @@ class FluidSlice:
             side=self.side,
             angular_rate=self.angular_rate,
             grid=grid,
+            cross_check=self.cross_check,
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -194,6 +204,7 @@ class FluidSlice:
             "side_m": self.side.magnitude_in("meter"),
             "omega_per_s": self.angular_rate.magnitude_in("1/s"),
             "grid": self.grid.to_dict(),
+            "cross_check": bool(self.cross_check),
         }
 
     @classmethod
@@ -203,6 +214,7 @@ class FluidSlice:
             side=Quantity(float(payload["side_m"]), "meter"),
             angular_rate=Quantity(float(payload["omega_per_s"]), "1/s"),
             grid=Transport2DGrid.from_dict(payload["grid"]),
+            cross_check=bool(payload.get("cross_check", True)),
         )
 
 
@@ -606,7 +618,7 @@ def _diffusivity_result(
             | {prop.TEMPERATURE: temperature},
             assumptions=prop.POWER_LAW_DIFFUSIVITY_MODEL.assumptions,
         ),
-        metadata={"wall_seconds_telemetry": str(time.perf_counter() - started)},
+        metadata={"coupling_executor_wall_seconds": str(time.perf_counter() - started)},
     )
     # Producer-published requirement, guarded before the value is transported.
     report.require_admission(
@@ -646,7 +658,7 @@ def _fluid_result(
     return replace(
         result,
         metadata=dict(result.metadata)
-        | {"wall_seconds_telemetry": str(time.perf_counter() - started)},
+        | {"coupling_executor_wall_seconds": str(time.perf_counter() - started)},
     )
 
 
@@ -694,7 +706,7 @@ def _wall_result(
             | {prop.WALL_EFFLUX: wall_efflux},
             assumptions=prop.WALL_CONDUCTANCE_MODEL.assumptions,
         ),
-        metadata={"wall_seconds_telemetry": str(time.perf_counter() - started)},
+        metadata={"coupling_executor_wall_seconds": str(time.perf_counter() - started)},
     )
     report.require_admission(
         problem.validation_requirements,
@@ -758,7 +770,7 @@ def _thermal_result(
             },
             assumptions=lump.LUMPED_CAPACITY_MODEL.assumptions,
         ),
-        metadata={"wall_seconds_telemetry": str(time.perf_counter() - started)},
+        metadata={"coupling_executor_wall_seconds": str(time.perf_counter() - started)},
     )
     # THE ADMISSION INVARIANT, Thermal → Fluid direction. The requirement is
     # named by THIS CONSUMER because `thermal_lumped` publishes none on its
@@ -771,7 +783,7 @@ def _thermal_result(
 
 
 def _executors(
-    system: FluidThermalSystem, *, cross_check: bool = True
+    system: FluidThermalSystem,
 ) -> dict[str, Callable[[Mapping[str, Quantity], str], ScientificResult]]:
     """problem_id -> how this pack solves it, given its transported inputs.
 
@@ -796,7 +808,7 @@ def _executors(
             run_id=run_id,
             system=system,
             diffusivity=inputs["diffusivity"],
-            cross_check=cross_check,
+            cross_check=system.slice.cross_check,
         )
 
     def wall_call(inputs: Mapping[str, Quantity], run_id: str):
@@ -827,7 +839,6 @@ def run_fluid_thermal_coupling(
     plan: FixedPointCouplingPlan,
     *,
     run_id: str = "ft-coupled",
-    cross_check: bool = True,
 ) -> CoupledRun:
     """Build the composition, then iterate it with the shared, unedited loop.
 
@@ -839,7 +850,7 @@ def run_fluid_thermal_coupling(
     problems = coupled_problems(system)
     return run_fixed_point(
         problems,
-        _executors(system, cross_check=cross_check),
+        _executors(system),
         plan,
         run_id=run_id,
         software_version=SOFTWARE_VERSION,
@@ -860,15 +871,35 @@ def run_fluid_thermal_coupling(
 def sweep_timings(run: CoupledRun) -> tuple[dict[str, float], ...]:
     """Per-sweep wall time, per participant, from the results themselves.
 
+    Keyed ``coupling_executor_wall_seconds`` and deliberately **not**
+    ``wall_seconds_telemetry``: the fluid domain already writes that key as a
+    ``float`` (``transport2d/solver.py``) and its own refinement gate reads it
+    back typed as one, so overwriting it with a string here would have put two
+    JSON shapes under one key with a consumer typed for one of them.
+
     Read out of ``ScientificResult.metadata``, which every executor above
-    stamps with its own solver's telemetry. Reported, never used to decide
-    anything.
+    stamps with the wall time of the whole executor — not
+    ``RawSolverOutput.wall_seconds``, which for the fluid participant excludes
+    ``assemble`` and therefore understates the leg the coupling actually pays
+    for by an order of magnitude.
+
+    **A stated objection, not an oversight.**
+    ``docs/min-cross-domain-foundation-evidence.md`` §2.1 (attempt 4) rejected
+    ``ScientificResult.metadata`` by name as "the untyped escape hatch this
+    platform refuses everywhere else". It is used here anyway, for one reason
+    and under one restriction: no typed record in this repository carries
+    per-executor wall time (``ProvenanceRecord`` carries tolerances and
+    environment, not cost; ``SolverSettings`` records settings, not
+    measurements), and this value is **reported and never read by anything
+    that decides**. Nothing in this pack, in either participant, or in
+    ``run_fixed_point`` branches on it. If a consumer ever does branch on it,
+    the objection above becomes live and the value needs a typed home.
     """
     timings: list[dict[str, float]] = []
     for iteration in run.iterations:
         row: dict[str, float] = {}
         for result in iteration.results:
-            telemetry = result.metadata.get("wall_seconds_telemetry")
+            telemetry = result.metadata.get("coupling_executor_wall_seconds")
             if telemetry is not None:
                 row[result.problem_id] = float(telemetry)
         row["sweep_total"] = float(sum(row.values()))
