@@ -26,7 +26,7 @@ promoted, and §12 states plainly what this milestone did *not* prove.
 |---|---|---|---|
 | Focused (`tests/test_composite_system0.py`) | — | **79 passed** | +79 |
 | FAST (`-m "not expensive"`) | **1681 passed / 625 deselected** | **1760 passed / 625 deselected** | +79 |
-| FULL (no marker, sequential, single process) | **2306 passed / 0 failed / 0 errors** (`f1ed553`) | **2385 passed / 0 failed / 0 errors** | +79 |
+| FULL (no marker, sequential, single process) | **2306 passed / 0 failed / 0 errors** (`f1ed553`) | **2385 passed / 0 failed / 0 errors**, 785.65 s (13:05) | +79 |
 
 The FULL figure was measured **once, at the end, sequentially**, on the final
 tree, in a single uninterrupted process.
@@ -296,7 +296,7 @@ two sources feed **one** endpoint, which nothing here does.
   deletion in one file, entirely inside the catalogue data block** — the record
   literal plus its name in the catalogue tuple. It ran end-to-end immediately
   (`criterion_met`, 10 iterations, `R = 0.0212559 ohm`, `T = 351.999 K`) and the
-  focused suite stayed at **76 passed**. Zero changes to any model,
+  focused suite stayed green (76 tests at the time of that experiment). Zero changes to any model,
   realization, solver, problem builder, admission check, serializer or coupling
   code.
 
@@ -412,7 +412,7 @@ inherits unchanged: fan-in refusal, tolerance dimension, seed shadowing, the
 `STATE`/`CONTROL` role convention, and the scalar-endpoint limitation of
 `QuantityDependency`.
 
-**Baseline note.** Both the reviewer and the falfifier initially read
+**Baseline note.** Both the reviewer and the falsifier initially read
 `/home/user/crafty` (`03c30f6`, 48 commits behind) rather than the
 `composite-system0` worktree. The falsifier was re-pointed and its findings are
 against the correct tree. The reviewer's baseline reconciliation section
@@ -571,7 +571,7 @@ Recorded here rather than by amending it.
 | 2 | **Domain extensibility** | Good. A new material is data (measured: 11 lines). A new functional form is one model + one realization + one solver + one table entry, and touches no existing material. No universal core edit is required for either. |
 | 3 | **Breaking-change risk** | Low. Purely additive: 2 new files, 1 export list, 3 new pack-local schemas with no stored payload anywhere. Every pre-existing number is asserted unchanged. |
 | 4 | **Reversibility** | High. Deleting the two files and the export block restores `f1ed553` behaviour exactly. Nothing else depends on them. |
-| 5 | **Implementation complexity** | Moderate and honestly higher than the null: ~2 900 production lines against ~0. The cost buys typed geometry, material identity, 17 refusals, provenance and serialization that the null attempt structurally could not have. |
+| 5 | **Implementation complexity** | Moderate and honestly higher than the null: ~2 900 production lines against ~0. The cost buys typed geometry, material identity, 19 refusals, provenance and serialization that the null attempt structurally could not have. |
 | 6 | **Runtime cost** | Negligible. Two extra scalar algebraic solves per wire per sweep; the 7-problem chain converges in 10–13 sweeps in milliseconds. The focused suite is 4.7 s and stays in FAST. |
 | 7 | **Serialization impact** | Contained. Three new pack-local schemas, zero changes to any existing schema string, zero stored payloads. `require_schema` is exact-match, so the shape was settled *before* implementation, which is the only cheap moment. |
 | 8 | **Time-to-proof** | Good. One reviewer round, one falsifier round, then executable evidence — the ~2-round cap held, and all nine falsifier corrections were absorbed before implementation rather than after. |
@@ -582,7 +582,7 @@ Recorded here rather than by amending it.
 **KEEP.**
 
 The design as implemented survived the falsifier's nine corrections, holds
-under 76 focused assertions and 2382 full-suite tests, and added **no universal
+under 79 focused test functions and a 2385-test full suite, and added **no universal
 contract**. Its two known limitations (§5.2, §5.3) are limitations of the
 *existing* contracts, are recorded with measurements, and are not worked around.
 
