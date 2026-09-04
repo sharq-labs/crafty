@@ -131,11 +131,34 @@ from ...scientific.twins.definition import (
 from ...scientific.units.quantity import Quantity
 from .resistor_body import RESISTOR_POWER_METRIC
 
+#: How one DC circuit gets solved. **The only substitution seam in this pack.**
+#:
+#: `API-MCP-V0`. Introduced additively so an external caller may select, from a
+#: closed enumeration owned by the application layer, *which* concrete circuit
+#: solver runs inside the electro-thermal loop. The default is this pack's own,
+#: so every pre-existing caller and every stored number is unchanged.
+#:
+#: Note what this seam deliberately is **not**. It is not a provider framework,
+#: not a registry, not a plugin system and not a capability lookup. It is one
+#: keyword argument whose type is the callable the pack already had. The
+#: substitution therefore stays strictly *below* coupling semantics — the plan,
+#: the dependency records, the tear, the iteration and the outcome are
+#: untouched — which is the property the real-external-provider milestone
+#: measured, and which a registry sitting here would have obscured.
+#:
+#: This pack cannot name any concrete substitute and does not import one. It
+#: receives a callable and calls it. Which implementations exist, and which
+#: external identity selects which, is a fact about the *application layer* and
+#: is unreadable from here.
+CircuitSolver = Callable[[DCCircuit, str], ScientificResult]
+
+
 # This pack publishes its own declarations only. The generic coupling records
 # and the loop are `engcore.coupling`'s and are imported above for this
 # module's own use; re-exporting them here would restate the false ownership
 # `COUPLING-PACK-RELOCATION` removed. A guard test asserts they stay out.
 __all__ = [
+    "CircuitSolver",
     "CoupledElectroThermalSystem",
     "CoupledStage",
     "DEPENDENCY_HEAT",
@@ -144,6 +167,7 @@ __all__ = [
     "build_coupled_twin",
     "coupled_dependencies",
     "coupled_problems",
+    "native_circuit_solver",
     "nominal_plan",
     "run_fixed_point_coupling",
     "stage_problems",
@@ -617,18 +641,32 @@ def _thermal_result(
     )
 
 
-def _electrical_result(
-    *, run_id: str, system: CoupledElectroThermalSystem,
-    resistances: Mapping[str, Quantity],
+def native_circuit_solver(
+    circuit: DCCircuit, run_id: str
 ) -> ScientificResult:
-    circuit = system.circuit_at(resistances)
+    """This pack's own way of solving one DC circuit. The default seam.
+
+    Published so that the *default* and any substitute have the same type, and
+    so a caller can state "solve it the way this pack always did" explicitly
+    rather than by passing ``None``.
+    """
     return solve_circuit(
         circuit, run_id=run_id, problem=build_dc_problem(circuit)
     )
 
 
+def _electrical_result(
+    *, run_id: str, system: CoupledElectroThermalSystem,
+    resistances: Mapping[str, Quantity],
+    circuit_solver: CircuitSolver,
+) -> ScientificResult:
+    return circuit_solver(system.circuit_at(resistances), run_id)
+
+
 def _executors(
-    system: CoupledElectroThermalSystem, problems: Sequence[ScientificProblem]
+    system: CoupledElectroThermalSystem,
+    problems: Sequence[ScientificProblem],
+    circuit_solver: CircuitSolver = native_circuit_solver,
 ) -> dict[str, Callable[[Mapping[str, Quantity], str], ScientificResult]]:
     """problem_id -> how this pack solves it, given its transported inputs.
 
@@ -648,7 +686,8 @@ def _executors(
             for stage in system.stages
         }
         return _electrical_result(
-            run_id=run_id, system=system, resistances=resistances
+            run_id=run_id, system=system, resistances=resistances,
+            circuit_solver=circuit_solver,
         )
 
     table[electrical.problem_id] = electrical_call
@@ -677,12 +716,18 @@ def run_fixed_point_coupling(
     plan: FixedPointCouplingPlan,
     *,
     run_id: str = "et-coupled",
+    circuit_solver: CircuitSolver = native_circuit_solver,
 ) -> CoupledRun:
     """The electro-thermal entry point: build the composition, then iterate it.
 
     Everything domain-specific happens here — the problems, and the dispatch
     table that says how each of them is solved. :func:`run_fixed_point` receives
     both as data and runs the iteration without being able to name either.
+
+    ``circuit_solver`` is the one substitution seam (see :data:`CircuitSolver`).
+    It defaults to :func:`native_circuit_solver`, so a caller that does not pass
+    it gets exactly the execution this function performed before the seam
+    existed — asserted numerically, not assumed.
     """
     problems = coupled_problems(
         system,
@@ -691,7 +736,7 @@ def run_fixed_point_coupling(
     )
     return run_fixed_point(
         problems,
-        _executors(system, problems),
+        _executors(system, problems, circuit_solver),
         plan,
         run_id=run_id,
         software_version="engcore.systems.electrothermal.coupled/0.1.0",

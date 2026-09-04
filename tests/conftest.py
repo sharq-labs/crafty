@@ -126,6 +126,7 @@ EXPENSIVE_MODULES: dict[str, str] = {
     "tests/test_executable_scientific_spec.py": "reconstructs and executes three domains, launches fresh interpreters and one real ngspice process",
     "tests/test_exec_spec_structured_input.py": "reconstructs two structured consumers and launches fresh interpreters for each",
     "tests/systems/fluidthermal/test_ft_coupling_execution.py": "executes the Fluid-Thermal coupled loop over three grids and two operating points",
+    "tests/test_api_mcp_v0_transports.py": "spawns real HTTP and MCP server processes and launches real ngspice",
 }
 
 #: Tests inside an expensive module that stay in FAST. Each only reads files,

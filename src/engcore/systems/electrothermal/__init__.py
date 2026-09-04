@@ -28,17 +28,20 @@ from .resistor_body import (
     run_open_loop_pass,
 )
 from .coupled import (
+    CircuitSolver,
     CoupledElectroThermalSystem,
     CoupledStage,
     build_coupled_twin,
     coupled_dependencies,
     coupled_problems,
+    native_circuit_solver,
     nominal_plan,
     stage_problems,
     run_fixed_point_coupling,
 )
 
 __all__ = [
+    "CircuitSolver",
     "CoupledElectroThermalSystem",
     "CoupledStage",
     "DEPENDENCY_HEAT",
@@ -54,6 +57,7 @@ __all__ = [
     "coupled_problems",
     "electrothermal_dependencies",
     "electrothermal_problems",
+    "native_circuit_solver",
     "nominal_plan",
     "run_fixed_point_coupling",
     "run_open_loop_pass",

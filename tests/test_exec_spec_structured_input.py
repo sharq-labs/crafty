@@ -843,6 +843,42 @@ _FIELD_SUPPORT_FOUNDATION_EXCEPTIONS = {
 }
 
 
+#: The two files a later, externally-exposing milestone (`API-MCP-V0`) is
+#: documented and authorized to touch: one additive ``circuit_solver`` keyword
+#: on the electro-thermal entry point, plus the ``CircuitSolver`` alias and the
+#: published ``native_circuit_solver`` default it names, and the package
+#: ``__init__`` re-export of both. It is the narrowest seam that lets an
+#: external caller select, from a closed enumeration owned by the application
+#: layer, which concrete circuit solver runs inside the coupled loop. The
+#: default is the pack's own prior call, and a test asserts the two produce
+#: byte-identical records — see docs/api-mcp-v0-evidence.md. This guard's own
+#: claim (this milestone touches nothing under `src/`) is unaffected: it was true
+#: when this milestone was written, and that fact does not change.
+#: `API-MCP-V0` additionally ADDS three packages under `src/`: the
+#: transport-neutral application boundary and the two stdlib transports that
+#: frame it. They are new top-level trees, they import inward only, and no
+#: file of this milestone is among them.
+_API_MCP_V0_NEW_TREES = (
+    "src/engcore/application/",
+    "src/crafty_http/",
+    "src/crafty_mcp/",
+)
+
+
+def _excluding_api_mcp_v0(paths):
+    return {
+        path
+        for path in paths
+        if not any(path.startswith(tree) for tree in _API_MCP_V0_NEW_TREES)
+    }
+
+
+_API_MCP_V0_EXCEPTIONS = {
+    "src/engcore/systems/electrothermal/coupled.py",
+    "src/engcore/systems/electrothermal/__init__.py",
+}
+
+
 def test_h_no_universal_core_or_committed_evidence_was_modified():
     """FAIL CONDITION §13.7."""
     for path in ("src/", "experiments/cross_domain_coverage/", "experiments/exec_spec_residue/"):
@@ -858,6 +894,7 @@ def test_h_no_universal_core_or_committed_evidence_was_modified():
             - {_PORTABILITY_EXCEPTION}
             - _PLANNER_DISCOVERY_EXCEPTIONS
             - _FIELD_SUPPORT_FOUNDATION_EXCEPTIONS
+        - _API_MCP_V0_EXCEPTIONS
         )
         assert changed == set(), f"{path} was modified: {sorted(changed)}"
     untracked = subprocess.run(
@@ -867,7 +904,9 @@ def test_h_no_universal_core_or_committed_evidence_was_modified():
         text=True,
         check=True,
     )
-    assert untracked.stdout.strip() == ""
+    assert _excluding_api_mcp_v0(untracked.stdout.split()) == set(), (
+        f"src/ gained files: {untracked.stdout}"
+    )
 
 
 def test_no_scientific_problem_schema_moved():
