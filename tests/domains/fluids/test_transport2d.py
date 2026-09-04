@@ -539,7 +539,10 @@ def test_full_reconstruction_and_re_execution_in_a_fresh_interpreter() -> None:
         domain = Transport2DDomain.from_dict(payload)
         problem = build_transport2d_problem(domain, problem_id={problem_id!r})
         result = solve_transport2d(domain, run_id="fresh-process", problem=problem)
-        print(json.dumps({{k: v.magnitude_in("dimensionless") for k, v in result.values.items()}}))
+        from src.engcore.domains.fluids.transport2d import METRIC_UNITS
+        print(json.dumps(
+            {{k: v.magnitude_in(METRIC_UNITS[k]) for k, v in result.values.items()}}
+        ))
         """
     )
     completed = subprocess.run(
@@ -551,9 +554,16 @@ def test_full_reconstruction_and_re_execution_in_a_fresh_interpreter() -> None:
     )
     assert completed.returncode == 0, completed.stderr
     reconstructed_values = json.loads(completed.stdout.strip().splitlines()[-1])
+    # Each metric is compared in ITS OWN declared unit. An earlier form
+    # compared every one of them in `dimensionless`, which was true while
+    # every metric was a value of c; `phi_D:wall` is a reduction OF c and
+    # carries m**2/s.
+    from src.engcore.domains.fluids.transport2d import METRIC_UNITS
+
+    assert set(reconstructed_values) == set(original.values)
     for name, quantity in original.values.items():
         assert reconstructed_values[name] == pytest.approx(
-            quantity.magnitude_in("dimensionless"), abs=1e-12
+            quantity.magnitude_in(METRIC_UNITS[name]), abs=1e-12
         )
 
 

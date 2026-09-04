@@ -73,7 +73,13 @@ from .problem import (
     FIELD_UNIT,
     FIELD_VARIABLE,
     MAX_METRIC,
+    METRIC_UNITS,
     MIN_METRIC,
+    PHI_D_METRIC,
+    SIDE_EAST,
+    SIDE_NORTH,
+    SIDE_SOUTH,
+    SIDE_WEST,
     TRANSPORT2D_ADVECTION_DIFFUSION,
     TRANSPORT2D_MODELS,
     Transport2DDomain,
@@ -105,6 +111,16 @@ class PreparedTransport2DSystem:
     sparse: Any                     # scipy.sparse csr_matrix, (dof, dof)
     rhs: np.ndarray                 # (dof,)
     centres: np.ndarray             # (n,) cell-centre coordinates, one axis
+    #: One entry per DIFFUSIVE boundary face the assembly actually built:
+    #: ``(row, side_label, ghost_value)``. ``ghost_value`` is the very number
+    #: :func:`assemble` moved onto the right-hand side for that face — not a
+    #: re-derivation of it — so the wall-efflux reduction computed from this
+    #: is the flux the assembled operator represents, by construction rather
+    #: than by agreement. Advective ghost faces are deliberately NOT recorded:
+    #: the transported quantity is the diffusive efflux, and the advective
+    #: normal velocity is mixed-sign on every side of this benchmark and
+    #: cannot be honestly oriented (``reference.side_orientation``).
+    boundary_faces: tuple[tuple[int, str, float], ...] = ()
 
     @property
     def n(self) -> int:
@@ -121,8 +137,59 @@ class PreparedTransport2DSystem:
         return mid * self.n + mid
 
 
+#: Which labelled side a ghost neighbour in direction ``(di, dj)`` lies across.
+#: The labels are the problem record's own boundary-condition names, so the
+#: efflux reduction and the BoundaryOrientation records refer to one vocabulary.
+_SIDE_OF: dict[tuple[int, int], str] = {
+    (-1, 0): SIDE_WEST,
+    (1, 0): SIDE_EAST,
+    (0, -1): SIDE_SOUTH,
+    (0, 1): SIDE_NORTH,
+}
+
+
 def _index(i: int, j: int, n: int) -> int:
     return i * n + j
+
+
+def wall_efflux_per_side(
+    system: "PreparedTransport2DSystem", field_flat: np.ndarray
+) -> dict[str, float]:
+    """Outward diffusive efflux of ``c`` per labelled side, from the SOLVED field.
+
+    The one place the Fluid → Thermal transported quantity is computed, and it
+    is computed **from the discrete solution and the assembled system, never
+    from the closed form 8D**.
+
+    For every diffusive boundary face the assembly recorded, the outward flux
+    the shipped stencil represents is
+
+        ``D * (c_cell - c_ghost)``
+
+    which is ``-D * (dc/dn) * dl`` with the gradient taken over the full ``dx``
+    between the boundary cell centre and the ghost centre and the face measure
+    ``dl = dx`` per unit depth — exactly the boundary term
+    :func:`assemble` folded into the right-hand side, sign included. Positive
+    means efflux, because ``c`` is positive inside and the Dirichlet data
+    drives it to zero at the wall.
+
+    **This is deliberately not the preparation's formula.**
+    ``docs/fluid-thermal-preparation.md`` §FT0/P2 used
+    ``2 D sum(c_boundary)``, i.e. a one-sided gradient over ``dx/2`` against a
+    wall value of exactly zero. That is what the problem *record* states, but
+    it is not what ``assemble`` implements: the shipped scheme puts the ghost
+    cell a full ``dx`` out and gives it ``c*(ghost centre)``, which is not
+    ``-c_cell``. Using the shipped convention keeps the reduction consistent
+    with the operator that produced the field, and it is measurably twice as
+    accurate at every grid tried. The sign convention is unchanged.
+    """
+    diffusivity = system.domain.diffusivity_m2_s
+    per_side: dict[str, float] = {}
+    for row, side, ghost in system.boundary_faces:
+        per_side[side] = per_side.get(side, 0.0) + diffusivity * (
+            float(field_flat[row]) - ghost
+        )
+    return per_side
 
 
 def assemble(domain: Transport2DDomain) -> PreparedTransport2DSystem:
@@ -147,6 +214,8 @@ def assemble(domain: Transport2DDomain) -> PreparedTransport2DSystem:
     sparse = sp.lil_matrix((dof, dof))
     rhs = np.zeros(dof)
 
+    boundary_faces: list[tuple[int, str, float]] = []
+
     for i in range(n):
         for j in range(n):
             x, y = centres[i], centres[j]
@@ -157,7 +226,7 @@ def assemble(domain: Transport2DDomain) -> PreparedTransport2DSystem:
             )
             diagonal = 4.0 * diffusivity / (dx * dx)
 
-            def neighbour(di: int, dj: int, coeff: float) -> None:
+            def neighbour(di: int, dj: int, coeff: float, *, record: bool = False) -> None:
                 nonlocal diagonal
                 ii, jj = i + di, j + dj
                 if 0 <= ii < n and 0 <= jj < n:
@@ -167,10 +236,13 @@ def assemble(domain: Transport2DDomain) -> PreparedTransport2DSystem:
                 else:
                     gx = (ii + 0.5) * dx
                     gy = (jj + 0.5) * dx
-                    rhs[row] -= coeff * c_star(gx, gy, side_m=side_m)
+                    ghost = c_star(gx, gy, side_m=side_m)
+                    rhs[row] -= coeff * ghost
+                    if record:
+                        boundary_faces.append((row, _SIDE_OF[(di, dj)], ghost))
 
             for di, dj in ((-1, 0), (1, 0), (0, -1), (0, 1)):
-                neighbour(di, dj, -diffusivity / (dx * dx))
+                neighbour(di, dj, -diffusivity / (dx * dx), record=True)
 
             if ux >= 0.0:
                 diagonal += ux / dx
@@ -194,6 +266,7 @@ def assemble(domain: Transport2DDomain) -> PreparedTransport2DSystem:
         sparse=sparse.tocsr(),
         rhs=rhs,
         centres=centres,
+        boundary_faces=tuple(boundary_faces),
     )
 
 
@@ -280,7 +353,15 @@ class _Transport2DSolverBase:
     ) -> dict[str, Quantity]:
         if not raw.succeeded:
             return {}
-        return {name: Quantity(value, FIELD_UNIT) for name, value in raw.values.items()}
+        # Per-metric units, from the domain's one table. An earlier form
+        # stamped FIELD_UNIT on every metric, which was true while every
+        # metric was a value of c; the wall efflux is a reduction OF c and
+        # carries m**2/s, and a units restoration that assumed one unit for a
+        # whole domain would have shipped it as dimensionless.
+        return {
+            name: Quantity(value, METRIC_UNITS[name])
+            for name, value in raw.values.items()
+        }
 
     def validate(self, prepared: PreparedSolve, raw: RawSolverOutput) -> ValidationReport:
         system: PreparedTransport2DSystem = prepared.payload
@@ -400,9 +481,11 @@ def _solve_with_backend(
             wall_seconds=wall,
         )
 
+    per_side = wall_efflux_per_side(system, field_flat)
     values = {
         CENTRE_METRIC: float(field_flat[system.centre_index]),
         **_values_from_field(field_flat),
+        PHI_D_METRIC: float(sum(per_side.values())),
     }
 
     # Bulk field output, named identity per DATA-BOUNDARY0 — this is the
@@ -428,6 +511,10 @@ def _solve_with_backend(
             "linear_system_residual": residual,
             "field_bytes_length": len(field_bytes),
             "field": [float(v) for v in field_flat],
+            # Per-side, so the orientation check has real samples to classify
+            # and a caller can see WHERE the efflux came from rather than only
+            # how much of it there was.
+            "wall_efflux_per_side": dict(per_side),
         },
     )
 

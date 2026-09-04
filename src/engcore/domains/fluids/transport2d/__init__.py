@@ -54,11 +54,15 @@ from .problem import (
     ALL_SIDES,
     CENTRE_METRIC,
     DIFFUSIVITY_UNIT,
+    EFFLUX_REFERENCE,
+    EFFLUX_UNIT,
     FIELD_UNIT,
     FIELD_VARIABLE,
     LENGTH_UNIT,
     MAX_METRIC,
+    METRIC_UNITS,
     MIN_METRIC,
+    PHI_D_METRIC,
     ANGULAR_RATE_UNIT,
     SIDE_EAST,
     SIDE_NORTH,
@@ -91,6 +95,7 @@ from .solver import (
     NativeDenseTransport2DSolver,
     Transport2DSolver,
     solve_transport2d,
+    wall_efflux_per_side,
 )
 from .validation import (
     ANALYTIC_REL_TOL,
@@ -103,7 +108,10 @@ from .validation import (
     classify_boundary_orientation,
     read_centre_concentration_unguarded,
     read_centre_concentration_with_admission,
+    read_wall_efflux_unguarded,
+    read_wall_efflux_with_admission,
     run_verification_gate,
+    wall_efflux_orientations,
 )
 
 __all__ = [
@@ -119,6 +127,8 @@ __all__ = [
     "CENTRE_METRIC",
     "MAX_METRIC",
     "MIN_METRIC",
+    "PHI_D_METRIC",
+    "METRIC_UNITS",
     "ALL_SIDES",
     "SIDE_SOUTH",
     "SIDE_NORTH",
@@ -128,6 +138,7 @@ __all__ = [
     "Transport2DSolver",
     "NativeDenseTransport2DSolver",
     "solve_transport2d",
+    "wall_efflux_per_side",
     "SPARSE_SOLVER_ID",
     "DENSE_SOLVER_ID",
     "SOLVER_VERSION",
@@ -154,6 +165,9 @@ __all__ = [
     # admission (F8)
     "read_centre_concentration_unguarded",
     "read_centre_concentration_with_admission",
+    "read_wall_efflux_unguarded",
+    "read_wall_efflux_with_admission",
+    "wall_efflux_orientations",
     # boundary orientation (MIN-FIELD-SUPPORT-FOUNDATION)
     "classify_boundary_orientation",
     "boundary_orientation_report",
@@ -162,6 +176,8 @@ __all__ = [
     "LENGTH_UNIT",
     "DIFFUSIVITY_UNIT",
     "ANGULAR_RATE_UNIT",
+    "EFFLUX_UNIT",
+    "EFFLUX_REFERENCE",
     # errors
     "Transport2DError",
     "Transport2DConfigurationError",

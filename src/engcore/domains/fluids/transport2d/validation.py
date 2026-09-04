@@ -45,6 +45,7 @@ from ....scientific.errors import ScientificValidationError
 from ....scientific.ir.orientation import (
     BoundaryOrientation,
     MixedOrientationError,
+    OrientationSign,
     classify_sign,
 )
 from ....scientific.results.validation import (
@@ -55,7 +56,7 @@ from ....scientific.results.validation import (
 )
 from ....scientific.units.quantity import Quantity
 from .errors import Transport2DConfigurationError
-from .problem import ALL_SIDES
+from .problem import ALL_SIDES, EFFLUX_REFERENCE, EFFLUX_UNIT, PHI_D_METRIC
 from .reference import (
     REFERENCE_EXPRESSION,
     REFERENCE_ID,
@@ -98,6 +99,37 @@ class Transport2DValidationSettings:
             "admissibility_atol": float(self.admissibility_atol),
             "cross_check_atol": float(self.cross_check_atol),
         }
+
+
+def wall_efflux_orientations() -> tuple[BoundaryOrientation, ...]:
+    """The declared sign of the transported wall efflux, one record per side.
+
+    ``POSITIVE`` relative to ``outward_normal`` means: a positive reported
+    ``phi_D:wall`` contribution is an efflux, scalar leaving the domain. This
+    is the one fact a coupled loop cannot afford to leave in a comment — a
+    flipped sign turns a cooling composition into a heating one and both
+    converge.
+
+    Four records rather than one, because ``BoundaryOrientation`` names a
+    boundary and this benchmark declares four. The preparation measured
+    (``docs/fluid-thermal-preparation.md`` §FT0/P5) that ``classify_sign``
+    accepts the diffusive normal gradient on every one of them and **refuses**
+    the advective normal velocity on every one of them; this domain therefore
+    reports the former and does not report the latter.
+    """
+    return tuple(
+        BoundaryOrientation(
+            boundary_name=side,
+            reference=EFFLUX_REFERENCE,
+            sign=OrientationSign.POSITIVE,
+            description=(
+                f"A positive {PHI_D_METRIC!r} contribution from {side!r} is an "
+                f"efflux: scalar leaving the domain through that side, in "
+                f"{EFFLUX_UNIT}."
+            ),
+        )
+        for side in ALL_SIDES
+    )
 
 
 def build_validation_report(
@@ -217,6 +249,48 @@ def build_validation_report(
             )
         )
 
+    # FT-SCALAR-COUPLING: the declared efflux sign, checked against the
+    # per-side numbers this very solve produced. Not a claim about accuracy —
+    # only that the transported reduction points the way its record says.
+    per_side = dict(raw.diagnostics.get("wall_efflux_per_side", {}))
+    if per_side:
+        issues: list[str] = []
+        for orientation in wall_efflux_orientations():
+            issues.extend(
+                orientation.check_against([per_side[orientation.boundary_name]])
+                if orientation.boundary_name in per_side
+                else (
+                    f"boundary {orientation.boundary_name!r}: this solve "
+                    f"produced no efflux sample for it",
+                )
+            )
+        total = float(sum(per_side.values()))
+        checks.append(
+            ValidationCheck(
+                name="wall_efflux_orientation",
+                outcome=(
+                    ValidationOutcome.PASS if not issues else ValidationOutcome.FAIL
+                ),
+                detail=(
+                    f"declared sign {OrientationSign.POSITIVE.value!r} relative "
+                    f"to {EFFLUX_REFERENCE!r} on all four sides, checked "
+                    f"against this solve's own per-side efflux "
+                    f"(total {total:.6g} {EFFLUX_UNIT}). "
+                    + ("; ".join(issues) if issues else "no disagreement")
+                ),
+                establishes=None,
+            )
+        )
+    else:
+        checks.append(
+            ValidationCheck(
+                name="wall_efflux_orientation",
+                outcome=ValidationOutcome.NOT_RUN,
+                detail="this solve reported no per-side wall efflux",
+                establishes=None,
+            )
+        )
+
     checks.append(
         ValidationCheck(
             name="discretization_convergence",
@@ -289,6 +363,37 @@ def read_centre_concentration_with_admission(
         context=f"fluids.transport2d result {result.result_id!r}",
     )
     return result.value(CENTRE_METRIC)
+
+
+def read_wall_efflux_unguarded(
+    problem: "ScientificProblem", result: "ScientificResult"
+) -> Quantity:
+    """Read the wall diffusive efflux with NO admission guard.
+
+    The sibling of :func:`read_centre_concentration_unguarded`, and it exists
+    for the same reason: to demonstrate, rather than assert, that the guard
+    below is load-bearing. A coupling that used this reader would consume an
+    inadmissible flux and converge on it.
+    """
+    return result.value(PHI_D_METRIC)
+
+
+def read_wall_efflux_with_admission(
+    problem: "ScientificProblem", result: "ScientificResult"
+) -> Quantity:
+    """Read the wall diffusive efflux, refusing an inadmissible result.
+
+    The Fluid participant's side of the coupling admission invariant: a fluid
+    result that does not satisfy every requirement its own problem declared
+    must not reach the Thermal solve. Raises ``ScientificValidationError`` —
+    the caller never reaches the read, and a coupling built on this reader
+    stops rather than continuing on a value it was told not to trust.
+    """
+    result.validation.require_admission(
+        problem.validation_requirements,
+        context=f"fluids.transport2d wall efflux of result {result.result_id!r}",
+    )
+    return result.value(PHI_D_METRIC)
 
 
 # =====================================================================

@@ -125,6 +125,7 @@ EXPENSIVE_MODULES: dict[str, str] = {
     "tests/systems/aerospace/test_multirotor_mvr1.py": "runs target-driven multirotor design studies",
     "tests/test_executable_scientific_spec.py": "reconstructs and executes three domains, launches fresh interpreters and one real ngspice process",
     "tests/test_exec_spec_structured_input.py": "reconstructs two structured consumers and launches fresh interpreters for each",
+    "tests/systems/fluidthermal/test_ft_coupling_execution.py": "executes the Fluid-Thermal coupled loop over three grids and two operating points",
 }
 
 #: Tests inside an expensive module that stay in FAST. Each only reads files,
@@ -195,6 +196,17 @@ STATIC_GUARDS: dict[str, frozenset[str]] = {
     "tests/systems/aerospace/test_multirotor_mvr1.py": frozenset(
         {
             "test_no_mvr1_logic_leaks_into_frozen_general_design_layer",
+        }
+    ),
+    # FT-SCALAR-COUPLING. Everything in the execution module drives the 2D PDE
+    # solver except these three, which read source, read records, or inspect a
+    # dataclass's fields. They are the assertions a code edit is most likely to
+    # break, so they stay in FAST.
+    "tests/systems/fluidthermal/test_ft_coupling_execution.py": frozenset(
+        {
+            "test_case_b_no_relaxation_factor_exists_anywhere_to_reach_for",
+            "test_the_reconstruction_residue_is_recorded_rather_than_papered_over",
+            "test_the_thermal_admission_requirement_is_consumer_declared_and_says_so",
         }
     ),
     # EXEC-SPEC. The measurement itself is records work and costs milliseconds;

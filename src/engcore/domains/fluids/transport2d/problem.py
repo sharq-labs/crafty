@@ -79,6 +79,11 @@ from .errors import Transport2DConfigurationError
 
 # --- units -------------------------------------------------------------------
 FIELD_UNIT = "dimensionless"
+#: Unit of the boundary-integrated diffusive efflux. `D` carries m**2/s and
+#: `c` is dimensionless, so `D * dc/dn * dl` is m**2/s per unit depth. The
+#: same unit as the diffusivity, and NOT by coincidence: the reduction is
+#: exactly linear in D and the field it reduces carries no scale.
+EFFLUX_UNIT = "m**2/s"
 LENGTH_UNIT = "meter"
 DIFFUSIVITY_UNIT = "m**2/s"
 ANGULAR_RATE_UNIT = "1/s"
@@ -90,7 +95,13 @@ TRANSPORT2D_ADVECTION_DIFFUSION = SolverCapability(
     "cell-centered finite volume",
 )
 
-MODEL_VERSION = "0.1.0"
+# 0.2.0, not 0.1.0. FT-SCALAR-COUPLING adds a second declared OUTPUT to this
+# model (`phi_D`). The physics, the assumptions, the inputs and the validity
+# domain are byte-identical; what changed is what the claim states it
+# produces, and a model that produces something new is not the same model
+# reference. Bumping is cheaper than an unversioned change: a stored result
+# citing 0.1.0 still names a model that really did produce only `c`.
+MODEL_VERSION = "0.2.0"
 
 _ASSUMPTIONS = (
     "two spatial dimensions; a single scalar transported field",
@@ -152,6 +163,19 @@ TRANSPORT2D_MODEL = ScientificModelDefinition(
                 "Normalized dimensionless scalar transport field over the "
                 "domain. Not a concentration or temperature: no absolute "
                 "scale is implied."
+            ),
+        ),
+        # A REDUCTION of the same field over the boundary, not a second
+        # field. Once integrated it is a scalar living on no support, which
+        # is exactly why it can cross a problem boundary today while the
+        # field it was reduced from cannot.
+        ModelOutputSpec(
+            metric="phi_D",
+            unit_exemplar=EFFLUX_UNIT,
+            description=(
+                "Boundary-integrated outward diffusive efflux of c over the "
+                "whole boundary, per unit depth: the closed integral of "
+                "-D grad(c).n. Positive means efflux. Fick's law at a wall."
             ),
         ),
     ),
@@ -416,6 +440,38 @@ CENTRE_METRIC = "c:centre"
 MAX_METRIC = "c:max"
 MIN_METRIC = "c:min"
 
+#: The boundary-integrated outward diffusive efflux — the ONE scalar reduction
+#: of this benchmark's field whose EXACT value depends on the benchmark's own
+#: physical input.
+#:
+#: WHY THIS ONE AND NOT ``c:centre``. The manufactured solution
+#: ``c* = sin(pi x/L) sin(pi y/L)`` is pinned by an analytically derived source
+#: term, so ``c*`` — and therefore ``c:centre``, ``c:max`` and ``c:min`` — is
+#: **independent of D and of omega**: the exact centre value is 1.0 for every
+#: admissible input. ``docs/fluid-thermal-preparation.md`` §FT0/P1 measured the
+#: computed ``c:centre`` moving by 0.161 across a 50x change in D, i.e. 100% of
+#: that apparent sensitivity is discretization error. A composition closed on
+#: it would look healthy and transport nothing but numerical error.
+#: ``phi_D:wall`` has the exact value ``8 D`` — genuinely, non-degenerately
+#: dependent on the fluid's own input, with an independent closed form to check
+#: the transported number against. A regression test pins this reasoning so a
+#: later author cannot quietly re-wire a composition onto ``c:centre``.
+PHI_D_METRIC = "phi_D:wall"
+
+#: Every metric this domain reports, with the unit it must carry. One table,
+#: so the solver, the problem statement and the tests cannot drift apart —
+#: the same device ``kinetics/cstr`` uses.
+METRIC_UNITS: dict[str, str] = {
+    CENTRE_METRIC: FIELD_UNIT,
+    MAX_METRIC: FIELD_UNIT,
+    MIN_METRIC: FIELD_UNIT,
+    PHI_D_METRIC: EFFLUX_UNIT,
+}
+
+#: The domain-declared reference direction the efflux sign is stated against.
+#: An opaque label as far as core is concerned (``ir/orientation.py``).
+EFFLUX_REFERENCE = "outward_normal"
+
 #: Boundary region labels. Compass points chosen for readability; the core
 #: treats ``region`` as an opaque label (ir/conditions.py) either way.
 SIDE_SOUTH = "side-south"  # y = 0
@@ -462,6 +518,17 @@ def build_transport2d_problem(
             unit=FIELD_UNIT,
             role=VariableRole.OBSERVABLE,
             description="Minimum field value over all cell centres",
+        ),
+        ScientificVariable(
+            name=PHI_D_METRIC,
+            unit=EFFLUX_UNIT,
+            role=VariableRole.OBSERVABLE,
+            description=(
+                "Boundary-integrated outward diffusive efflux of c over all "
+                "four sides, per unit depth; positive means efflux. Computed "
+                "from the solved field over the boundary faces the assembly "
+                "itself recorded — never from its closed form 8D."
+            ),
         ),
     )
     parameters = (
@@ -514,6 +581,10 @@ def build_transport2d_problem(
                 "field_finite",
                 "sparse_dense_assembly_agreement",
                 "admissibility_bound",
+                # FT-SCALAR-COUPLING. The transported reduction's declared
+                # sign is checked against the solved field. A sign error in a
+                # coupled loop turns cooling into heating and both converge.
+                "wall_efflux_orientation",
             }
         ),
         metadata={
