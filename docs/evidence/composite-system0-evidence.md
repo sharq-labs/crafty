@@ -499,6 +499,19 @@ architecture pass.
   `electrical:temperature_dependent_resistivity`; `RealizationRegistry` filters
   and does not rank, no planner exists, and none was built.
 
+### 12.1 Remaining gaps, named
+
+| Gap | Status |
+|---|---|
+| `ValidityDomain` cannot express per-material ranges on a shared model | measured (§5.2); worked around inside the existing contract by building a domain from the material record; **not** worked around by a second authority |
+| `ProvenanceRecord.inputs` cannot record a typed categorical | measured (§5.3); the material name survives on the problem record only, and is deliberately not smuggled through `metadata` |
+| `ThermalBody` has no `to_dict`, so the pack serializes it locally | recorded in `power_chain`'s own source; the method belongs on the record the day a second consumer needs it |
+| `WireSegment | FixedLoad` is discriminated by `isinstance` in the system pack | held at this size; §7 of the architecture ban is scoped to universal core, and the alternative (a universal `ComponentInstance`/`Port`) is what §4.1 measured as forced by nothing. **The honest tripwire is a third element kind that poses its own problems** — at that point the union should be re-examined, not grown |
+| a wire's geometry is declared on the electrical side and lumped on the thermal side | two epistemic standards for one physical object, inside one pack (§12) |
+| the fixed load is thermally isolated by construction | not physics: `FixedPointCouplingPlan` refuses fan-in, so a second edge into a `heat_input` endpoint is unrepresentable today |
+| two realizations provide one capability, unranked | deliberate; `RealizationRegistry` filters and does not rank, and no planner exists |
+| the declared series order is unfalsifiable by this consumer | in a series loop across an ideal source the current is common, so permuting elements changes no number |
+
 ## 13. Divergences from the preregistration
 
 Recorded here rather than by amending it.
