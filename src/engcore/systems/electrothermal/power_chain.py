@@ -38,11 +38,20 @@ geometry, no body. A heterogeneous series is what makes the chain a *system*
 rather than N copies of one thing, and the union is discriminated by type in a
 **system pack**, never in universal core.
 
-The load is thermally isolated on purpose and the reason is structural, not
-physical: giving it a body would create a second edge into a ``heat_input``
-endpoint, and :class:`~engcore.coupling.FixedPointCouplingPlan` refuses fan-in
-outright because no record states how two sources on one endpoint combine.
-Recorded as a measured limit of the existing contract, not worked around.
+The load is thermally isolated on purpose, and the reason is what this
+milestone is measuring rather than a limit of any contract. A ``FixedLoad``
+declares a temperature-independent resistance, so a thermal body attached to
+it would be a **dead-end participant**: nothing downstream reads its state, and
+it would change no answer while adding a problem, an edge and an executor to
+every record. Representable, and deliberately not represented — this milestone
+changes exactly one property, and everything else has to hold still for the
+differential to mean anything.
+
+It is NOT a fan-in refusal. A load's body would pose its own thermal problem
+with its own ``heat_input`` endpoint fed by one edge, so
+:class:`~engcore.coupling.FixedPointCouplingPlan` would admit it. Fan-in
+becomes the wall only when two sources feed **one** endpoint — two heat paths
+into one body — which nothing here does.
 
 What this module does NOT introduce
 -----------------------------------

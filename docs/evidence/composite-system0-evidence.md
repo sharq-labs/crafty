@@ -24,9 +24,9 @@ promoted, and §12 states plainly what this milestone did *not* prove.
 
 | Tier | Before | After | Delta |
 |---|---|---|---|
-| Focused (`tests/test_composite_system0.py`) | — | **78 passed** | +78 |
-| FAST (`-m "not expensive"`) | **1681 passed / 625 deselected** | **1759 passed / 625 deselected** | +78 |
-| FULL (no marker, sequential, single process) | **2306 passed / 0 failed / 0 errors** (`f1ed553`) | **2384 passed / 0 failed / 0 errors** | +78 |
+| Focused (`tests/test_composite_system0.py`) | — | **79 passed** | +79 |
+| FAST (`-m "not expensive"`) | **1681 passed / 625 deselected** | **1760 passed / 625 deselected** | +79 |
+| FULL (no marker, sequential, single process) | **2306 passed / 0 failed / 0 errors** (`f1ed553`) | **2385 passed / 0 failed / 0 errors** | +79 |
 
 The FULL figure was measured **once, at the end, sequentially**, on the final
 tree, in a single uninterrupted process.
@@ -46,7 +46,7 @@ baseline above is measured *after* that repair.
 | `src/engcore/domains/electrical/conductor_material.py` | **new** | 1727 |
 | `src/engcore/systems/electrothermal/power_chain.py` | **new** | 1173 |
 | `src/engcore/systems/electrothermal/__init__.py` | export list only | +36 |
-| `tests/test_composite_system0.py` | **new** | 1600 |
+| `tests/test_composite_system0.py` | **new** | 1643 |
 | `tests/test_api_mcp_v0.py` | guard repair (§11) | +31 / −8 |
 | `tests/test_coupling_pack_relocation.py` | guard repair (§11) | +53 / −8 |
 | `.gitignore` | `.pytest_tmp_*/` | +3 |
@@ -263,6 +263,23 @@ when wire_A's material changes — the two are in series and share a current.
 That is coupling, not aliasing. A topology in which two instances could not
 influence each other would exercise nothing, which is the same argument the
 pre-existing `CoupledElectroThermalSystem` docstring already makes.
+
+### 7.1b Arity 3, and what the fan-in wall actually is
+
+`test_t5c` runs a **three-wire** chain (copper, aluminium, silver, plus the
+fixed load): 10 problems, 12 declared edges, 3 torn endpoints, admitted with no
+issues, converging with each wire still evaluating its own material's law to
+`1e-14` relative and all three resistances distinct and correctly ordered.
+
+That is the measured basis for a correction to a claim this milestone was
+initially given and did not verify: the `FixedLoad`'s thermal isolation is
+**not** a fan-in refusal. A body attached to a load would pose its own thermal
+problem with its own `heat_input` endpoint fed by one edge, and the plan admits
+exactly that pattern three times over here. The load has no body because its
+resistance is temperature-independent, so a body would be a **dead-end
+participant** that changes no answer — a design choice about what this
+milestone varies, not a limit of any contract. Fan-in becomes a wall only when
+two sources feed **one** endpoint, which nothing here does.
 
 ### 7.2 The third material — measured, zero code change
 
@@ -514,7 +531,7 @@ architecture pass.
 | `ThermalBody` has no `to_dict`, so the pack serializes it locally | recorded in `power_chain`'s own source; the method belongs on the record the day a second consumer needs it |
 | `WireSegment | FixedLoad` is discriminated by `isinstance` in the system pack | held at this size; §7 of the architecture ban is scoped to universal core, and the alternative (a universal `ComponentInstance`/`Port`) is what §4.1 measured as forced by nothing. **The honest tripwire is a third element kind that poses its own problems** — at that point the union should be re-examined, not grown |
 | a wire's geometry is declared on the electrical side and lumped on the thermal side | two epistemic standards for one physical object, inside one pack (§12) |
-| the fixed load is thermally isolated by construction | not physics: `FixedPointCouplingPlan` refuses fan-in, so a second edge into a `heat_input` endpoint is unrepresentable today |
+| the fixed load is thermally isolated by construction | a design choice, not a contract limit: its resistance is temperature-independent, so a body attached to it would be a dead-end participant that changes no answer. It is **not** a fan-in refusal — a load's body would have its own `heat_input` endpoint fed by one edge, and the plan would admit it |
 | two realizations provide one capability, unranked | deliberate; `RealizationRegistry` filters and does not rank, and no planner exists |
 | the declared series order is unfalsifiable by this consumer | in a series loop across an ideal source the current is common, so permuting elements changes no number |
 

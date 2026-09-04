@@ -1330,6 +1330,49 @@ def test_t5_the_quadratic_form_is_not_reachable_by_the_linear_model():
     assert abs(quadratic_t - linear_t) > 1e6 * TOL.magnitude_in(KELVIN)
 
 
+def test_t5c_a_third_thermally_active_element_is_admitted_not_refused():
+    """The fan-in wall is two sources on ONE endpoint, not one body per element.
+
+    A third wire adds a third body, a third `heat_input` endpoint, a third
+    4-cycle and a third torn edge. The plan admits all of it, which is the
+    measured basis for saying that the `FixedLoad`'s thermal isolation is a
+    design choice about what this milestone varies — not a contract limit.
+    """
+    target = pc.PowerChain(
+        chain_id="three-wire",
+        source_voltage=Quantity(18.0, "volt"),
+        elements=(
+            wire("wire_A", cmat.COPPER),
+            wire("wire_M", cmat.ALUMINIUM),
+            pc.FixedLoad("load", LOAD),
+            wire("wire_B", cmat.SILVER),
+        ),
+    )
+    problems, dependencies, plan = pc.compose(target, seed=SEED)
+    assert len(problems) == 10          # 1 electrical + 3 per wire
+    assert len(dependencies) == 12      # 4 per wire
+    assert len(plan.torn) == 3
+    assert plan.check_against(problems) == ()   # no fan-in, no unresolved edge
+    run = pc.run_power_chain(target, plan, run_id="three")
+    assert run.outcome is cpl.CouplingOutcome.CRITERION_MET
+    # Three independent instances, three materials, three property laws.
+    for cid, material in (("wire_A", cmat.COPPER), ("wire_M", cmat.ALUMINIUM),
+                          ("wire_B", cmat.SILVER)):
+        temperature = input_temperature_of(run, cid).magnitude_in(KELVIN)
+        expected = material.rho_ref_ohm_m * (
+            1.0 + material.alpha_per_k * (temperature - material.t_ref_k)
+        )
+        assert resistivity_of(run, cid).magnitude_in("ohm * meter") == (
+            pytest.approx(expected, rel=1e-14)
+        )
+    resistances = {
+        cid: resistance_of(run, cid).magnitude_in("ohm")
+        for cid in ("wire_A", "wire_M", "wire_B")
+    }
+    assert len(set(resistances.values())) == 3
+    assert resistances["wire_B"] < resistances["wire_A"] < resistances["wire_M"]
+
+
 def test_t5b_material_identity_selects_the_model_that_is_evaluated():
     """The selection is data-driven: the record declares its own model."""
     assert cmat.COPPER.resistivity_model() is cmat.LINEAR_RESISTIVITY_MODEL
