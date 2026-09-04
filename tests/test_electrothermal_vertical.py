@@ -222,11 +222,21 @@ def test_gate_g0b_the_property_state_has_no_condition_and_the_time_levels_differ
     assert prop.boundary_conditions == ()
 
     thermal = problems[2]
-    (condition,) = thermal.initial_conditions
+    conditions = {c.variable: c for c in thermal.initial_conditions}
+    # FT-SCALAR-COUPLING repaired TEMPORAL-DEFECT-B: the thermal problem now
+    # also states the value of its imposed ambient control, so this record
+    # carries two conditions rather than one. The claim under test is
+    # unchanged and is asserted on the STATE condition by name.
+    assert set(conditions) == {lump.TEMPERATURE, lump.AMBIENT_TEMPERATURE}
+    condition = conditions[lump.TEMPERATURE]
     # The thermal condition is on a DELIBERATELY different endpoint from the
     # metric the loop transports — severed by MIN-FOUNDATION-ET finding D-1.
     assert condition.variable == lump.TEMPERATURE
     assert lump.TEMPERATURE != lump.TEMPERATURE_METRIC
+    # And the coupled heat input still has NO declared value: it arrives across
+    # a declared QuantityDependency, so a record stating one would be claiming
+    # an operating point the loop overrides on every sweep.
+    assert lump.HEAT_INPUT not in conditions
     # Three kelvin-valued endpoints on one problem; dimension separates none.
     levels = (
         lump.TEMPERATURE,

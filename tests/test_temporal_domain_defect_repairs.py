@@ -14,6 +14,13 @@ either evolving state, so a genuinely transient stiff integration over
 record entirely: the only ``[time]``-dimensioned parameter was
 ``residence_time`` = 200 s, so a records-only reader taking "the [time]
 parameter" for the horizon was wrong by exactly a factor of two.
+
+DEFECT B — ``thermal_lumped`` declared its controls without their values
+-----------------------------------------------------------------------
+``heat_input`` and ``ambient_temperature`` are correctly declared ``CONTROL``
+variables. A ``ScientificVariable`` carries no value, so nothing on the record
+said *at what value* they were imposed: two runs of one body at 40 W and 4 W
+serialized byte-identically while their results differed by 15.6 K.
 """
 
 from __future__ import annotations
@@ -22,8 +29,11 @@ import json
 
 import pytest
 
+from engcore.domains import thermal_lumped as lump
 from engcore.domains.kinetics import cstr
 from engcore.domains.kinetics.cstr.problem import build_cstr_problem
+from engcore.scientific.composition import unresolved_inputs
+from engcore.scientific.errors import InvalidScientificProblem
 from engcore.scientific.ir.variables import VariableRole
 from engcore.scientific.units.quantity import Quantity
 
@@ -56,6 +66,17 @@ def _run(*, end_time_s: float = 400.0) -> cstr.ReactorRun:
         operation=operation,
         initial_concentration=Quantity(1000.0, "mol/m**3"),
         initial_temperature=Quantity(350.0, "kelvin"),
+    )
+
+
+def _body(*, ambient_k: float = 300.0) -> lump.ThermalBody:
+    return lump.ThermalBody(
+        body_id="defect-b",
+        heat_capacity=Quantity(600.0, "joule/kelvin"),
+        ambient_conductance=Quantity(2.0, "watt/kelvin"),
+        ambient_temperature=Quantity(ambient_k, "kelvin"),
+        initial_temperature=Quantity(300.0, "kelvin"),
+        duration=Quantity(600.0, "second"),
     )
 
 
@@ -155,3 +176,97 @@ def test_defect_a_the_repaired_record_still_solves_and_still_agrees():
     problem = build_cstr_problem(run)
     cstr.verify_problem_matches_run(problem, run)
     assert problem.is_time_dependent is True
+
+
+# =====================================================================
+# DEFECT B
+# =====================================================================
+
+def test_defect_b_the_original_reproducer_two_heats_one_record():
+    """40 W and 4 W: byte-identical records, 15.6 K apart. Now separable."""
+    body = _body()
+    hot = lump.build_lumped_thermal_problem(
+        body, heat_input=Quantity(40.0, "watt"), problem_id="p"
+    )
+    cold = lump.build_lumped_thermal_problem(
+        body, heat_input=Quantity(4.0, "watt"), problem_id="p"
+    )
+    assert _payload(hot) != _payload(cold)
+
+    finals = []
+    for problem, watts in ((hot, 40.0), (cold, 4.0)):
+        solver = lump.LumpedThermalSolver()
+        solver.bind_body(body, problem.problem_id, heat_input=Quantity(watts, "watt"))
+        raw = solver.solve(solver.prepare(problem))
+        finals.append(raw.values[lump.TEMPERATURE_METRIC])
+    assert finals[0] - finals[1] == pytest.approx(15.5640, abs=1e-3)
+
+
+def test_defect_b_the_ambient_control_value_is_now_on_the_record():
+    warm = lump.build_lumped_thermal_problem(_body(ambient_k=320.0), problem_id="p")
+    cool = lump.build_lumped_thermal_problem(_body(ambient_k=300.0), problem_id="p")
+    assert _payload(warm) != _payload(cool)
+    conditions = {c.variable: c for c in warm.initial_conditions}
+    assert conditions[lump.AMBIENT_TEMPERATURE].value.magnitude_in("kelvin") == 320.0
+
+
+def test_defect_b_recording_a_control_value_does_not_make_it_resolved():
+    """The role declaration is the point and it is preserved.
+
+    ``unresolved_inputs`` reports a ``CONTROL`` variable regardless of any
+    condition on it, so a composition still sees both controls as inputs
+    needing a supplier. The repair added an operating point, not a claim of
+    closure.
+    """
+    body = _body()
+    problem = lump.build_lumped_thermal_problem(
+        body, heat_input=Quantity(40.0, "watt"), problem_id="p"
+    )
+    names = {q for (_, q, _) in unresolved_inputs([problem])}
+    assert lump.HEAT_INPUT in names
+    assert lump.AMBIENT_TEMPERATURE in names
+    roles = {v.name: v.role for v in problem.variables}
+    assert roles[lump.HEAT_INPUT] is VariableRole.CONTROL
+    assert roles[lump.AMBIENT_TEMPERATURE] is VariableRole.CONTROL
+
+
+def test_defect_b_a_record_stating_one_heat_may_not_be_solved_at_another():
+    body = _body()
+    problem = lump.build_lumped_thermal_problem(
+        body, heat_input=Quantity(40.0, "watt"), problem_id="p"
+    )
+    solver = lump.LumpedThermalSolver()
+    solver.bind_body(body, "p", heat_input=Quantity(4.0, "watt"))
+    with pytest.raises(InvalidScientificProblem, match="imposed heat input"):
+        solver.prepare(problem)
+
+
+def test_defect_b_an_omitted_heat_input_stays_omitted_and_stays_solvable():
+    """The composed case: the value arrives across a declared dependency.
+
+    A record that stated a value the coupling loop overrides on every sweep
+    would be worse than one that states none, so omission remains a real
+    answer and is not refused.
+    """
+    body = _body()
+    problem = lump.build_lumped_thermal_problem(body, problem_id="p")
+    assert lump.HEAT_INPUT not in {c.variable for c in problem.initial_conditions}
+    solver = lump.LumpedThermalSolver()
+    solver.bind_body(body, "p", heat_input=Quantity(7.0, "watt"))
+    raw = solver.solve(solver.prepare(problem))
+    assert raw.succeeded
+
+
+def test_defect_b_an_ambient_that_contradicts_the_body_is_refused():
+    problem = lump.build_lumped_thermal_problem(_body(ambient_k=300.0), problem_id="p")
+    with pytest.raises(InvalidScientificProblem, match="ambient"):
+        lump.LumpedThermalSolver.verify_problem_matches_body(
+            problem, _body(ambient_k=320.0)
+        )
+
+
+def test_defect_b_no_universal_record_changed():
+    """Both repairs are domain-side. The schema string does not move."""
+    problem = lump.build_lumped_thermal_problem(_body(), problem_id="p")
+    assert problem.to_dict()["schema"] == "scientific_problem/2"
+    assert build_cstr_problem(_run()).to_dict()["schema"] == "scientific_problem/2"

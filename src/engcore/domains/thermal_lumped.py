@@ -451,6 +451,7 @@ class ThermalBody:
 def build_lumped_thermal_problem(
     body: ThermalBody,
     *,
+    heat_input: Quantity | None = None,
     problem_id: str | None = None,
 ) -> ScientificProblem:
     """The universal problem statement for one lumped body.
@@ -460,7 +461,74 @@ def build_lumped_thermal_problem(
     of the problem; these are imposed from outside it. The distinction is the
     one the electrical domain does not make for a resistance, and recording it
     honestly here is the point.
+
+    **TEMPORAL-DEFECT-B, repaired here.** Declaring a control said *that* it is
+    imposed and never said *at what value*, so two runs of the same body under
+    40 W and 4 W serialized byte-identically while their final temperatures
+    differed by 15.6 K. The role declaration is right and is kept; what was
+    missing is the operating point.
+
+    ``imposed`` states it, using the one existing core record for "this
+    variable holds this value at this stated instant" — an
+    :class:`InitialCondition` carrying ``time = 0 s``. This is exact for this
+    realization, whose declared assumption is that *the heat input is constant
+    over the integrated interval*: a control that does not vary over the
+    interval takes its interval-wide value at its start.
+
+    What this deliberately does **not** do:
+
+    * It does not turn a control into a parameter. ``unresolved_inputs``
+      reports a ``CONTROL`` variable regardless of any condition on it, so a
+      composition still sees both controls as inputs needing a supplier — the
+      value is an operating point on the record, not a claim of closure.
+    * It does not invent a history, a schedule, or an event. One constant value
+      over one interval is all this realization integrates and all that is
+      recorded.
+
+    ``heat_input`` is optional because it genuinely may not be known when the
+    problem is posed: in a composition it arrives across a declared
+    :class:`~engcore.scientific.composition.QuantityDependency`, and a record
+    that stated a value the loop then overrode would be worse than one that
+    states none. Omitting it is therefore a real answer — "no imposed value is
+    declared here" — and :meth:`LumpedThermalSolver.verify_problem_matches_body`
+    enforces the other direction: a record that *does* state one may not be
+    solved at a different one.
+
+    ``ambient_temperature`` is not optional: the body declares it, so the
+    record can always state it, and before this repair it could not.
     """
+    imposed = [
+        InitialCondition(
+            variable=AMBIENT_TEMPERATURE,
+            value=body.ambient_temperature,
+            time=Quantity(0.0, TIME_UNIT),
+            description=(
+                "Imposed ambient temperature, constant over the interval."
+            ),
+        ),
+    ]
+    if heat_input is not None:
+        if not isinstance(heat_input, Quantity):
+            raise InvalidScientificProblem(
+                "heat_input must be a Quantity carrying watts — a bare number "
+                "is not a declaration"
+            )
+        heat_input.require_compatible(
+            POWER_UNIT, context="imposed heat input"
+        )
+        if not math.isfinite(heat_input.magnitude_in(POWER_UNIT)):
+            raise InvalidScientificProblem("imposed heat input must be finite")
+        imposed.append(
+            InitialCondition(
+                variable=HEAT_INPUT,
+                value=heat_input,
+                time=Quantity(0.0, TIME_UNIT),
+                description=(
+                    "Imposed heat delivered to the body, constant over the "
+                    "interval."
+                ),
+            )
+        )
     return ScientificProblem(
         problem_id=problem_id or f"thermal-lumped-{body.body_id}",
         name=f"Lumped thermal body {body.body_id}",
@@ -509,8 +577,10 @@ def build_lumped_thermal_problem(
             InitialCondition(
                 variable=TEMPERATURE,
                 value=body.initial_temperature,
+                time=Quantity(0.0, TIME_UNIT),
                 description="Body temperature at the start of the interval.",
             ),
+            *imposed,
         ),
         models=(
             ModelReference(
@@ -613,17 +683,57 @@ class LumpedThermalSolver:
                     f"problem {problem.problem_id!r} states {name} = {stated} "
                     f"but the bound body declares {declared}"
                 )
-        initial = problem.initial_conditions
-        if len(initial) != 1 or initial[0].variable != TEMPERATURE:
+        conditions = {c.variable: c for c in problem.initial_conditions}
+        state = conditions.get(TEMPERATURE)
+        if state is None:
             raise InvalidScientificProblem(
-                f"problem {problem.problem_id!r} must carry exactly one "
-                f"initial condition, on {TEMPERATURE!r}"
+                f"problem {problem.problem_id!r} must carry an initial "
+                f"condition on {TEMPERATURE!r}"
             )
-        if initial[0].value.compare(body.initial_temperature) != 0.0:
+        if state.value.compare(body.initial_temperature) != 0.0:
             raise InvalidScientificProblem(
-                f"problem {problem.problem_id!r} starts at {initial[0].value} "
+                f"problem {problem.problem_id!r} starts at {state.value} "
                 f"but the bound body declares {body.initial_temperature}"
             )
+        ambient = conditions.get(AMBIENT_TEMPERATURE)
+        if ambient is None:
+            raise InvalidScientificProblem(
+                f"problem {problem.problem_id!r} states no value for the "
+                f"imposed control {AMBIENT_TEMPERATURE!r}; a record that does "
+                f"not carry its operating point cannot distinguish two runs "
+                f"that differ only in it"
+            )
+        if ambient.value.compare(body.ambient_temperature) != 0.0:
+            raise InvalidScientificProblem(
+                f"problem {problem.problem_id!r} imposes an ambient of "
+                f"{ambient.value} but the bound body declares "
+                f"{body.ambient_temperature}"
+            )
+
+    @staticmethod
+    def verify_problem_matches_heat_input(
+        problem: ScientificProblem, heat_input: Quantity
+    ) -> None:
+        """Refuse a problem that states an imposed heat other than the bound one.
+
+        TEMPORAL-DEFECT-B, enforced. Stating the operating point on the record
+        is only half the repair: a record that states 40 W and is then solved
+        at 4 W is a *worse* artefact than one that states nothing, because it
+        reads as attributable and is not. When the record states no imposed
+        heat this is silent — that is the composed case, where the value
+        arrives across a declared dependency and no record could have carried
+        it before the loop ran.
+        """
+        for condition in problem.initial_conditions:
+            if condition.variable != HEAT_INPUT:
+                continue
+            if condition.value.compare(heat_input) != 0.0:
+                raise InvalidScientificProblem(
+                    f"problem {problem.problem_id!r} states an imposed heat "
+                    f"input of {condition.value} but the solve was bound to "
+                    f"{heat_input}; a result attributed to a record that "
+                    f"describes a different operating point is unattributable"
+                )
 
     def supports(self, problem: ScientificProblem) -> bool:
         return LUMPED_CAPACITY_TRANSIENT.name in problem.required_capabilities
@@ -644,6 +754,9 @@ class LumpedThermalSolver:
         body, watts = bound
         # Refuse an inconsistent pairing before solving, not after attributing.
         self.verify_problem_matches_body(problem, body)
+        self.verify_problem_matches_heat_input(
+            problem, Quantity(watts, POWER_UNIT)
+        )
         return PreparedSolve(
             problem=problem,
             solver=self.identity,
