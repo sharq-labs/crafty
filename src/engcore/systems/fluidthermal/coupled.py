@@ -15,18 +15,24 @@ no bulk reference crosses a problem boundary.
 
 WHAT THIS MODULE DOES NOT CONTAIN
 ---------------------------------
-No loop. The iteration is
-:func:`engcore.systems.electrothermal.coupled.run_fixed_point`, **imported
+No loop. The iteration is :func:`engcore.coupling.run_fixed_point`, **imported
 unedited**, and that import is the point: `docs/electrothermal-vertical-prereg.md`
 §16 preregistered "a second, materially different coupled consumer written
 against these records without editing them" as the condition under which
 `FixedPointCouplingPlan` / `TornEndpoint` / `CoupledRun` / `run_fixed_point`
-become promotion candidates. This module is that consumer, and the fact that
-a *fluids* pack has to reach into an *electrothermal* pack to find the machinery
-is itself the measurement — see
-``docs/fluid-thermal-scalar-coupling-evidence.md`` §P/§Q. Nothing is copied,
+become promotion candidates. This module is that consumer. Nothing is copied,
 re-implemented or subclassed here; if it were, the promotion test would have
 been answered by construction rather than by execution.
+
+When this pack was written the machinery lived in
+``engcore.systems.electrothermal.coupled``, and the fact that a *fluids* pack
+had to reach into an *electrothermal* pack to find a loop that names no domain
+was itself the measurement — see ``docs/fluid-thermal-scalar-coupling-evidence.md``
+§P/§Q/§V. `COUPLING-PACK-RELOCATION` acted on it: the machinery now lives in
+``engcore.coupling``, domain-neutral coupling execution infrastructure and
+**explicitly not** universal scientific semantics, with its executable source
+byte-for-byte unchanged by the move. The serialized records this pack produces
+no longer carry another domain pair's name.
 
 No relaxation factor, no damping, no acceleration, no divergence test, no
 rollback, no scheduler, no participant registry, no transfer operator and no
@@ -90,9 +96,10 @@ from ...scientific.results.provenance import ExecutionBinding, ProvenanceRecord
 from ...scientific.results.result import ScientificResult
 from ...scientific.results.uncertainty import Uncertainty
 from ...scientific.units.quantity import Quantity
-# The coupling machinery, imported UNEDITED from the pack that minted it.
-# See the module docstring: this import is the preregistered promotion test.
-from ..electrothermal.coupled import (
+# The coupling machinery, from the domain-neutral package that owns it.
+# See the module docstring: this pack executes against it UNEDITED, and that
+# is the preregistered promotion test `ET-VERTICAL` §16 wrote down.
+from ...coupling import (
     CoupledRun,
     FixedPointCouplingPlan,
     TornEndpoint,

@@ -36,7 +36,7 @@ from engcore.scientific.results.validation import (
     ValidationReport,
 )
 from engcore.scientific.units.quantity import Quantity
-from engcore.systems.electrothermal import coupled as et
+from engcore import coupling as cpl
 from engcore.systems import fluidthermal as ft
 from engcore.systems.fluidthermal import coupled as ftc
 from engcore.systems.fluidthermal import properties as prop
@@ -263,7 +263,7 @@ def test_n1_the_efflux_by_contrast_carries_real_physical_sensitivity():
 
 def test_case_a_the_loop_converges_and_lands_on_the_preregistered_value():
     system, run, wall = run_case(n_cells=32, heat_w=6.0)
-    assert run.outcome is et.CouplingOutcome.CRITERION_MET
+    assert run.outcome is cpl.CouplingOutcome.CRITERION_MET
     assert run.iterations_run == 13
     temperature = coupled_temperature(system, run)
     assert temperature == pytest.approx(355.7, abs=1.0)
@@ -296,7 +296,7 @@ def test_case_a_pc1_as_preregistered_is_an_identity_and_cannot_fail():
     one_sweep_system, one_sweep, _ = run_case(
         n_cells=16, heat_w=6.0, max_iterations=1
     )
-    assert one_sweep.outcome is et.CouplingOutcome.ITERATION_LIMIT_REACHED
+    assert one_sweep.outcome is cpl.CouplingOutcome.ITERATION_LIMIT_REACHED
     unconverged = coupled_temperature(one_sweep_system, one_sweep)
     phi1, _ = final_efflux_and_diffusivity(one_sweep_system, one_sweep)
     assert abs(unconverged - (T_AMB + 6.0 / (RHO_CP * DEPTH * phi1))) <= 1e-3
@@ -314,7 +314,7 @@ def test_case_a_pc1_prime_the_fixed_point_residual_across_two_sweeps():
     shows it is large when it has not.
     """
     system, run, _ = run_case(n_cells=32, heat_w=6.0)
-    assert run.outcome is et.CouplingOutcome.CRITERION_MET
+    assert run.outcome is cpl.CouplingOutcome.CRITERION_MET
     final_t = coupled_temperature(system, run)
     previous = run.iterations[-2]
     previous_phi = previous.result_for(system.fluid_problem_id).value(
@@ -329,7 +329,7 @@ def test_case_a_pc1_prime_the_fixed_point_residual_across_two_sweeps():
     # at its full 40-sweep budget gives ~82x the tolerance — already a clear
     # failure of PC1', and a measure of how close to converged it is.)
     system_b, run_b, _ = run_case(n_cells=16, heat_w=40.0, max_iterations=4)
-    assert run_b.outcome is et.CouplingOutcome.ITERATION_LIMIT_REACHED
+    assert run_b.outcome is cpl.CouplingOutcome.ITERATION_LIMIT_REACHED
     final_b = coupled_temperature(system_b, run_b)
     previous_b = run_b.iterations[-2].result_for(
         system_b.fluid_problem_id
@@ -383,7 +383,7 @@ def test_case_a_the_answer_does_not_depend_on_the_seed():
     """A fixed point is a property of the system, not of where iteration began."""
     system_a, run_a, _ = run_case(n_cells=16, heat_w=6.0)
     system_b, run_b, _ = run_case(n_cells=16, heat_w=6.0, seed_k=450.0)
-    assert run_b.outcome is et.CouplingOutcome.CRITERION_MET
+    assert run_b.outcome is cpl.CouplingOutcome.CRITERION_MET
     assert coupled_temperature(system_b, run_b) == pytest.approx(
         coupled_temperature(system_a, run_a), abs=1e-3
     )
@@ -408,7 +408,7 @@ def test_pc2_the_coupled_error_falls_at_the_participants_own_order():
     errors = {}
     for n_cells in (16, 32, 64):
         system, run, _ = run_case(n_cells=n_cells, heat_w=6.0)
-        assert run.outcome is et.CouplingOutcome.CRITERION_MET
+        assert run.outcome is cpl.CouplingOutcome.CRITERION_MET
         assert run.iterations_run <= 25
         errors[n_cells] = coupled_temperature(system, run) - exact
 
@@ -510,7 +510,7 @@ def test_the_exact_coupled_answer_contains_no_advective_physics_at_all():
 
 def test_case_b_the_strong_feedback_point_does_not_converge_undamped():
     system, run, _ = run_case(n_cells=32, heat_w=40.0)
-    assert run.outcome is et.CouplingOutcome.ITERATION_LIMIT_REACHED
+    assert run.outcome is cpl.CouplingOutcome.ITERATION_LIMIT_REACHED
     assert run.iterations_run == 40
     last = run.final_iterate_change.magnitude_in("kelvin")
     assert 1e-3 < last < 5e-2
@@ -526,7 +526,7 @@ def test_case_b_is_not_a_solver_failure_every_subsolve_succeeded():
     that did not converge at all.
     """
     system, run, _ = run_case(n_cells=32, heat_w=40.0)
-    assert run.outcome is et.CouplingOutcome.ITERATION_LIMIT_REACHED
+    assert run.outcome is cpl.CouplingOutcome.ITERATION_LIMIT_REACHED
     for iteration in run.iterations:
         for result in iteration.results:
             assert result.is_usable, (iteration.index, result.problem_id)
@@ -586,7 +586,7 @@ def test_case_b_diagnostic_the_budget_was_exhausted_not_the_contraction():
         system, ft.coupled_dependencies(system), max_iterations=200
     )
     run = ft.run_fluid_thermal_coupling(system, plan, run_id="ft-spike-b-200")
-    assert run.outcome is et.CouplingOutcome.CRITERION_MET
+    assert run.outcome is cpl.CouplingOutcome.CRITERION_MET
     assert 40 < run.iterations_run <= 80
     exact = ft.coupled_fixed_point(heat_w=40.0, **REFERENCE_CONSTANTS)
     assert coupled_temperature(system, run) - exact == pytest.approx(
@@ -606,7 +606,7 @@ def test_case_b_no_relaxation_factor_exists_anywhere_to_reach_for():
     none. There is nothing to tune, which is the strongest form of "it was not
     tuned".
     """
-    assert set(et.FixedPointCouplingPlan.__dataclass_fields__) == {
+    assert set(cpl.FixedPointCouplingPlan.__dataclass_fields__) == {
         "plan_id", "dependencies", "torn", "absolute_tolerance",
         "max_iterations",
     }
@@ -724,7 +724,7 @@ def test_the_thermal_admission_requirement_is_consumer_declared_and_says_so():
 def test_the_coupled_record_reconstructs_every_participant_and_every_exchange():
     system, run, _ = run_case(n_cells=16, heat_w=6.0)
     payload = json.loads(json.dumps(run.to_dict()))
-    restored = et.CoupledRun.from_dict(payload)
+    restored = cpl.CoupledRun.from_dict(payload)
 
     # The four exchange identities, with their units, from the plan alone.
     edges = {
@@ -797,9 +797,7 @@ _FRESH_PROCESS_SCRIPT = """
 import json, sys
 payload = json.loads(sys.stdin.read())
 from engcore.systems import fluidthermal as ft
-from engcore.systems.electrothermal.coupled import (
-    FixedPointCouplingPlan, execution_order,
-)
+from engcore.coupling import FixedPointCouplingPlan, execution_order
 
 system = ft.FluidThermalSystem.from_dict(payload["system"])
 plan = FixedPointCouplingPlan.from_dict(payload["plan"])

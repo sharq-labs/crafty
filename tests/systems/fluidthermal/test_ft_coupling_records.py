@@ -28,7 +28,7 @@ from engcore.scientific.ir.orientation import OrientationSign
 from engcore.scientific.ir.variables import VariableRole
 from engcore.scientific.units.quantity import Quantity
 from engcore.systems import fluidthermal as ft
-from engcore.systems.electrothermal import coupled as et
+from engcore import coupling as cpl
 from engcore.systems.fluidthermal import coupled as ftc
 from engcore.systems.fluidthermal import properties as prop
 
@@ -132,12 +132,12 @@ def test_the_cycle_has_four_admissible_tears_and_the_readers_rank_none():
     problems = ft.coupled_problems(system)
     ids = [p.problem_id for p in problems]
     dependencies = ft.coupled_dependencies(system)
-    assert et.execution_order(ids, dependencies) == ()
-    assert len(et.cycle_edges(ids, dependencies)) == 4
+    assert cpl.execution_order(ids, dependencies) == ()
+    assert len(cpl.cycle_edges(ids, dependencies)) == 4
     tears = [
         d
         for d in dependencies
-        if et.execution_order(ids, [e for e in dependencies if e is not d])
+        if cpl.execution_order(ids, [e for e in dependencies if e is not d])
     ]
     assert len(tears) == 4
 
@@ -146,7 +146,7 @@ def test_the_execution_order_is_computed_from_the_records():
     system = make_system()
     problems = ft.coupled_problems(system)
     plan = ft.nominal_plan(system, ft.coupled_dependencies(system))
-    order = et.execution_order([p.problem_id for p in problems], plan.uncut)
+    order = cpl.execution_order([p.problem_id for p in problems], plan.uncut)
     assert order == (
         system.diffusivity_problem_id,
         system.fluid_problem_id,
@@ -580,35 +580,143 @@ def test_universal_core_was_not_touched_by_this_milestone():
     assert _diff("src/engcore/scientific/") == ""
 
 
-def test_the_electrothermal_coupling_machinery_was_not_edited():
-    """PR1, the preregistered promotion test, measured rather than asserted.
+#: The commit at which `ET-VERTICAL` minted the coupling machinery inside the
+#: electro-thermal pack, and the file it minted it in. `COUPLING-PACK-RELOCATION`
+#: moved that code to ``src/engcore/coupling/``; this pair is what the move is
+#: measured against.
+_MINTED_AT = "6caa11395b1033802ab101b2c024857bff0ae305"
+_MINTED_IN = "src/engcore/systems/electrothermal/coupled.py"
 
-    This second consumer executes against `FixedPointCouplingPlan`,
-    `TornEndpoint`, `CoupledRun` and `run_fixed_point` **unedited**. If this
-    ever fails, the promotion test has failed and the correct output is that
-    finding — not an edit that makes the second consumer fit.
+#: Every object `FT-SCALAR-COUPLING` executes against, directly or transitively.
+_RELOCATED = (
+    "is_ratio_scale", "shares_origin", "_require_ratio_scale", "edge_key",
+    "CouplingOutcome", "TornEndpoint", "FixedPointCouplingPlan", "_edges",
+    "execution_order", "cycle_edges", "CoupledIteration", "CoupledRun",
+    "run_fixed_point",
+)
+
+
+#: The ONE executable edit `COUPLING-PACK-RELOCATION` had to make, named here
+#: rather than hidden by a general normalizer. ``FixedPointCouplingPlan.
+#: unsupplied`` imports ``externally_imposed`` by a *relative* path, and the
+#: code moved one package level closer to ``engcore.scientific`` — so the dots
+#: had to change or the import would resolve to nothing. It changes no value,
+#: no branch and no target: both spellings name
+#: ``engcore.scientific.composition.externally_imposed``.
+_RELATIVE_IMPORT_REPAIR = ("from ...scientific.", "from ..scientific.")
+
+#: …and it was needed by exactly one relocated object.
+_NEEDED_THE_REPAIR = {"FixedPointCouplingPlan"}
+
+
+def _executable_source(module_source: str, name: str) -> str:
+    """The named top-level object's source with every string constant blanked.
+
+    Docstrings explain a rule; they are not the rule. Blanking them is what
+    lets a byte-identity claim survive a docstring that was rewritten to stop
+    narrating one domain's physics, while still failing on any change to a
+    single executable token.
     """
-    base = "6caa11395b1033802ab101b2c024857bff0ae305"
-    changed = subprocess.run(
-        ["git", "diff", "--name-only", base, "--",
-         "src/engcore/systems/electrothermal/"],
+    tree = ast.parse(module_source)
+    node = next(
+        n for n in tree.body
+        if getattr(n, "name", None) == name
+        and isinstance(n, (ast.FunctionDef, ast.ClassDef))
+    )
+    for inner in ast.walk(node):
+        if isinstance(inner, ast.Constant) and isinstance(inner.value, str):
+            inner.value = ""
+    return ast.unparse(node)
+
+
+def test_the_coupling_machinery_was_relocated_and_not_edited():
+    """PR1, the preregistered promotion test, restated for a moved owner.
+
+    The original form asserted ``git diff --name-only <base> --
+    src/engcore/systems/electrothermal/`` was empty, which measured "the
+    machinery was not edited to fit the second consumer" only for as long as
+    the machinery stayed in that directory. `COUPLING-PACK-RELOCATION` moved
+    it, so that form can no longer hold — and it is replaced by a **stronger**
+    one rather than deleted: every relocated object's *executable* source must
+    be byte-identical to the blob `ET-VERTICAL` committed, read straight out of
+    git. Docstrings and the module's location are free to change; not one
+    executable token is.
+
+    If this ever fails, the promotion test has failed and the correct output is
+    that finding — not an edit that makes a consumer fit.
+    """
+    minted = subprocess.run(
+        ["git", "show", f"{_MINTED_AT}:{_MINTED_IN}"],
         cwd=REPO_ROOT, capture_output=True, text=True, check=True,
-    ).stdout.strip()
-    assert changed == "", changed
+    ).stdout
+    package = REPO_ROOT / "src/engcore/coupling"
+    now = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in sorted(package.glob("*.py"))
+    )
+    repaired = set()
+    for name in _RELOCATED:
+        was, now_src = _executable_source(minted, name), _executable_source(now, name)
+        if was != now_src:
+            # Apply the one named repair, and only it — then demand equality.
+            was = was.replace(*_RELATIVE_IMPORT_REPAIR)
+            repaired.add(name)
+        assert was == now_src, name
+    # …and prove the repair was needed exactly where the milestone said, so a
+    # future edit cannot hide behind it.
+    assert repaired == _NEEDED_THE_REPAIR, sorted(repaired)
 
 
-def test_the_loop_this_pack_uses_is_the_electrothermal_one_by_identity():
-    """Not a copy, not a subclass, not a re-implementation."""
-    assert ftc.run_fixed_point is et.run_fixed_point
-    assert ftc.FixedPointCouplingPlan is et.FixedPointCouplingPlan
-    assert ftc.TornEndpoint is et.TornEndpoint
-    assert ftc.CoupledRun is et.CoupledRun
+def test_the_relocated_machinery_left_no_copy_behind():
+    """A move, not a fork. No pack may still define a relocated object."""
+    for pack in ("electrothermal", "fluidthermal"):
+        for path in sorted(
+            (REPO_ROOT / "src/engcore/systems" / pack).glob("*.py")
+        ):
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            defined = {
+                n.name for n in tree.body
+                if isinstance(n, (ast.FunctionDef, ast.ClassDef))
+            } | {
+                t.id for n in tree.body if isinstance(n, ast.Assign)
+                for t in n.targets if isinstance(t, ast.Name)
+            }
+            clashes = sorted(defined & set(_RELOCATED))
+            assert not clashes, f"{path.name} redefines {clashes}"
+
+
+def test_the_loop_this_pack_uses_is_the_shared_generic_one_by_identity():
+    """Not a copy, not a subclass, not a re-implementation — for BOTH packs."""
+    from engcore.systems.electrothermal import coupled as etc
+
+    for pack in (ftc, etc):
+        assert pack.run_fixed_point is cpl.run_fixed_point
+        assert pack.FixedPointCouplingPlan is cpl.FixedPointCouplingPlan
+        assert pack.TornEndpoint is cpl.TornEndpoint
+        assert pack.CoupledRun is cpl.CoupledRun
+
+
+def test_neither_pack_republishes_a_generic_coupling_name():
+    """The false ownership is gone, not renamed.
+
+    A domain-named pack publishing a domain-neutral record is exactly what
+    `COUPLING-PACK-RELOCATION` removed. Importing one for a module's own use is
+    ordinary Python; re-exporting it is a second owner.
+    """
+    from engcore.systems import electrothermal as et_pack
+    from engcore.systems import fluidthermal as ft_pack
+    from engcore.systems.electrothermal import coupled as etc
+
+    generic = set(cpl.__all__) | set(_RELOCATED)
+    for module in (et_pack, ft_pack, etc, ftc):
+        published = set(getattr(module, "__all__", ()))
+        assert not published & generic, (module.__name__, sorted(published & generic))
 
 
 def test_the_loop_still_cannot_name_either_science():
     """PR2. The generic loop gained no fluid or thermal branch."""
     source = (
-        REPO_ROOT / "src/engcore/systems/electrothermal/coupled.py"
+        REPO_ROOT / "src/engcore/coupling/execution.py"
     ).read_text(encoding="utf-8")
     tree = ast.parse(source)
     body = next(

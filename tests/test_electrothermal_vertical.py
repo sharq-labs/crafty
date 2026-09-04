@@ -38,6 +38,7 @@ from src.engcore.scientific.results.validation import (
 )
 from src.engcore.scientific.solvers.protocol import ConvergenceState
 from src.engcore.scientific.units.quantity import Quantity, dimensionality
+from src.engcore import coupling as cpl
 from src.engcore.systems.electrothermal import coupled as cp
 from src.engcore.systems.electrothermal import resistor_body
 from src.engcore.systems.electrothermal.resistor_body import (
@@ -175,14 +176,14 @@ def test_gate_g0_the_declared_cycle_has_no_execution_order():
     ids = [p.problem_id for p in problems]
 
     # 1. admissible topological orders
-    assert cp.execution_order(ids, dependencies) == ()
-    assert len(cp.cycle_edges(ids, dependencies)) == 3
+    assert cpl.execution_order(ids, dependencies) == ()
+    assert len(cpl.cycle_edges(ids, dependencies)) == 3
 
     # 2. admissible single-edge tears
     tears = [
         d
         for d in dependencies
-        if cp.execution_order(ids, [e for e in dependencies if e is not d])
+        if cpl.execution_order(ids, [e for e in dependencies if e is not d])
     ]
     assert len(tears) == 3
 
@@ -324,7 +325,7 @@ def test_a_a_later_electrical_solve_consumes_a_temperature_updated_resistance(ca
 def test_a1_case_a_reproduces_the_preregistered_trace(case_a):
     """Preregistration §10 CASE A, digit for digit."""
     run, problems, _ = case_a
-    assert run.outcome is cp.CouplingOutcome.CRITERION_MET
+    assert run.outcome is cpl.CouplingOutcome.CRITERION_MET
     assert run.iterations_run == 10
 
     electrical, prop, thermal = (p.problem_id for p in problems)
@@ -445,18 +446,18 @@ def test_a3_the_transported_endpoint_decides_the_physics():
 
 def test_b_coupling_convergence_has_its_own_type(case_a):
     run, _, _ = case_a
-    assert isinstance(run.outcome, cp.CouplingOutcome)
+    assert isinstance(run.outcome, cpl.CouplingOutcome)
     assert run.outcome is not ConvergenceState.CONVERGED
-    assert set(cp.CouplingOutcome) == {
-        cp.CouplingOutcome.CRITERION_MET,
-        cp.CouplingOutcome.ITERATION_LIMIT_REACHED,
+    assert set(cpl.CouplingOutcome) == {
+        cpl.CouplingOutcome.CRITERION_MET,
+        cpl.CouplingOutcome.ITERATION_LIMIT_REACHED,
     }
     # It is not a ConvergenceState, and no ConvergenceState member was added.
     assert {s.value for s in ConvergenceState} == {
         "not_applicable", "converged", "not_converged",
         "max_iterations", "diverged", "failed",
     }
-    assert not set(cp.CouplingOutcome) & set(ConvergenceState)
+    assert not set(cpl.CouplingOutcome) & set(ConvergenceState)
 
 
 def test_b2_the_outcome_lives_in_no_untyped_channel(case_a):
@@ -521,7 +522,7 @@ def test_b3_the_outcome_is_not_computed_from_the_participants(case_a):
 def test_c1_the_iteration_budget_stops_a_run_whose_sub_solves_all_succeeded():
     """Preregistration §10 CASE C1."""
     run, _, _ = execute(NOMINAL, budget=2, run_id="caseC1")
-    assert run.outcome is cp.CouplingOutcome.ITERATION_LIMIT_REACHED
+    assert run.outcome is cpl.CouplingOutcome.ITERATION_LIMIT_REACHED
     assert run.criterion_met is False
     assert run.iterations_run == 2
     assert run.final_iterate_change.magnitude_in(KELVIN) == pytest.approx(
@@ -551,7 +552,7 @@ def test_c2_a_non_contracting_configuration_does_not_converge_on_legitimate_phys
         MARGINAL, metric=lump.STEADY_STATE_TEMPERATURE_METRIC,
         budget=50, run_id="caseC2",
     )
-    assert run.outcome is cp.CouplingOutcome.ITERATION_LIMIT_REACHED
+    assert run.outcome is cpl.CouplingOutcome.ITERATION_LIMIT_REACHED
     assert run.iterations_run == 50
     assert run.final_iterate_change.magnitude_in(KELVIN) == pytest.approx(
         4.901961e-02, rel=1e-4
@@ -595,7 +596,7 @@ def test_c2_a_non_contracting_configuration_does_not_converge_on_legitimate_phys
 def test_d_a_converged_coupling_does_not_make_the_model_valid():
     """Preregistration §10 CASE F. Three verdicts, one run, none overwriting another."""
     run, problems, _ = execute(OVERHEATED, run_id="caseF")
-    assert run.outcome is cp.CouplingOutcome.CRITERION_MET
+    assert run.outcome is cpl.CouplingOutcome.CRITERION_MET
     assert run.iterations_run == 25
     assert only_temperature(run) == pytest.approx(498.994793, abs=1e-6)
 
@@ -709,7 +710,7 @@ def test_g_a_dimensionally_wrong_edge_is_refused_before_the_first_iteration():
     # endpoint is a different refusal (test_h4b), and this case is about the
     # dimension.
     kept = tuple(d for d in dependencies if d.target_quantity != lump.HEAT_INPUT)
-    plan = cp.FixedPointCouplingPlan(
+    plan = cpl.FixedPointCouplingPlan(
         plan_id="broken-dimension",
         dependencies=kept + (broken,),
         torn=cp.nominal_plan(
@@ -735,7 +736,7 @@ def test_g2_an_undeclared_quantity_is_refused_before_the_first_iteration():
         unit_exemplar=lump.POWER_UNIT,
         name="undeclared-target",
     )
-    plan = cp.FixedPointCouplingPlan(
+    plan = cpl.FixedPointCouplingPlan(
         plan_id="broken-name",
         dependencies=tuple(dependencies) + (broken,),
         torn=cp.nominal_plan(
@@ -778,12 +779,12 @@ def test_g4_torn_edges_of_mixed_dimension_are_refused_rather_than_normalized():
         d for d in dependencies if d.target_quantity == lump.HEAT_INPUT
     )
     with pytest.raises(InvalidScientificProblem, match="different"):
-        cp.FixedPointCouplingPlan(
+        cpl.FixedPointCouplingPlan(
             plan_id="mixed",
             dependencies=dependencies,
             torn=(
-                cp.TornEndpoint(temperature_edge, Quantity(300.0, KELVIN)),
-                cp.TornEndpoint(power_edge, Quantity(2.0, "watt")),
+                cpl.TornEndpoint(temperature_edge, Quantity(300.0, KELVIN)),
+                cpl.TornEndpoint(power_edge, Quantity(2.0, "watt")),
             ),
             absolute_tolerance=TOL,
             max_iterations=5,
@@ -794,15 +795,15 @@ def test_g5_a_seed_of_the_wrong_dimension_is_refused():
     _, dependencies = compose(NOMINAL)
     edge = next(d for d in dependencies if d.target_quantity == mat.TEMPERATURE)
     with pytest.raises(InvalidScientificProblem, match="seed"):
-        cp.TornEndpoint(edge, Quantity(300.0, "watt"))
+        cpl.TornEndpoint(edge, Quantity(300.0, "watt"))
     with pytest.raises(InvalidScientificProblem, match="Quantity"):
-        cp.TornEndpoint(edge, 300.0)
+        cpl.TornEndpoint(edge, 300.0)
 
 
 def test_g6_an_uncut_cycle_and_an_unknown_tear_are_both_refused():
     problems, dependencies = compose(NOMINAL)
     with pytest.raises(InvalidScientificProblem, match="cut at least one"):
-        cp.FixedPointCouplingPlan(
+        cpl.FixedPointCouplingPlan(
             plan_id="uncut", dependencies=dependencies, torn=(),
             absolute_tolerance=TOL, max_iterations=5,
         )
@@ -811,9 +812,9 @@ def test_g6_an_uncut_cycle_and_an_unknown_tear_are_both_refused():
         target_problem_id="b", target_quantity="y", unit_exemplar=KELVIN,
     )
     with pytest.raises(InvalidScientificProblem, match="not one of"):
-        cp.FixedPointCouplingPlan(
+        cpl.FixedPointCouplingPlan(
             plan_id="foreign", dependencies=dependencies,
-            torn=(cp.TornEndpoint(foreign, Quantity(1.0, KELVIN)),),
+            torn=(cpl.TornEndpoint(foreign, Quantity(1.0, KELVIN)),),
             absolute_tolerance=TOL, max_iterations=5,
         )
 
@@ -825,7 +826,7 @@ def test_g6_an_uncut_cycle_and_an_unknown_tear_are_both_refused():
 def test_h_two_stages_converge_and_nothing_aliases(case_e):
     """Preregistration §10 CASE E."""
     run, problems, _ = case_e
-    assert run.outcome is cp.CouplingOutcome.CRITERION_MET
+    assert run.outcome is cpl.CouplingOutcome.CRITERION_MET
     assert run.iterations_run == 8
 
     values = {k: v.magnitude_in(KELVIN) for k, v in run.final_values.items()}
@@ -966,7 +967,7 @@ def test_h4b_a_plan_refuses_fan_in_rather_than_resolving_it_by_declaration_order
         TWO_STAGE, dependencies, seed=Quantity(300.0, KELVIN)
     ).torn
     with pytest.raises(InvalidScientificProblem, match="more than one"):
-        cp.FixedPointCouplingPlan(
+        cpl.FixedPointCouplingPlan(
             plan_id="fan-in",
             dependencies=tuple(dependencies) + (fan_in,),
             torn=torn,
@@ -978,12 +979,12 @@ def test_h4b_a_plan_refuses_fan_in_rather_than_resolving_it_by_declaration_order
         d for d in dependencies if d.target_quantity == mat.TEMPERATURE
     )
     with pytest.raises(InvalidScientificProblem, match="more than one"):
-        cp.FixedPointCouplingPlan(
+        cpl.FixedPointCouplingPlan(
             plan_id="double-seed",
             dependencies=dependencies,
             torn=(
-                cp.TornEndpoint(temperature_edge, Quantity(300.0, KELVIN)),
-                cp.TornEndpoint(temperature_edge, Quantity(310.0, KELVIN)),
+                cpl.TornEndpoint(temperature_edge, Quantity(300.0, KELVIN)),
+                cpl.TornEndpoint(temperature_edge, Quantity(310.0, KELVIN)),
             ),
             absolute_tolerance=TOL,
             max_iterations=5,
@@ -1012,12 +1013,12 @@ def test_x1_cycle_edges_reports_only_the_cyclic_core():
     # the milestone's own graph: a pure 3-cycle, every edge on it
     problems, dependencies = compose(NOMINAL)
     ids = [p.problem_id for p in problems]
-    assert len(cp.cycle_edges(ids, dependencies)) == 3
+    assert len(cpl.cycle_edges(ids, dependencies)) == 3
 
     # A feeds B, B and C cycle. A->B is NOT on a cycle.
     nodes = ["A", "B", "C"]
     graph = (edge("A", "B"), edge("B", "C"), edge("C", "B"))
-    core = cp.cycle_edges(nodes, graph)
+    core = cpl.cycle_edges(nodes, graph)
     assert {(d.source_problem_id, d.target_problem_id) for d in core} == {
         ("B", "C"), ("C", "B")
     }
@@ -1025,13 +1026,13 @@ def test_x1_cycle_edges_reports_only_the_cyclic_core():
     # C also feeds a sink D, which is likewise not on the cycle
     nodes = ["A", "B", "C", "D"]
     graph = (edge("A", "B"), edge("B", "C"), edge("C", "B"), edge("C", "D"))
-    core = cp.cycle_edges(nodes, graph)
+    core = cpl.cycle_edges(nodes, graph)
     assert {(d.source_problem_id, d.target_problem_id) for d in core} == {
         ("B", "C"), ("C", "B")
     }
 
     # a genuinely acyclic graph has no cyclic core at all
-    assert cp.cycle_edges(["A", "B"], (edge("A", "B"),)) == ()
+    assert cpl.cycle_edges(["A", "B"], (edge("A", "B"),)) == ()
 
 
 def test_x2_one_notion_of_edge_identity_is_used_everywhere():
@@ -1052,14 +1053,14 @@ def test_x2_one_notion_of_edge_identity_is_used_everywhere():
         unit_exemplar="rankine",          # same edge, different exemplar
         name="near-duplicate",
     )
-    assert cp.edge_key(twin) == cp.edge_key(edge)
+    assert cpl.edge_key(twin) == cpl.edge_key(edge)
     assert twin != edge
     # the near-duplicate is now caught as a second edge into one endpoint
     with pytest.raises(InvalidScientificProblem, match="more than one"):
-        cp.FixedPointCouplingPlan(
+        cpl.FixedPointCouplingPlan(
             plan_id="near-duplicate",
             dependencies=tuple(dependencies) + (twin,),
-            torn=(cp.TornEndpoint(edge, Quantity(300.0, KELVIN)),),
+            torn=(cpl.TornEndpoint(edge, Quantity(300.0, KELVIN)),),
             absolute_tolerance=TOL,
             max_iterations=5,
         )
@@ -1081,14 +1082,14 @@ def test_x3_the_loop_verifies_what_its_executors_returned():
 
     # 1. a missing executor is refused before the first sweep
     with pytest.raises(InvalidScientificProblem, match="no executor"):
-        cp.run_fixed_point(
+        cpl.run_fixed_point(
             problems, {k: v for k, v in list(honest.items())[:1]}, plan,
             run_id="uncovered", software_version="test",
         )
 
     # 2. a duplicated problem id is refused
     with pytest.raises(InvalidScientificProblem, match="duplicate problem id"):
-        cp.run_fixed_point(
+        cpl.run_fixed_point(
             tuple(problems) + (problems[1],), honest, plan,
             run_id="dupe", software_version="test",
         )
@@ -1100,7 +1101,7 @@ def test_x3_the_loop_verifies_what_its_executors_returned():
         honest[target](inputs, run_id), problem_id="somewhere-else"
     )
     with pytest.raises(InvalidScientificProblem, match="attributed to"):
-        cp.run_fixed_point(
+        cpl.run_fixed_point(
             problems, liar, plan, run_id="liar", software_version="test",
         )
 
@@ -1119,17 +1120,17 @@ def test_x4_seeding_over_a_declared_condition_is_refused():
         unit_exemplar=KELVIN,
         name="time-marching",
     )
-    plan = cp.FixedPointCouplingPlan(
+    plan = cpl.FixedPointCouplingPlan(
         plan_id="marcher",
         dependencies=(onto_state,),
-        torn=(cp.TornEndpoint(onto_state, Quantity(300.0, KELVIN)),),
+        torn=(cpl.TornEndpoint(onto_state, Quantity(300.0, KELVIN)),),
         absolute_tolerance=TOL,
         max_iterations=3,
     )
     issues = plan.check_against(problems)
     assert any("seeded_over_condition" in i for i in issues)
     with pytest.raises(InvalidScientificProblem, match="time marching"):
-        cp.run_fixed_point(
+        cpl.run_fixed_point(
             problems, cp._executors(NOMINAL, problems), plan,
             run_id="marcher", software_version="test",
         )
@@ -1168,7 +1169,7 @@ def test_x6_an_unsupplied_input_is_reported_but_cannot_be_refused():
         lump.AMBIENT_TEMPERATURE
     }
 
-    under = cp.FixedPointCouplingPlan(
+    under = cpl.FixedPointCouplingPlan(
         plan_id="under-declared",
         dependencies=tuple(
             d for d in dependencies if d.target_quantity != lump.HEAT_INPUT
@@ -1190,24 +1191,24 @@ def test_x7_a_coupled_run_refuses_the_states_its_siblings_refuse(case_a):
     """Falsifier F-15: ``CoupledRun`` validated less than every record beside it."""
     run, _, plan = case_a
     with pytest.raises(InvalidScientificProblem, match="no iterations"):
-        cp.CoupledRun(
-            plan=plan, outcome=cp.CouplingOutcome.CRITERION_MET,
+        cpl.CoupledRun(
+            plan=plan, outcome=cpl.CouplingOutcome.CRITERION_MET,
             iterations=(), final_values={}, provenance=run.provenance,
         )
     with pytest.raises(InvalidScientificProblem, match="ProvenanceRecord"):
-        cp.CoupledRun(
-            plan=plan, outcome=cp.CouplingOutcome.CRITERION_MET,
+        cpl.CoupledRun(
+            plan=plan, outcome=cpl.CouplingOutcome.CRITERION_MET,
             iterations=run.iterations, final_values={}, provenance=None,
         )
     with pytest.raises(InvalidScientificProblem, match="CoupledIteration"):
-        cp.CoupledRun(
-            plan=plan, outcome=cp.CouplingOutcome.CRITERION_MET,
+        cpl.CoupledRun(
+            plan=plan, outcome=cpl.CouplingOutcome.CRITERION_MET,
             iterations=("not an iteration",), final_values={},
             provenance=run.provenance,
         )
     with pytest.raises(InvalidScientificProblem, match="Quantity"):
-        cp.CoupledRun(
-            plan=plan, outcome=cp.CouplingOutcome.CRITERION_MET,
+        cpl.CoupledRun(
+            plan=plan, outcome=cpl.CouplingOutcome.CRITERION_MET,
             iterations=run.iterations, final_values={("a", "b"): 1.0},
             provenance=run.provenance,
         )
@@ -1233,7 +1234,7 @@ def test_x8_the_final_values_key_is_structural_and_the_name_is_honest(case_a):
     # the honest name survives a run that did not converge: this value sits
     # 0.72 K from the fixed point and its own last step moved 6.4 K, six orders
     # above the criterion it never met.
-    assert stalled.outcome is cp.CouplingOutcome.ITERATION_LIMIT_REACHED
+    assert stalled.outcome is cpl.CouplingOutcome.ITERATION_LIMIT_REACHED
     (value,) = stalled.final_values.values()
     assert value.magnitude_in(KELVIN) != pytest.approx(338.577018, abs=1e-6)
     assert stalled.final_iterate_change.magnitude_in(KELVIN) > 6.0
@@ -1244,7 +1245,7 @@ def test_x8_the_final_values_key_is_structural_and_the_name_is_honest(case_a):
     assert "converged_values" not in payload
     for entry in payload["final_values"]:
         assert set(entry) == {"problem_id", "quantity", "value"}
-    assert cp.CoupledRun.from_dict(payload).final_values == run.final_values
+    assert cpl.CoupledRun.from_dict(payload).final_values == run.final_values
 
     # the one composite key that remains is in frozen core and is documented
     assert any("::" in k for k in run.provenance.inputs)
@@ -1285,29 +1286,39 @@ def test_i2_the_new_module_uses_published_contracts_only():
     """The reverse leak: does the pack reach into core internals?
 
     Every ``engcore.scientific`` name it imports must be one the core package
-    publishes in its own ``__all__``.
+    publishes in its own ``__all__``. Applied to the system pack **and** to the
+    relocated `engcore.coupling` package together: `COUPLING-PACK-RELOCATION`
+    moved the code, and a scan that stayed pointed at the old file would have
+    stopped measuring anything.
     """
     import src.engcore.scientific as core
 
-    source = pathlib.Path(inspect.getfile(cp)).read_text(encoding="utf-8")
-    tree = ast.parse(source)
+    sources = [pathlib.Path(inspect.getfile(cp)).read_text(encoding="utf-8")]
+    package = REPO_ROOT / "src/engcore/coupling"
+    sources += [
+        path.read_text(encoding="utf-8") for path in sorted(package.glob("*.py"))
+    ]
     published = set(core.__all__)
     imported: list[tuple[str, str]] = []
-    for node in ast.walk(tree):
-        if isinstance(node, ast.ImportFrom) and node.module:
-            if "scientific" in node.module or node.level >= 3:
-                for alias in node.names:
-                    imported.append((node.module or "", alias.name))
+    for source in sources:
+        tree = ast.parse(source)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and node.module:
+                if "scientific" in node.module or node.level >= 3:
+                    for alias in node.names:
+                        imported.append((node.module or "", alias.name))
     scientific = [
         name
         for module, name in imported
         if "scientific" in module and not name.startswith("_")
     ]
-    assert scientific, "the module does import core contracts"
+    assert scientific, "the modules do import core contracts"
     unpublished = sorted(set(n for n in scientific if n not in published))
     # Exactly four, and each is a serialization or units utility the sibling
-    # domain packs already use. Everything else the pack imports from core is
-    # in `engcore.scientific.__all__` — the published surface.
+    # domain packs already use. Everything else imported from core is in
+    # `engcore.scientific.__all__` — the published surface. The set is
+    # unchanged by the relocation: the four moved with the code that needs
+    # them, and no fifth was added.
     assert unpublished == [
         "registry", "require_schema", "require_unit", "schema_string"
     ], unpublished
@@ -1327,8 +1338,8 @@ def test_i3_the_coupling_records_carry_no_domain_vocabulary(case_a):
     # domain classes they validate — that is what a system pack is for, and
     # asserting otherwise would be asserting the wrong thing.
     for function in (
-        cp.run_fixed_point, cp.execution_order, cp.cycle_edges,
-        cp.is_ratio_scale,
+        cpl.run_fixed_point, cpl.execution_order, cpl.cycle_edges,
+        cpl.is_ratio_scale,
     ):
         tree = ast.parse(_code_only(inspect.getsource(function)))
         rendered = ast.dump(tree).lower()
@@ -1348,8 +1359,8 @@ def test_i3_the_coupling_records_carry_no_domain_vocabulary(case_a):
     # cite this milestone's documents by filename, which is prose about the
     # record and not a fact the record carries.
     for cls in (
-        cp.TornEndpoint, cp.FixedPointCouplingPlan, cp.CoupledIteration,
-        cp.CoupledRun, cp.CouplingOutcome,
+        cpl.TornEndpoint, cpl.FixedPointCouplingPlan, cpl.CoupledIteration,
+        cpl.CoupledRun, cpl.CouplingOutcome,
     ):
         rendered = _code_only(inspect.getsource(cls)).lower()
         for word in ("electrical", "thermal", "joule", "resistor", "kelvin",
@@ -1392,18 +1403,18 @@ def test_i4_the_plan_and_the_graph_readers_work_for_an_unrelated_domain_pair():
     )
     nodes = ["mechanical-shaft", "lubricant-film", "lubricant-viscosity"]
     edges = (friction, viscosity, drag)
-    assert cp.execution_order(nodes, edges) == ()
-    plan = cp.FixedPointCouplingPlan(
+    assert cpl.execution_order(nodes, edges) == ()
+    plan = cpl.FixedPointCouplingPlan(
         plan_id="tribology",
         dependencies=edges,
-        torn=(cp.TornEndpoint(viscosity, Quantity(340.0, KELVIN)),),
+        torn=(cpl.TornEndpoint(viscosity, Quantity(340.0, KELVIN)),),
         absolute_tolerance=Quantity(1e-4, KELVIN),
         max_iterations=20,
     )
-    assert cp.execution_order(nodes, plan.uncut) == (
+    assert cpl.execution_order(nodes, plan.uncut) == (
         "lubricant-viscosity", "mechanical-shaft", "lubricant-film"
     )
-    assert cp.FixedPointCouplingPlan.from_dict(plan.to_dict()) == plan
+    assert cpl.FixedPointCouplingPlan.from_dict(plan.to_dict()) == plan
 
 
 # =====================================================================
@@ -1569,11 +1580,11 @@ def test_m_an_affine_scale_may_not_carry_a_coupling_tolerance():
     )
     assert dimensionality("degC") == dimensionality(KELVIN)
 
-    assert cp.is_ratio_scale(KELVIN) is True
-    assert cp.is_ratio_scale("rankine") is True     # a temperature unit that passes
-    assert cp.is_ratio_scale("degC") is False
-    assert cp.is_ratio_scale("degF") is False
-    assert cp.is_ratio_scale("watt") is True
+    assert cpl.is_ratio_scale(KELVIN) is True
+    assert cpl.is_ratio_scale("rankine") is True     # a temperature unit that passes
+    assert cpl.is_ratio_scale("degC") is False
+    assert cpl.is_ratio_scale("degF") is False
+    assert cpl.is_ratio_scale("watt") is True
 
     _, dependencies = compose(NOMINAL)
     with pytest.raises(InvalidScientificProblem, match="conventional"):
@@ -1587,7 +1598,7 @@ def test_m_an_affine_scale_may_not_carry_a_coupling_tolerance():
         tolerance=Quantity(1.8e-6, "rankine"), max_iterations=50,
     )
     run = cp.run_fixed_point_coupling(NOMINAL, plan, run_id="rankine")
-    assert run.outcome is cp.CouplingOutcome.CRITERION_MET
+    assert run.outcome is cpl.CouplingOutcome.CRITERION_MET
     assert only_temperature(run) == pytest.approx(338.577018, abs=1e-6)
     assert run.final_iterate_change.units == "degree_Rankine"
 
@@ -1599,9 +1610,11 @@ def test_m2_the_refusal_contains_no_temperature_knowledge():
     docstring is for. The executable rule names no unit at all: it asks whether
     zero maps to zero, and that question has no dimension.
     """
+    from src.engcore.coupling import scales
+
     code = _code_only(
-        inspect.getsource(cp.is_ratio_scale)
-    ) + _code_only(inspect.getsource(cp._require_ratio_scale))
+        inspect.getsource(cpl.is_ratio_scale)
+    ) + _code_only(inspect.getsource(scales._require_ratio_scale))
     for word in ("kelvin", "celsius", "degc", "degf", "temperature",
                  "rankine", "watt", "ohm"):
         assert word not in code.lower(), word
@@ -1642,15 +1655,15 @@ def test_n_the_twin_is_not_mutated_and_is_not_an_input(case_a):
 
 def test_o_every_new_record_round_trips(case_a):
     run, _, plan = case_a
-    assert cp.FixedPointCouplingPlan.from_dict(plan.to_dict()) == plan
+    assert cpl.FixedPointCouplingPlan.from_dict(plan.to_dict()) == plan
     assert json.dumps(plan.to_dict(), sort_keys=True) == json.dumps(
-        cp.FixedPointCouplingPlan.from_dict(plan.to_dict()).to_dict(),
+        cpl.FixedPointCouplingPlan.from_dict(plan.to_dict()).to_dict(),
         sort_keys=True,
     )
     for endpoint in plan.torn:
-        assert cp.TornEndpoint.from_dict(endpoint.to_dict()) == endpoint
+        assert cpl.TornEndpoint.from_dict(endpoint.to_dict()) == endpoint
 
-    revived = cp.CoupledRun.from_dict(run.to_dict())
+    revived = cpl.CoupledRun.from_dict(run.to_dict())
     assert revived.outcome is run.outcome
     assert revived.iterations_run == run.iterations_run
     assert json.dumps(revived.to_dict(), sort_keys=True) == json.dumps(
@@ -1658,7 +1671,7 @@ def test_o_every_new_record_round_trips(case_a):
     )
     iteration = run.iterations[0]
     assert json.dumps(
-        cp.CoupledIteration.from_dict(iteration.to_dict()).to_dict(),
+        cpl.CoupledIteration.from_dict(iteration.to_dict()).to_dict(),
         sort_keys=True,
     ) == json.dumps(iteration.to_dict(), sort_keys=True)
 
@@ -1666,9 +1679,9 @@ def test_o_every_new_record_round_trips(case_a):
 def test_o2_an_unknown_schema_is_rejected(case_a):
     _, _, plan = case_a
     payload = plan.to_dict()
-    payload["schema"] = "electrothermal_fixed_point_plan/2"
+    payload["schema"] = "coupling_fixed_point_plan/2"
     with pytest.raises(ScientificCoreError):
-        cp.FixedPointCouplingPlan.from_dict(payload)
+        cpl.FixedPointCouplingPlan.from_dict(payload)
 
 
 def test_o3_no_existing_schema_version_moved():
@@ -1686,11 +1699,30 @@ def test_o3_no_existing_schema_version_moved():
     assert EXECUTION_BINDING_SCHEMA == "execution_binding/1"
     assert RESULT_SCHEMA == "scientific_result/2"
     assert RAW_OUTPUT_SCHEMA == "raw_solver_output/2"
-    # and the four new ones are new
-    assert cp.TORN_ENDPOINT_SCHEMA == "electrothermal_torn_endpoint/1"
-    assert cp.FIXED_POINT_PLAN_SCHEMA == "electrothermal_fixed_point_plan/1"
-    assert cp.COUPLED_ITERATION_SCHEMA == "electrothermal_coupled_iteration/1"
-    assert cp.COUPLED_RUN_SCHEMA == "electrothermal_coupled_run/1"
+    # The four coupling schemas keep version /1 and changed NAME once, in
+    # `COUPLING-PACK-RELOCATION`, when a second production consumer made
+    # `electrothermal_*` false for a fluid-thermal payload. Version /1 is
+    # correct rather than lazy: the (name, version) pair is new, and a bump to
+    # /2 would imply a /1 of these names once existed and was readable.
+    assert cpl.TORN_ENDPOINT_SCHEMA == "coupling_torn_endpoint/1"
+    assert cpl.FIXED_POINT_PLAN_SCHEMA == "coupling_fixed_point_plan/1"
+    assert cpl.COUPLED_ITERATION_SCHEMA == "coupling_iteration/1"
+    assert cpl.COUPLED_RUN_SCHEMA == "coupling_run/1"
+
+    # and no executable statement anywhere under src/ still emits or accepts
+    # one of the four names they replaced. Measured over code with every
+    # string constant blanked: the docstrings that *explain* the rename name
+    # the old strings, which is what a docstring is for, and a scan that could
+    # not tell prose from code would be measuring the comments.
+    for path in (REPO_ROOT / "src").rglob("*.py"):
+        if "__pycache__" in path.parts:
+            continue
+        code = _code_only(path.read_text(encoding="utf-8"))
+        for old_name in (
+            "electrothermal_torn_endpoint", "electrothermal_fixed_point_plan",
+            "electrothermal_coupled_iteration", "electrothermal_coupled_run",
+        ):
+            assert old_name not in code, (old_name, path)
 
 
 # =====================================================================
@@ -1740,7 +1772,7 @@ def test_r1_kwargs_cannot_carry_what_the_plan_carries(case_a):
     # inspectable and checkable before execution
     assert plan.check_against(problems) == ()
     # serializable, and equal after a round trip
-    assert cp.FixedPointCouplingPlan.from_dict(plan.to_dict()) == plan
+    assert cpl.FixedPointCouplingPlan.from_dict(plan.to_dict()) == plan
     # and it knows which edges it cuts, which a bag of scalars cannot
     assert plan.torn_endpoints == (("resistance-tcr-R1", mat.TEMPERATURE),)
     assert len(plan.uncut) == len(plan.dependencies) - len(plan.torn)
@@ -1769,8 +1801,8 @@ def test_r2_a_boolean_reproduces_every_assertion_this_milestone_makes():
     assert set(as_bool.values()) == {True, False}
     assert converged.criterion_met is not stalled.criterion_met
     # no third state is produced anywhere in this milestone
-    assert {run.outcome for run in (converged, stalled)} == set(cp.CouplingOutcome)
-    assert len(cp.CouplingOutcome) == 2
+    assert {run.outcome for run in (converged, stalled)} == set(cpl.CouplingOutcome)
+    assert len(cpl.CouplingOutcome) == 2
 
 
 def test_r4_a_float_tolerance_cannot_detect_either_mistake():
@@ -1846,7 +1878,7 @@ def test_h0b_the_loop_cannot_run_without_the_declared_dependencies():
     missing_heat = tuple(
         d for d in dependencies if d.target_quantity != lump.HEAT_INPUT
     )
-    plan = cp.FixedPointCouplingPlan(
+    plan = cpl.FixedPointCouplingPlan(
         plan_id="edge-deleted",
         dependencies=missing_heat,
         torn=torn,
@@ -1861,7 +1893,7 @@ def test_h0b_the_loop_cannot_run_without_the_declared_dependencies():
 def test_r3_the_torn_pairing_is_structural_and_not_positional(case_a):
     """R3: two parallel tuples would carry the association in an index."""
     _, _, plan = case_a
-    reordered = cp.FixedPointCouplingPlan(
+    reordered = cpl.FixedPointCouplingPlan(
         plan_id=plan.plan_id,
         dependencies=tuple(reversed(plan.dependencies)),
         torn=plan.torn,
@@ -1884,7 +1916,7 @@ def test_r7_provenance_cannot_be_the_plan_because_it_needs_a_run(case_a):
     # the plan, by contrast, is fully checkable before anything executes
     problems, _ = compose(NOMINAL)
     assert plan.check_against(problems) == ()
-    assert cp.FixedPointCouplingPlan.from_dict(plan.to_dict()) == plan
+    assert cpl.FixedPointCouplingPlan.from_dict(plan.to_dict()) == plan
 
 
 def test_r8_the_stored_iterate_change_agrees_with_the_derived_one(case_a):

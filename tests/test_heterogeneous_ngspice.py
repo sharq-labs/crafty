@@ -45,6 +45,7 @@ from src.engcore.scientific.results.provenance import (
 from src.engcore.scientific.results.validation import ValidationOutcome
 from src.engcore.scientific.solvers.protocol import ConvergenceState
 from src.engcore.scientific.units.quantity import Quantity
+from src.engcore import coupling as cpl
 from src.engcore.systems.electrothermal import coupled as cp
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -156,7 +157,7 @@ def run_coupled(system, *, provider, seed=300.0, budget=50, label="run"):
             p.problem_id for p in problems if p.problem_id.startswith("electrical_dc:")
         )
         table[electrical] = ngspice_electrical_executor(system, ng.NgspiceDCSolver())
-    return cp.run_fixed_point(
+    return cpl.run_fixed_point(
         problems, table, plan,
         run_id=f"{label}-{provider}", software_version="hetero-proof",
         assumptions=(),
@@ -362,7 +363,7 @@ def test_d_the_coupling_code_is_identical_between_the_two_runs():
     Not "equivalent" — *the same function object*. And no
     ``native_coupling()`` / ``ngspice_coupling()`` pair exists.
     """
-    assert cp.run_fixed_point is cp.run_fixed_point
+    assert cpl.run_fixed_point is cpl.run_fixed_point
     exported = set(cp.__all__)
     for forbidden in (
         "native_coupling", "ngspice_coupling", "run_fixed_point_native",
@@ -401,7 +402,7 @@ def test_d2_only_one_dispatch_entry_differs(coupled_nominal):
 
 def test_e_case_a_coupled_results_agree(coupled_nominal):
     native, external = coupled_nominal
-    assert native.outcome is external.outcome is cp.CouplingOutcome.CRITERION_MET
+    assert native.outcome is external.outcome is cpl.CouplingOutcome.CRITERION_MET
     assert set(native.final_values) == set(external.final_values)
     for key, quantity in native.final_values.items():
         a = quantity.magnitude_in(KELVIN)
@@ -414,7 +415,7 @@ def test_e_case_a_coupled_results_agree(coupled_nominal):
 
 def test_e2_case_e_two_stage_coupled_results_agree(coupled_two_stage):
     native, external = coupled_two_stage
-    assert native.outcome is external.outcome is cp.CouplingOutcome.CRITERION_MET
+    assert native.outcome is external.outcome is cpl.CouplingOutcome.CRITERION_MET
     for key, quantity in native.final_values.items():
         assert abs(
             quantity.magnitude_in(KELVIN)
@@ -673,14 +674,14 @@ def test_g4_provider_failure_is_none_of_the_other_three_failures(coupled_nominal
 
     # the three things it is not, each still reachable and still distinct
     assert ConvergenceState.FAILED is not ConvergenceState.CONVERGED
-    assert cp.CouplingOutcome.ITERATION_LIMIT_REACHED is not (
-        cp.CouplingOutcome.CRITERION_MET
+    assert cpl.CouplingOutcome.ITERATION_LIMIT_REACHED is not (
+        cpl.CouplingOutcome.CRITERION_MET
     )
     assert ValidationOutcome.FAIL is not ValidationOutcome.PASS
     # and a provider failure inside a coupling run propagates rather than
     # being recorded as non-convergence
     native, _ = coupled_nominal
-    assert native.outcome is cp.CouplingOutcome.CRITERION_MET
+    assert native.outcome is cpl.CouplingOutcome.CRITERION_MET
 
 
 def test_g5_the_singular_precondition_is_detected_on_both_paths():
@@ -907,7 +908,7 @@ def test_p2_the_corrupted_power_is_refused_before_the_coupled_loop_admits_it():
     table[electrical] = ngspice_electrical_executor(NOMINAL, _CorruptPower())
 
     with pytest.raises(ng.NgspiceExecutionFailure):
-        cp.run_fixed_point(
+        cpl.run_fixed_point(
             problems, table, plan, run_id="P2-corrupt",
             software_version="hetero-proof", assumptions=(),
         )

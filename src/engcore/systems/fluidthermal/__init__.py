@@ -16,8 +16,8 @@ Module roles::
                    Verification side only; imports `math` and nothing else
     coupled.py     the system declaration, the four QuantityDependency edges,
                    the plan, the executors, and the entry point. The loop
-                   itself is `electrothermal.coupled.run_fixed_point`,
-                   imported unedited
+                   itself is `engcore.coupling.run_fixed_point`, imported
+                   unedited
 
 See `docs/fluid-thermal-scalar-coupling-prereg.md` for what was committed in
 advance and `docs/fluid-thermal-scalar-coupling-evidence.md` for what executed.

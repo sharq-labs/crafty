@@ -1,7 +1,7 @@
-"""Closed-loop electro-thermal coupling: the loop, and the records it produces.
+"""Closed-loop electro-thermal coupling: the composition, and how it is solved.
 
-`ET-VERTICAL`. The previous milestone represented the loop and stopped one
-electrical solve short of closing it. This module closes it::
+`ET-VERTICAL`, relocated by `COUPLING-PACK-RELOCATION`. The loop this module
+closes::
 
         seed T⁽⁰⁾
             ↓
@@ -13,53 +13,47 @@ Iteration *n ≥ 2* solves the electrical problem at a resistance the previous
 thermal solve produced. That is the whole difference from `run_open_loop_pass`,
 and it is what makes this a coupled execution rather than a representation.
 
-Why these records live here and not in ``engcore.scientific``
-------------------------------------------------------------
-Because no universal reader of them exists. There is no planner, no
-execution-plan compiler and no scheduler anywhere in the platform, and all three
-are deferred. `MIN-FOUNDATION-ET` added its one universal record because a
-*measurement* showed no reader could recover the fact it carried; there is no
-analogous measurement here, and "a second coupled domain pair could reuse this"
-is an argument, not evidence. The promotion criterion is preregistered in
-``docs/electrothermal-vertical-prereg.md`` §16: a second, materially different
-coupled consumer written against these records **without editing them**.
+Where the machinery lives, and why it is not here
+-------------------------------------------------
+The plan, the torn endpoint, the outcome enum, the iteration and run records,
+the graph readers and the fixed-point loop itself now live in
+``engcore.coupling`` — imported here, not defined here. They were minted by
+this pack, and `FT-SCALAR-COUPLING` then executed a second, materially
+different coupled pair against them **unedited, by object identity**, which
+made a domain-named owner false in two measurable ways: a fluid ↔ thermal run
+serialized under ``electrothermal_coupled_run/1``, and a fluids pack had to
+import an *electrothermal* pack to reach a loop that names no domain.
+`COUPLING-PACK-RELOCATION` moved them, executable source byte-for-byte
+unchanged. See ``docs/coupling-pack-relocation-evidence.md``.
 
-The two future systems nearest the commercial target both bend the shape a
-universal record would freeze now — 2:1 fan-in has no combination rule, and
-convective transport makes the upstream side a runtime property of the sign of
-the mass flow. Freezing a directed, single-scalar-tolerance shape on one
-consumer would be deciding those on no evidence.
+**None of that is a promotion into universal scientific Core.**
+``engcore.coupling`` is coupling execution/composition infrastructure. No
+universal reader of a coupling plan or a coupling outcome exists anywhere in
+the platform, and this milestone did not invent one.
 
-What the loop is, and is not
-----------------------------
-It is a Gauss–Seidel (Picard) fixed-point iteration over a torn dependency
-cycle. It is **not** a scheduler, a participant registry, a transfer operator,
-an interpolator, a relaxation framework or a coupling platform. There is no
-relaxation factor, no damping, no acceleration, no rollback, no checkpointing,
-no event handling and no time synchronization.
-
-It is also **not time marching.** The thermal problem's initial condition is the
-same in every iteration; the iterate is a *coupling* iterate, not a time level.
-Advancing the initial condition between iterations would make
-``|T⁽ⁿ⁺¹⁾ − T⁽ⁿ⁾|`` a time-stepping increment and reporting it as coupling
-convergence would collapse the two. Two things prevent it:
-:meth:`FixedPointCouplingPlan.check_against` refuses to seed an endpoint a
-declared condition already determines, and every iteration's thermal provenance
-records the same t₀.
+What this module keeps, and why
+-------------------------------
+Everything scientific: the stage co-identity convention, the series circuit,
+the three declared dependency edges, the tear rule this pack's callers use, the
+twin, the per-problem executors, and the entry point. A generic package may
+transport identities and values and execute a plan; it must not know that a
+transported watt is Joule dissipation or that a transported kelvin is the state
+coordinate of a temperature-dependent resistance. Those statements are made
+here, by the pack that knows the physics.
 
 How the loop knows what feeds what
 ----------------------------------
 It reads the declared :class:`~engcore.scientific.composition.QuantityDependency`
-records. Every transported value is looked up as
+records this module builds. Every transported value is looked up as
 
     ``result_of(dep.source_problem_id).values[dep.source_quantity]``
 
 and delivered under ``dep.target_quantity``. **No metric name is constructed,
 parsed or inferred inside the iteration.** Change a dependency's
-``source_quantity`` to a different declared metric of the same dimension and the
-loop transports something else and converges somewhere else — which is what
-makes the records load-bearing rather than decorative, and is exercised by the
-two configurations described below.
+``source_quantity`` to a different declared metric of the same dimension and
+the loop transports something else and converges somewhere else — which is
+what makes the records load-bearing rather than decorative, and is exercised by
+the two configurations described below.
 
 The execution order is likewise computed, not written down: the torn edges are
 removed and the remainder is topologically sorted. With the edges declared here
@@ -74,30 +68,39 @@ Selecting the second gives the self-consistent end-of-interval state; selecting
 the third gives the coupled steady state. They differ by 3.4 K on identical
 inputs, and only the enumerated *name* separates them.
 
+It is not time marching
+-----------------------
+The thermal problem's initial condition is the same in every iteration; the
+iterate is a *coupling* iterate, not a time level. Advancing the initial
+condition between iterations would make ``|T⁽ⁿ⁺¹⁾ − T⁽ⁿ⁾|`` a time-stepping
+increment and reporting it as coupling convergence would collapse the two. Two
+things prevent it: :meth:`~engcore.coupling.FixedPointCouplingPlan.check_against`
+refuses to seed an endpoint a declared condition already determines, and every
+iteration's thermal provenance records the same t₀.
+
 Offset units are refused, and precisely why
 -------------------------------------------
 ``Quantity(0.001, "kelvin").magnitude_in("degC")`` is ``-273.149``, and ``degC``
 has the same dimensionality as ``kelvin``, so no dimension check can see a
-mismatch between them.
-
-What that does **not** break is the arithmetic of the comparison. Both sides are
-converted into one unit before subtraction, and an affine offset cancels in a
-difference — so the loop would compute the right number even on an affine scale.
-What it breaks is the **stored record**: ``largest_iterate_change`` is a
-difference carried in a type that means an absolute value, and a consumer
-calling ``.to("kelvin")`` on a ``degC`` delta gets ``273.15``. The comparison
-unit must therefore be a **ratio scale** — zero maps to zero in the base unit —
-which admits ``rankine`` and refuses ``degC`` without containing any temperature
-knowledge.
+mismatch between them. The arithmetic of the comparison survives it — both
+sides are converted into one unit before subtraction and an affine offset
+cancels in a difference — but the **stored record** does not:
+``largest_iterate_change`` is a difference carried in a type that means an
+absolute value. ``engcore.coupling.scales`` refuses an affine comparison unit
+for that reason, structurally and without any temperature knowledge.
 """
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass
-from enum import Enum
-from typing import Any, Callable, Iterable, Mapping, Sequence
+from typing import Callable, Mapping, Sequence
 
+from ...coupling import (
+    CoupledRun,
+    FixedPointCouplingPlan,
+    TornEndpoint,
+    run_fixed_point,
+)
 from ...domains import thermal_lumped as lump
 from ...domains.electrical import material as mat
 from ...domains.electrical.dc import (
@@ -119,47 +122,33 @@ from ...scientific.ir.problem import ModelReference, ScientificProblem
 from ...scientific.results.provenance import ExecutionBinding, ProvenanceRecord
 from ...scientific.results.result import ScientificResult
 from ...scientific.results.uncertainty import Uncertainty
-from ...scientific.serialization import require_schema, schema_string
 from ...scientific.twins.definition import (
     ScientificTwin,
     TwinDatum,
     TwinDatumRole,
     TwinKind,
 )
-from ...scientific.units.quantity import Quantity, registry
-from ...scientific.units.validation import require_unit
+from ...scientific.units.quantity import Quantity
 from .resistor_body import RESISTOR_POWER_METRIC
 
+# This pack publishes its own declarations only. The generic coupling records
+# and the loop are `engcore.coupling`'s and are imported above for this
+# module's own use; re-exporting them here would restate the false ownership
+# `COUPLING-PACK-RELOCATION` removed. A guard test asserts they stay out.
 __all__ = [
-    "COUPLED_ITERATION_SCHEMA",
-    "COUPLED_RUN_SCHEMA",
     "CoupledElectroThermalSystem",
-    "CoupledIteration",
-    "CoupledRun",
     "CoupledStage",
-    "CouplingOutcome",
-    "FIXED_POINT_PLAN_SCHEMA",
-    "FixedPointCouplingPlan",
-    "TORN_ENDPOINT_SCHEMA",
-    "TornEndpoint",
+    "DEPENDENCY_HEAT",
+    "DEPENDENCY_RESISTANCE",
+    "DEPENDENCY_TEMPERATURE",
     "build_coupled_twin",
     "coupled_dependencies",
     "coupled_problems",
-    "cycle_edges",
-    "edge_key",
-    "execution_order",
-    "is_ratio_scale",
     "nominal_plan",
-    "run_fixed_point",
     "run_fixed_point_coupling",
-    "shares_origin",
     "stage_problems",
 ]
 
-TORN_ENDPOINT_SCHEMA = schema_string("electrothermal_torn_endpoint")
-FIXED_POINT_PLAN_SCHEMA = schema_string("electrothermal_fixed_point_plan")
-COUPLED_ITERATION_SCHEMA = schema_string("electrothermal_coupled_iteration")
-COUPLED_RUN_SCHEMA = schema_string("electrothermal_coupled_run")
 
 #: Prose labels for the declared edges. Nothing branches on them.
 DEPENDENCY_HEAT = "joule-dissipation-heats-body"
@@ -168,494 +157,6 @@ DEPENDENCY_RESISTANCE = "property-resistance-sets-circuit-element"
 
 SOURCE_ID = "V1"
 REFERENCE_NODE = "gnd"
-
-
-# =====================================================================
-# Unit admissibility — required change 1
-# =====================================================================
-
-def is_ratio_scale(unit: str) -> bool:
-    """Does zero of this unit map to zero of its base unit?
-
-    A ratio scale can be subtracted and its difference stored under its own
-    unit; an affine scale cannot. The test is structural and carries no
-    knowledge of any particular dimension: ``rankine`` passes and ``degC`` does
-    not, for the same reason and by the same arithmetic.
-
-    **What this does and does not protect, stated precisely.** The arithmetic
-    of the comparison is safe without it: both sides are converted into one unit
-    before subtraction, and an affine offset cancels in a difference. What it
-    protects is the **stored record**. ``largest_iterate_change`` is a
-    *difference* carried in a type that means an *absolute value*, so a
-    consumer holding a `4.7e-7 degC` delta and calling ``.to("kelvin")`` on it
-    would get `273.15`. Refusing an affine scale for the comparison unit is
-    what keeps that record convertible.
-
-    **One provider dependency, recorded rather than hidden.** This reaches past
-    the ``Quantity`` contract into the units backend through the units module's
-    own ``registry()`` accessor, because the contract publishes no way to name a
-    dimension's base unit. A backend without ``get_base_units`` would break this
-    function. It is the only such call in this module, it is in a system pack
-    and not in universal core, and :meth:`FixedPointCouplingPlan.__post_init__`
-    additionally applies a pairwise check that uses published contract alone.
-    """
-    normalized = require_unit(unit, context="coupling comparison unit")
-    _, base = registry().get_base_units(normalized)
-    return Quantity(0.0, normalized).magnitude_in(str(base)) == 0.0
-
-
-def shares_origin(unit: str, other: str) -> bool:
-    """Do these two compatible units share a zero?
-
-    Published contract only — no units-backend call. It catches the mixed pair
-    (a tolerance in kelvin against an edge declared in ``degC``, or the
-    reverse), which is the case where a conversion actually happens. It cannot
-    catch a wholly affine composition, where every conversion is the identity
-    and only the stored label is misleading; :func:`is_ratio_scale` covers that.
-    """
-    return Quantity(0.0, unit).magnitude_in(other) == 0.0
-
-
-def _require_ratio_scale(unit: str, *, label: str) -> str:
-    normalized = require_unit(unit, context=label)
-    if not is_ratio_scale(normalized):
-        raise InvalidScientificProblem(
-            f"{label} may not use {unit!r}: its zero is conventional, so a "
-            f"difference expressed in it is not a value of that unit and does "
-            f"not survive conversion. Use a ratio scale, whose zero maps to "
-            f"zero in its base unit"
-        )
-    return normalized
-
-
-def edge_key(dependency: QuantityDependency) -> tuple[str, str, str, str]:
-    """The identity of an edge: its two endpoints, and nothing else.
-
-    One notion of edge identity, used everywhere. An earlier form tested torn
-    membership by whole-record equality and computed the uncut set by this quad,
-    so two records differing only in ``unit_exemplar`` were distinct for one
-    purpose and identical for the other — the near-duplicate hazard
-    `MIN-FOUNDATION-ET` recorded as known unknown 6, met for the first time.
-    """
-    return (
-        dependency.source_problem_id,
-        dependency.source_quantity,
-        dependency.target_problem_id,
-        dependency.target_quantity,
-    )
-
-
-# =====================================================================
-# The plan — declarative, pre-execution, inspectable
-# =====================================================================
-
-class CouplingOutcome(str, Enum):
-    """Why the coupling iteration stopped. **Never a scientific verdict.**
-
-    Deliberately **not** :class:`~engcore.scientific.solvers.protocol.ConvergenceState`.
-    Both closed-form participants here report ``NOT_APPLICABLE``, which
-    ``RawSolverOutput.succeeded`` and ``ScientificResult.is_usable`` treat as
-    success; reusing that enum would make "the coupled loop converged" and "a
-    closed-form evaluation happened" the same serialized token, permanently, on
-    a record that is already at ``scientific_result/2``.
-
-    Members are limited to the ones this milestone actually executes. A
-    ``DIVERGED`` member is deliberately absent: nothing here implements a
-    divergence test, and `MODEL0-R` already had to delete an enum member
-    (``SURROGATE``) that was minted from intuition.
-    """
-
-    CRITERION_MET = "criterion_met"
-    ITERATION_LIMIT_REACHED = "iteration_limit_reached"
-
-
-@dataclass(frozen=True)
-class TornEndpoint:
-    """One cut edge of the dependency cycle, paired with the seed it needs.
-
-    The pairing is **structural**, not positional: two parallel tuples of
-    dependencies and seeds would carry the association in an index, which is
-    exactly the defect ``ExecutionBinding`` exists to prevent one level down.
-
-    The seed supplies ``dependency.target_quantity`` of
-    ``dependency.target_problem_id`` at iteration 1. It is not recoverable from
-    any record — see ``docs/electrothermal-vertical-evidence.md`` §4 — and it is
-    deliberately not inferred.
-    """
-
-    dependency: QuantityDependency
-    initial_value: Quantity
-
-    def __post_init__(self) -> None:
-        if not isinstance(self.dependency, QuantityDependency):
-            raise InvalidScientificProblem(
-                "torn endpoint requires a QuantityDependency"
-            )
-        if not isinstance(self.initial_value, Quantity):
-            raise InvalidScientificProblem(
-                "torn endpoint seed must be a Quantity — a bare number carries "
-                "no unit and cannot be checked against the edge it seeds"
-            )
-        if self.initial_value.dimensionality != self.dependency.dimension:
-            raise InvalidScientificProblem(
-                f"torn endpoint seed carries {self.initial_value.units!r} "
-                f"[{self.initial_value.dimensionality}] but the edge transports "
-                f"{self.dependency.unit_exemplar!r} [{self.dependency.dimension}]"
-            )
-
-    @property
-    def endpoint(self) -> tuple[str, str]:
-        """``(problem_id, quantity)`` of the endpoint this seed supplies."""
-        return (self.dependency.target_problem_id, self.dependency.target_quantity)
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "schema": TORN_ENDPOINT_SCHEMA,
-            "dependency": self.dependency.to_dict(),
-            "initial_value": self.initial_value.to_dict(),
-        }
-
-    @classmethod
-    def from_dict(cls, payload: Mapping[str, Any]) -> "TornEndpoint":
-        require_schema(payload, TORN_ENDPOINT_SCHEMA)
-        return cls(
-            dependency=QuantityDependency.from_dict(payload["dependency"]),
-            initial_value=Quantity.from_dict(payload["initial_value"]),
-        )
-
-
-@dataclass(frozen=True)
-class FixedPointCouplingPlan:
-    """Everything needed to execute a cyclic dependency set, stated before it runs.
-
-    A dependency set that contains a cycle has **zero** admissible execution
-    orders. Making it executable requires four facts that no existing record
-    carries: which edges are cut, what value each cut edge's target takes at
-    iteration 1, when to stop, and how long to try. This record carries exactly
-    those and nothing else.
-
-    It is a record rather than a set of keyword arguments for the same reason
-    ``QuantityDependency`` is: it must be inspectable *before* anything runs.
-    A ``float`` tolerance additionally could not be checked at all — the
-    dimension check against the torn edge, and the refusal of an affine scale,
-    are only possible because the tolerance carries its unit.
-    """
-
-    plan_id: str
-    dependencies: tuple[QuantityDependency, ...]
-    torn: tuple[TornEndpoint, ...]
-    absolute_tolerance: Quantity
-    max_iterations: int
-
-    def __post_init__(self) -> None:
-        plan_id = str(self.plan_id).strip()
-        if not plan_id:
-            raise InvalidScientificProblem("coupling plan requires a plan_id")
-        object.__setattr__(self, "plan_id", plan_id)
-        object.__setattr__(self, "dependencies", tuple(self.dependencies))
-        object.__setattr__(self, "torn", tuple(self.torn))
-
-        if not self.dependencies:
-            raise InvalidScientificProblem(
-                "a coupling plan over no dependencies composes nothing"
-            )
-        if not self.torn:
-            raise InvalidScientificProblem(
-                "a coupling plan must cut at least one edge; an uncut cycle has "
-                "no admissible execution order"
-            )
-
-        declared = {edge_key(d) for d in self.dependencies}
-        for endpoint in self.torn:
-            if edge_key(endpoint.dependency) not in declared:
-                raise InvalidScientificProblem(
-                    f"torn edge {endpoint.dependency.name or endpoint.endpoint!r} "
-                    f"is not one of the plan's declared dependencies; cutting an "
-                    f"edge the composition does not contain states nothing"
-                )
-
-        # Fan-in is REPORTED as unrepresentable, never resolved by accident.
-        #
-        # Two edges into one endpoint are individually valid records — each
-        # checks clean, and MIN-FOUNDATION-ET measured exactly that. What no
-        # record states is how to combine them: sum, override, or split. A
-        # dict of transported values keyed by target quantity would resolve it
-        # silently by declaration order, which is a combination rule invented
-        # from one consumer and hidden in an insertion order. Refused instead,
-        # in the same voice as the mixed-dimension refusal below.
-        for label, keys in (
-            (
-                "dependencies",
-                [(d.target_problem_id, d.target_quantity) for d in self.dependencies],
-            ),
-            ("torn edges", [e.endpoint for e in self.torn]),
-        ):
-            duplicated = sorted({k for k in keys if keys.count(k) > 1})
-            if duplicated:
-                raise InvalidScientificProblem(
-                    f"{len(duplicated)} endpoint(s) receive more than one of "
-                    f"this plan's {label}: {duplicated}. No record states "
-                    f"whether they sum, override or split, so the composition "
-                    f"is refused rather than combined by invention"
-                )
-
-        if not isinstance(self.absolute_tolerance, Quantity):
-            raise InvalidScientificProblem(
-                "coupling tolerance must be a Quantity — the criterion belongs "
-                "to coupling execution and a bare float cannot be checked "
-                "against the quantity it stops"
-            )
-        magnitude = self.absolute_tolerance.magnitude
-        if not math.isfinite(magnitude) or magnitude <= 0.0:
-            raise InvalidScientificProblem(
-                f"coupling tolerance must be finite and strictly positive, got "
-                f"{magnitude!r} {self.absolute_tolerance.units}"
-            )
-        _require_ratio_scale(
-            self.absolute_tolerance.units, label="coupling tolerance"
-        )
-
-        dimensions = {e.dependency.dimension for e in self.torn}
-        if len(dimensions) != 1:
-            raise InvalidScientificProblem(
-                f"the torn edges transport {len(dimensions)} different "
-                f"dimensions ({sorted(dimensions)}); one scalar tolerance "
-                f"cannot serve them and no record states how to normalize "
-                f"between them. Refused rather than normalized by invention"
-            )
-        (dimension,) = dimensions
-        if self.absolute_tolerance.dimensionality != dimension:
-            raise InvalidScientificProblem(
-                f"coupling tolerance carries "
-                f"{self.absolute_tolerance.units!r} "
-                f"[{self.absolute_tolerance.dimensionality}] but the torn edges "
-                f"transport [{dimension}]"
-            )
-        # Published-contract check, in addition to the backend-assisted one:
-        # the tolerance and every torn edge must share a zero, or a conversion
-        # between them is not a conversion of a difference.
-        for endpoint in self.torn:
-            for unit in (
-                endpoint.dependency.unit_exemplar,
-                endpoint.initial_value.units,
-            ):
-                if not shares_origin(unit, self.absolute_tolerance.units):
-                    raise InvalidScientificProblem(
-                        f"{unit!r} and {self.absolute_tolerance.units!r} do not "
-                        f"share a zero, so a difference converted between them "
-                        f"is not a difference"
-                    )
-
-        budget = int(self.max_iterations)
-        if budget < 1:
-            raise InvalidScientificProblem(
-                f"coupling budget must allow at least one iteration, got {budget}"
-            )
-        object.__setattr__(self, "max_iterations", budget)
-
-    @property
-    def comparison_unit(self) -> str:
-        """The one unit both sides of every comparison are converted into."""
-        return self.absolute_tolerance.units
-
-    @property
-    def torn_endpoints(self) -> tuple[tuple[str, str], ...]:
-        return tuple(e.endpoint for e in self.torn)
-
-    @property
-    def uncut(self) -> tuple[QuantityDependency, ...]:
-        """The dependencies that remain, and are therefore ordered, not seeded."""
-        cut = {edge_key(e.dependency) for e in self.torn}
-        return tuple(d for d in self.dependencies if edge_key(d) not in cut)
-
-    def unsupplied(
-        self, problems: Iterable[ScientificProblem]
-    ) -> tuple[tuple[str, str, str], ...]:
-        """Inputs this plan supplies no edge for. **Reported, never refused.**
-
-        Core's :func:`externally_imposed` answers this, and its answer is
-        deliberately ambiguous: an input with no supplier is either genuinely
-        imposed by the environment or forgotten, and **no record distinguishes
-        the two**. An ambient temperature and a missing heat source read
-        identically here.
-
-        So this reports and the caller decides. A plan that omits a required
-        edge is therefore *not* refused before the first iteration — which is a
-        measured limitation of the records, recorded rather than papered over,
-        and the reason the failure surfaces from the executor instead.
-        """
-        from ...scientific.composition import externally_imposed
-
-        return externally_imposed(problems, self.dependencies)
-
-    def check_against(
-        self, problems: Iterable[ScientificProblem]
-    ) -> tuple[str, ...]:
-        """Every reason this plan cannot be executed against these problems.
-
-        Reported before the first iteration. A dependency that names a quantity
-        no record enumerates, or transports a dimension the endpoint does not
-        carry, is a **malformed declaration** — not a scientific finding — so
-        the caller raises on a non-empty result rather than recording it.
-
-        Sources that are result metrics cannot be checked here: they do not
-        exist until a solve has produced them. The asymmetry is real and is not
-        papered over.
-        """
-        by_id = {p.problem_id: p for p in problems}
-        issues: list[str] = []
-        for dependency in self.dependencies:
-            for side, problem_id in (
-                ("target", dependency.target_problem_id),
-                ("source", dependency.source_problem_id),
-            ):
-                if problem_id not in by_id:
-                    issues.append(
-                        f"{side} problem {problem_id!r} is not part of the "
-                        f"composition"
-                    )
-            target = by_id.get(dependency.target_problem_id)
-            if target is not None:
-                for issue in dependency.check_against(target_problem=target):
-                    issues.append(
-                        f"{issue.kind.value}: {issue.name}: {issue.detail}"
-                    )
-
-        # A torn endpoint whose target is already determined by a declared
-        # condition is refused. The seed would override the condition, and for
-        # a STATE variable pinned by an initial condition that override is
-        # precisely time marching wearing the name of coupling.
-        for endpoint in self.torn:
-            target = by_id.get(endpoint.dependency.target_problem_id)
-            if target is None:
-                continue
-            determined = {c.variable for c in target.initial_conditions}
-            determined |= {c.variable for c in target.boundary_conditions}
-            if endpoint.dependency.target_quantity in determined:
-                issues.append(
-                    f"seeded_over_condition: "
-                    f"{endpoint.dependency.target_quantity}: problem "
-                    f"{target.problem_id!r} already determines it by a declared "
-                    f"condition; seeding it would override the condition, and "
-                    f"for a state variable that is time marching rather than "
-                    f"coupling"
-                )
-        return tuple(issues)
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "schema": FIXED_POINT_PLAN_SCHEMA,
-            "plan_id": self.plan_id,
-            "dependencies": [d.to_dict() for d in self.dependencies],
-            "torn": [e.to_dict() for e in self.torn],
-            "absolute_tolerance": self.absolute_tolerance.to_dict(),
-            "max_iterations": self.max_iterations,
-        }
-
-    @classmethod
-    def from_dict(cls, payload: Mapping[str, Any]) -> "FixedPointCouplingPlan":
-        require_schema(payload, FIXED_POINT_PLAN_SCHEMA)
-        return cls(
-            plan_id=payload["plan_id"],
-            dependencies=tuple(
-                QuantityDependency.from_dict(d) for d in payload["dependencies"]
-            ),
-            torn=tuple(TornEndpoint.from_dict(e) for e in payload["torn"]),
-            absolute_tolerance=Quantity.from_dict(payload["absolute_tolerance"]),
-            max_iterations=payload["max_iterations"],
-        )
-
-
-# =====================================================================
-# Graph readers — pure, and they report rather than decide
-# =====================================================================
-
-def _edges(dependencies: Iterable[QuantityDependency]) -> list[tuple[str, str]]:
-    return [(d.source_problem_id, d.target_problem_id) for d in dependencies]
-
-
-def execution_order(
-    problem_ids: Sequence[str], dependencies: Iterable[QuantityDependency]
-) -> tuple[str, ...]:
-    """A deterministic order in which these problems may be solved.
-
-    Kahn's algorithm with a sorted tie-break, so the order is a function of the
-    records and not of insertion. Returns an empty tuple when no order exists —
-    which is the answer for a cycle, not an error, because reporting that a
-    composition is cyclic is exactly what a reader of a composition is for.
-
-    It **reports**. It never chooses which edge to cut: three edges of a
-    3-cycle are equally admissible tears, nothing in any record ranks them, and
-    the only rule that would select one keys on a domain modelling a computed
-    quantity as a configured parameter — an undeclared accident, not a law.
-    """
-    remaining = {str(p) for p in problem_ids}
-    incoming: dict[str, int] = {p: 0 for p in remaining}
-    outgoing: dict[str, list[str]] = {p: [] for p in remaining}
-    for source, target in _edges(dependencies):
-        if source not in remaining or target not in remaining or source == target:
-            continue
-        outgoing[source].append(target)
-        incoming[target] += 1
-
-    ready = sorted(p for p in remaining if incoming[p] == 0)
-    order: list[str] = []
-    while ready:
-        node = ready.pop(0)
-        order.append(node)
-        for target in sorted(outgoing[node]):
-            incoming[target] -= 1
-            if incoming[target] == 0:
-                ready.append(target)
-                ready.sort()
-    return tuple(order) if len(order) == len(remaining) else ()
-
-
-def cycle_edges(
-    problem_ids: Sequence[str], dependencies: Iterable[QuantityDependency]
-) -> tuple[QuantityDependency, ...]:
-    """The dependencies that lie on the cyclic core. Reports; chooses nothing.
-
-    Computed by peeling: repeatedly discard any node with no incoming edges
-    (nothing feeds it, so it cannot be downstream of a cycle) and any node with
-    no outgoing edges (it feeds nothing, so it cannot be upstream of one). What
-    remains is exactly the part of the graph a topological order cannot reach,
-    and the edges among it are the ones that must be cut.
-
-    An earlier form asked :func:`execution_order` for the settled set — which
-    that function discards whenever an order does not exist — so on any cyclic
-    graph the settled set was empty and **every** edge was reported as cyclic.
-    On this milestone's own composition, a pure 3-cycle, that was
-    indistinguishable from the right answer. It was wrong for `A→B, B→C, C→B`,
-    where it named `A→B`.
-    """
-    nodes = {str(p) for p in problem_ids}
-    edges = [
-        d
-        for d in dependencies
-        if d.source_problem_id in nodes
-        and d.target_problem_id in nodes
-        and d.source_problem_id != d.target_problem_id
-    ]
-    remaining = set(nodes)
-    while True:
-        sources = {d.source_problem_id for d in edges
-                   if d.source_problem_id in remaining
-                   and d.target_problem_id in remaining}
-        targets = {d.target_problem_id for d in edges
-                   if d.source_problem_id in remaining
-                   and d.target_problem_id in remaining}
-        core = remaining & sources & targets
-        if core == remaining:
-            break
-        remaining = core
-        if not remaining:
-            break
-    return tuple(
-        d
-        for d in edges
-        if d.source_problem_id in remaining and d.target_problem_id in remaining
-    )
 
 
 # =====================================================================
@@ -1019,211 +520,6 @@ def build_coupled_twin(
     )
 
 
-# =====================================================================
-# The executed loop
-# =====================================================================
-
-@dataclass(frozen=True)
-class CoupledIteration:
-    """One pass of the loop: what was solved, and how far the iterate moved.
-
-    ``results`` carries every :class:`ScientificResult` produced in this pass,
-    so the value that crossed any declared edge is recoverable as
-    ``result_for(dep.source_problem_id).values[dep.source_quantity]``. A
-    companion ``CouplingTransfer`` record was designed and dropped for exactly
-    that reason: it would have restated what these results already say.
-
-    ``largest_iterate_change`` is the **change in the iterate**, not the
-    residual of any equation. Those are different quantities: the iterate
-    change measures how far a Gauss–Seidel sweep moved, and the residual
-    measures how far the coupled system is from being satisfied. Nothing here
-    computes the second, so nothing here may be named for it.
-
-    It is a **difference** stored in a type that means an absolute value.
-    ``Quantity`` draws no interval/ratio distinction, so a consumer could call
-    ``.to()`` on it with an affine target and get nonsense. The plan's
-    ratio-scale refusal is what keeps this field convertible; the limitation is
-    stated here because the type cannot state it.
-    """
-
-    index: int
-    results: tuple[ScientificResult, ...]
-    largest_iterate_change: Quantity
-
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "index", int(self.index))
-        object.__setattr__(self, "results", tuple(self.results))
-        if not isinstance(self.largest_iterate_change, Quantity):
-            raise InvalidScientificProblem(
-                "iterate change must be a Quantity"
-            )
-
-    def result_for(self, problem_id: str) -> ScientificResult:
-        for result in self.results:
-            if result.problem_id == problem_id:
-                return result
-        raise InvalidScientificProblem(
-            f"iteration {self.index} produced no result for problem "
-            f"{problem_id!r}"
-        )
-
-    def transported(self, dependency: QuantityDependency) -> Quantity:
-        """The value that crossed this edge in this pass. Derived, not stored."""
-        return self.result_for(dependency.source_problem_id).value(
-            dependency.source_quantity
-        )
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "schema": COUPLED_ITERATION_SCHEMA,
-            "index": self.index,
-            "results": [r.to_dict() for r in self.results],
-            "largest_iterate_change": self.largest_iterate_change.to_dict(),
-        }
-
-    @classmethod
-    def from_dict(cls, payload: Mapping[str, Any]) -> "CoupledIteration":
-        require_schema(payload, COUPLED_ITERATION_SCHEMA)
-        return cls(
-            index=payload["index"],
-            results=tuple(
-                ScientificResult.from_dict(r) for r in payload["results"]
-            ),
-            largest_iterate_change=Quantity.from_dict(
-                payload["largest_iterate_change"]
-            ),
-        )
-
-
-@dataclass(frozen=True)
-class CoupledRun:
-    """What the coupling iteration did, and why it stopped.
-
-    ``outcome`` is the **only** statement of coupling convergence anywhere. It
-    is not written into any ``ScientificResult.convergence``, any
-    ``ValidationReport``, any ``SolverSettings.tolerances``, any
-    ``ProvenanceRecord.tolerances``, or any metadata, diagnostics or artifacts
-    mapping — and it is never computed from the sub-solves' own convergence.
-    Every closed-form participant here reports ``NOT_APPLICABLE`` and the MNA
-    solve reports ``CONVERGED`` in every iteration of a run that did not
-    converge at all.
-    """
-
-    plan: FixedPointCouplingPlan
-    outcome: CouplingOutcome
-    iterations: tuple[CoupledIteration, ...]
-    #: The last value each torn endpoint took, whatever the outcome.
-    #:
-    #: Named ``final_values`` and **not** ``converged_values``: it is populated
-    #: identically on both exit paths, so on an ``ITERATION_LIMIT_REACHED`` run
-    #: it holds an iterate six kelvin from the fixed point. A field named
-    #: *converged* holding an unconverged number is one name meaning two things
-    #: — the defect `MIN-FOUNDATION-ET` caught pre-commit as finding D-1, when
-    #: it still cost a rename rather than a schema bump.
-    #:
-    #: Keyed by the ``(problem_id, quantity)`` pair itself, not by a
-    #: ``"{problem}::{quantity}"`` string. Both components already contain
-    #: colons, so a composite key would have to be parsed to be read — the
-    #: string convention this platform refuses, and the association
-    #: :class:`TornEndpoint` exists to carry structurally.
-    final_values: Mapping[tuple[str, str], Quantity]
-    provenance: ProvenanceRecord
-
-    def __post_init__(self) -> None:
-        if not isinstance(self.plan, FixedPointCouplingPlan):
-            raise InvalidScientificProblem(
-                "a coupled run requires the plan it executed"
-            )
-        if not isinstance(self.provenance, ProvenanceRecord):
-            raise InvalidScientificProblem(
-                "a coupled run requires a ProvenanceRecord: an unattributable "
-                "iteration is not a scientific result"
-            )
-        object.__setattr__(self, "outcome", CouplingOutcome(self.outcome))
-        iterations = tuple(self.iterations)
-        if not iterations:
-            raise InvalidScientificProblem(
-                "a coupled run with no iterations executed nothing; the budget "
-                "guarantees at least one"
-            )
-        for iteration in iterations:
-            if not isinstance(iteration, CoupledIteration):
-                raise InvalidScientificProblem(
-                    f"coupled run iterations must be CoupledIteration records, "
-                    f"got {type(iteration).__name__}"
-                )
-        object.__setattr__(self, "iterations", iterations)
-        object.__setattr__(
-            self,
-            "final_values",
-            {(str(p), str(q)): v for (p, q), v in dict(self.final_values).items()},
-        )
-        for name, value in self.final_values.items():
-            if not isinstance(value, Quantity):
-                raise InvalidScientificProblem(
-                    f"final value {name!r} must be a Quantity"
-                )
-
-    @property
-    def criterion_met(self) -> bool:
-        """Derived from :attr:`outcome`, never stored beside it."""
-        return self.outcome is CouplingOutcome.CRITERION_MET
-
-    @property
-    def iterations_run(self) -> int:
-        return len(self.iterations)
-
-    @property
-    def final_iterate_change(self) -> Quantity:
-        return self.iterations[-1].largest_iterate_change
-
-    @property
-    def iterate_changes(self) -> tuple[Quantity, ...]:
-        return tuple(i.largest_iterate_change for i in self.iterations)
-
-    @property
-    def final(self) -> CoupledIteration:
-        return self.iterations[-1]
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "schema": COUPLED_RUN_SCHEMA,
-            "plan": self.plan.to_dict(),
-            "outcome": self.outcome.value,
-            "iterations": [i.to_dict() for i in self.iterations],
-            # A list of records, not a mapping keyed by a joined string. The
-            # endpoint travels as its two components and is read back without
-            # being parsed.
-            "final_values": [
-                {
-                    "problem_id": problem_id,
-                    "quantity": quantity,
-                    "value": self.final_values[(problem_id, quantity)].to_dict(),
-                }
-                for problem_id, quantity in sorted(self.final_values)
-            ],
-            "provenance": self.provenance.to_dict(),
-        }
-
-    @classmethod
-    def from_dict(cls, payload: Mapping[str, Any]) -> "CoupledRun":
-        require_schema(payload, COUPLED_RUN_SCHEMA)
-        return cls(
-            plan=FixedPointCouplingPlan.from_dict(payload["plan"]),
-            outcome=CouplingOutcome(payload["outcome"]),
-            iterations=tuple(
-                CoupledIteration.from_dict(i) for i in payload["iterations"]
-            ),
-            final_values={
-                (entry["problem_id"], entry["quantity"]): Quantity.from_dict(
-                    entry["value"]
-                )
-                for entry in payload["final_values"]
-            },
-            provenance=ProvenanceRecord.from_dict(payload["provenance"]),
-        )
-
-
 # ---- per-problem execution, supplied by this pack --------------------------
 
 def _property_result(
@@ -1374,195 +670,6 @@ def _executors(
         table[prop.problem_id] = property_call
         table[thermal.problem_id] = thermal_call
     return table
-
-
-def run_fixed_point(
-    problems: Sequence[ScientificProblem],
-    executors: Mapping[str, Callable[[Mapping[str, Quantity], str], ScientificResult]],
-    plan: FixedPointCouplingPlan,
-    *,
-    run_id: str,
-    software_version: str,
-    assumptions: tuple[str, ...] = (),
-) -> CoupledRun:
-    """Execute a torn dependency cycle to convergence, or to the budget.
-
-    A Gauss–Seidel sweep in the order the *records* imply: cut the torn edges,
-    topologically sort what remains, and solve each problem with the values its
-    incoming edges transported. Torn targets take the seed on the first pass and
-    the previous pass's value afterwards.
-
-    **Nothing in this function names a domain, and nothing in it can.** It sees
-    a set of problems, a directed dependency set, a plan, and a mapping from
-    problem id to *something that solves that problem*. Which sciences sit
-    behind those callables is supplied by the caller and is unreadable from
-    here — which is what makes "the loop does not secretly know it is
-    electro-thermal" a checkable claim rather than an assurance.
-
-    It remains a **system-pack** function. It is not promoted into universal
-    core because no universal reader of a coupling plan or outcome exists;
-    the promotion criterion is preregistered.
-
-    Convergence is the largest change of any torn iterate, compared in one
-    ratio-scale unit fixed by the plan. It is **not** derived from any
-    participant's own convergence: in the non-convergent cases every sub-solve
-    reports success in every one of the fifty iterations that did not converge.
-
-    A sub-solve that refuses an inadmissible value is **not caught**. An
-    execution failure and a failure to converge are different findings, and a
-    loop that swallowed the first to report the second would be collapsing them.
-    """
-    seeds = {e.endpoint: e.initial_value for e in plan.torn}
-    problems = tuple(problems)
-    issues = plan.check_against(problems)
-    if issues:
-        raise InvalidScientificProblem(
-            f"coupling plan {plan.plan_id!r} cannot be executed against this "
-            f"composition: " + "; ".join(issues)
-        )
-
-    problem_ids = [p.problem_id for p in problems]
-    # Three pairing guards. Every domain in this repository has them —
-    # ``verify_problem_matches_circuit``, ``verify_problem_matches_body``,
-    # ``verify_problem_matches_conductor`` — and the one place that *composes*
-    # results is the place that most needs them. The next milestone replaces a
-    # participant with an external provider, which is exactly the producer most
-    # likely to hand back a result carrying its own identity.
-    duplicated = sorted({p for p in problem_ids if problem_ids.count(p) > 1})
-    if duplicated:
-        raise InvalidScientificProblem(
-            f"duplicate problem id(s) {duplicated}: two problems under one id "
-            f"would collapse into one solve and one attribution"
-        )
-    uncovered = sorted(set(problem_ids) - set(executors))
-    if uncovered:
-        raise InvalidScientificProblem(
-            f"no executor was supplied for {uncovered}; a problem in the "
-            f"composition that nothing solves cannot be ordered into a sweep"
-        )
-
-    order = execution_order(problem_ids, plan.uncut)
-    if not order:
-        raise InvalidScientificProblem(
-            f"coupling plan {plan.plan_id!r} leaves a cycle after its declared "
-            f"tears; no execution order exists"
-        )
-
-    unit = plan.comparison_unit
-    tolerance = plan.absolute_tolerance.magnitude_in(unit)
-    incoming: dict[str, list[QuantityDependency]] = {p: [] for p in problem_ids}
-    for dependency in plan.uncut:
-        incoming[dependency.target_problem_id].append(dependency)
-
-    current = dict(seeds)
-    iterations: list[CoupledIteration] = []
-    outcome = CouplingOutcome.ITERATION_LIMIT_REACHED
-
-    for index in range(1, plan.max_iterations + 1):
-        produced: dict[str, ScientificResult] = {}
-        for problem_id in order:
-            inputs: dict[str, Quantity] = {}
-            for dependency in incoming[problem_id]:
-                inputs[dependency.target_quantity] = produced[
-                    dependency.source_problem_id
-                ].value(dependency.source_quantity)
-            # Torn targets take the seed on the first pass and the previous
-            # pass's value afterwards. This cannot shadow a transported value:
-            # the plan refuses two dependencies sharing a target endpoint, so a
-            # torn edge's endpoint is never also an uncut edge's. An earlier
-            # form had no such refusal, and this assignment then silently
-            # discarded the transported value.
-            for endpoint, value in current.items():
-                if endpoint[0] == problem_id:
-                    inputs[endpoint[1]] = value
-            result = executors[problem_id](
-                inputs, f"{run_id}-{index}-{problem_id}"
-            )
-            if result.problem_id != problem_id:
-                raise InvalidScientificProblem(
-                    f"the executor for {problem_id!r} returned a result "
-                    f"attributed to {result.problem_id!r}; a composition that "
-                    f"accepted that would misattribute every value it "
-                    f"transported out of it"
-                )
-            produced[problem_id] = result
-
-        updated: dict[tuple[str, str], Quantity] = {}
-        largest = 0.0
-        for endpoint in plan.torn:
-            key = endpoint.endpoint
-            value = produced[endpoint.dependency.source_problem_id].value(
-                endpoint.dependency.source_quantity
-            )
-            updated[key] = value
-            largest = max(
-                largest,
-                abs(value.magnitude_in(unit) - current[key].magnitude_in(unit)),
-            )
-
-        iterations.append(
-            CoupledIteration(
-                index=index,
-                results=tuple(produced[p] for p in order),
-                largest_iterate_change=Quantity(largest, unit),
-            )
-        )
-        current = updated
-        if largest <= tolerance:
-            outcome = CouplingOutcome.CRITERION_MET
-            break
-
-    # Every iteration, not only the last. For this consumer every sweep binds
-    # the same participants, so the two agree — but this function is generic,
-    # and an executor that changed realization mid-run (an adaptive fallback, a
-    # provider degrading to a coarser method) would leave those bindings out of
-    # a last-iteration-only record. ``ProvenanceRecord`` deduplicates by key,
-    # so the union costs nothing and cannot under-claim.
-    bindings: list[ExecutionBinding] = []
-    for result in [r for iteration in iterations for r in iteration.results]:
-        if result.provenance.bindings:
-            bindings.extend(result.provenance.bindings)
-        else:
-            # Producers predating MODEL0-R declare participants without an
-            # association. The electrical solver is one; its models are named
-            # by the circuit it solved, and pairing them with its solver here
-            # states an association it did make. Nothing is inferred about a
-            # realization: it stays None, which is a real answer.
-            bindings.extend(
-                ExecutionBinding(
-                    model=ModelReference(model_id, version),
-                    realization=None,
-                    solver=result.solver,
-                )
-                for model_id, version in result.models
-            )
-
-    provenance = ProvenanceRecord(
-        run_id=run_id,
-        software_version=software_version,
-        bindings=tuple(bindings),
-        # ``ProvenanceRecord.inputs`` is ``Mapping[str, Quantity]`` in frozen
-        # core, so an endpoint has to be flattened to reach it. Recorded as a
-        # stated limitation rather than left silent: this key must be parsed to
-        # be read back, and ``CoupledRun.final_values`` is the record that
-        # carries the same endpoints structurally.
-        inputs={f"{p}::{q}": v for (p, q), v in sorted(current.items())},
-        assumptions=(
-            "Gauss-Seidel fixed-point iteration over a torn dependency cycle",
-            "no relaxation, damping or acceleration is applied",
-            "every problem's own declared conditions are identical in every "
-            "iteration; the iterate is a coupling iterate and not a time level",
-        )
-        + tuple(assumptions),
-    )
-
-    return CoupledRun(
-        plan=plan,
-        outcome=outcome,
-        iterations=tuple(iterations),
-        final_values=dict(current),
-        provenance=provenance,
-    )
 
 
 def run_fixed_point_coupling(
