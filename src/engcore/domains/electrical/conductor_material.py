@@ -149,7 +149,6 @@ from ...scientific.solvers.protocol import (
 from ...scientific.units.quantity import Quantity
 
 __all__ = [
-    "AREA",
     "AREA_UNIT",
     "CROSS_SECTIONAL_AREA",
     "GEOMETRIC_RESISTANCE_MODEL",
@@ -216,7 +215,6 @@ TEMPERATURE = "temperature"
 MATERIAL = "material"
 LENGTH = "length"
 CROSS_SECTIONAL_AREA = "cross_sectional_area"
-AREA = CROSS_SECTIONAL_AREA
 
 RESISTIVITY_METRIC = "resistivity"
 RESISTANCE_METRIC = "resistance"
