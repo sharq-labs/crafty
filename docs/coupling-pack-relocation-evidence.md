@@ -878,6 +878,59 @@ tests/test_heterogeneous_ngspice.py
 
 ---
 
+## R2. Test results and the exact delta
+
+Requirement: **0 failed, 0 errors**, no test weakened, skipped or xfailed.
+Baseline: **2177 passed**.
+
+| Selection | Baseline `ad6e6cd0` | After | Delta |
+|---|---|---|---|
+| Coupling-targeted (`tests/test_coupling_pack_relocation.py`) | — | **26** | +26 (new module) |
+| The preregistered §19 four-module set — `test_electrothermal_vertical.py`, `systems/fluidthermal/`, `test_min_foundation_electrothermal.py`, `test_heterogeneous_ngspice.py` | **210** | **212** | **+2** |
+| Both together | — | **238** | — |
+| FAST (`-m "not expensive"`) | — | **1602 passed / 0 failed** | — |
+| **FULL** | **2177 passed / 0 failed / 0 errors** | **2205 passed / 0 failed / 0 errors** (20 m 39 s) | **+28** |
+
+### Reconciling the delta, test by test
+
+**+2 in the preregistered four-module set.** Two guards were **added** to
+`tests/systems/fluidthermal/test_ft_coupling_records.py`:
+`test_the_relocated_machinery_left_no_copy_behind` and
+`test_neither_pack_republishes_a_generic_coupling_name`. Two guards were
+**replaced in place**, not removed:
+`test_the_electrothermal_coupling_machinery_was_not_edited` →
+`test_the_coupling_machinery_was_relocated_and_not_edited` (a directory diff
+became a byte-identity comparison against the minting blob — strictly
+stronger, §I.1), and
+`test_the_loop_this_pack_uses_is_the_electrothermal_one_by_identity` →
+`…_is_the_shared_generic_one_by_identity` (now asserted for **both** packs, not
+one). Both replacements were preregistered in §19.1 **before** they were made.
+
+**+26 from the new module.** `tests/test_coupling_pack_relocation.py`, 26
+tests, all new, none replacing anything.
+
+**+28 in FULL = 26 + 2, and it reconciles exactly.** 2177 → 2205. The new
+module contributes 26 and the two added Fluid↔Thermal guards contribute 2.
+Nothing else in the repository gained or lost a test.
+
+**Nothing removed, weakened, skipped or xfailed.** No `pytest.mark.skip`, no
+`xfail`, no widened tolerance, no deleted assertion anywhere in the diff. Two
+assertions were made *stronger* (the two replacements above) and two guards
+that could not fail were repaired so that they can (falsifier C-3, §N) — each
+now additionally proving, on a synthetic input, that it fires on a real
+offender and stays quiet on prose.
+
+**A note on the two working-tree guards.**
+`tests/test_exec_spec_structured_input.py::test_h_no_universal_core_or_committed_evidence_was_modified`
+and `tests/test_executable_scientific_spec.py::test_no_src_file_was_added_or_edited`
+compare `git diff --name-only HEAD -- src/`, i.e. the **uncommitted working
+tree**. They fail on any milestone while its `src/` changes are unstaged and
+pass once committed. `FT-SCALAR-COUPLING` modified `src/` the same way and
+added no exception registry, for the same reason. No exception was added here
+either, and none was needed.
+
+---
+
 ## S. Evidence level
 
 **EXECUTED, for a move.** Every claim in §H, §I, §J, §K, §L, §O, §P and §R is
