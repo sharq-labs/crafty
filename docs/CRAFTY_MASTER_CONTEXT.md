@@ -3502,3 +3502,97 @@ edited, both historical scope guards that read `git diff <their own prereg>` and
 therefore fail for every later milestone; the repository already carried this
 repair four times. New files are named individually in both, no assertion was
 changed and no tolerance loosened.
+
+# 71. PROPULSION0-EXT — completed
+
+```text
+Decision status:        PROPOSED
+Evidence:               L1 EXERCISED (two machines in one composition, eight
+                        operating points, four refusals, efficiency classified)
+                        L2 EXCLUDED BY PREREGISTRATION
+Milestone execution:    COMPLETE — verdict KEEP
+```
+
+Full record: `docs/evidence/propulsion0-ext-preregistration.md` (committed alone,
+not amended) and `docs/evidence/propulsion0-ext-evidence.md`. **Not a freeze.**
+Base `62a9fd7` (PROPULSION0). §70's record is **not** rewritten; it gains one
+pointer line.
+
+**Scope: exactly four coverage gaps** left by §70 — a valid load sweep (its §8),
+two motors (its §10), four missing negative cases (its §7), and the efficiency
+classification (its §5). Nothing else was rebuilt.
+
+**Universal contracts forced: NONE.** `engcore/scientific/` and
+`engcore/coupling/` byte-unchanged, asserted from git *and* the working tree.
+**No new file was created under `src/`**: every new function went into a file
+`PROPULSION0` already added, which is why §70's own scope gates needed no repair.
+Public surface grew by exactly four names: `drive_efficiency`, `no_load_speed`,
+`admit_speed_demand`, `admit_torque_demand`.
+
+**G1 — the sweep is a relation, not three fixtures.** Nine monotonicity relations
+were *derived* from one implicit-function argument before anything ran and only
+those were asserted: 240/240 consecutive pairs over 241 log-spaced points, plus
+five coupled runs. Three quantities are non-monotone with turning points in
+closed form, and each was located where its formula says. The `b` family
+**reverses** `tau_load` and `P_mech` where the `k_load` family raises them — an
+asymmetry no memorised number reproduces. **Preregistered quantitative
+prediction, matched:** efficiency is non-monotone, its maximum is the third of
+five points, and it turns at `w_eta = 724.32` rad/s (measured `R = 0.52992`).
+Energy closed at all eight points to ≤ 2.2e-14 against a declared 1e-9. No
+direction was asserted for `T_motor`, because its heat is a rising copper channel
+plus a falling mechanical one — measured at 10.02 W and 10.55 W at the reference.
+
+**G2 — two motors: independent YES, contamination NO, provenance YES.** Two
+machines of the same type ran in **one composition** — 28 problems, 40 edges,
+six torn endpoints, 13 iterations — on the unedited plan and loop. Changing one
+leaves the other **bit-identical**. Problem-id namespacing **does** collide (14
+of 17 derived ids carry no `drive_id`), and **F-1's second half is falsified**:
+the union is refused twice by universal core, not accepted. `ComponentInstance`
+was **not** built; the minimal candidate and its deletion criteria are written
+down instead.
+
+**Prediction P6 WITHDRAWN as unfalsifiable.** A composed plan is a pure function
+of the drive id, the component ids and `compose`'s own options — no load
+coefficient, machine constant, voltage, geometry or material enters it — so at
+equal ids "the other drive's plan" *is* this drive's plan, measured
+bit-identically with the second drive deleted. **F-2 is restated:** what is real
+is plan-to-composition under-identification, it bites at **N = 1**, and
+drive-scoped namespacing would not touch it.
+
+**G3 — four refusals, none reaching a solver.** Missing mechanical load,
+unsupported operating point, impossible torque demand, efficiency outside its
+validity range. Two of them derive from `V/k_e`, which is the **exact supremum**
+of shaft speed over every positive loop resistance — tight, `R`-independent, and
+fail-closed. The gates are declared to be gates and not feasibility oracles, and
+a demand that is admitted and then missed is exhibited.
+
+**G4 — efficiency is a state-dependent relation.** Not a material property, not a
+model parameter, not a solver output; four separate executable discriminations.
+**One pure function added and nothing else** — no field, no schema token, no
+serialization, no posed problem, no edge, no model, no solver. The derived range
+is `eta <= 1` (and `0 <= eta` given a non-negative output); the **strict**
+endpoints are a declared refusal scoped to this composition, so a regenerative
+drive is outside what the relation is declared over and the message says so.
+
+**Adversarial: two `architecture-falsifier` rounds, no BLOCKER, 8 findings
+closed, 1 prediction withdrawn.** Round 1's sharpest: the published pair
+`drive_efficiency(reconcile_drive_energy(...))` returned 0.80268 for a
+budget-exhausted run against a true 0.80225, because the balance closes at every
+iterate — the convergence gate now sits on the function producing the number, and
+the boundary it *cannot* reach is stated. Round 2's sharpest: the round-1 repair
+had **relocated** its counterexample rather than closing it, and this milestone's
+own circuit spy was **inert** — six assertions no implementation could violate.
+Both are recorded, and a test now proves the spy can fail.
+
+**Next milestone, from measured evidence only: bind a plan to the composition it
+was built for.** The single measured defect this milestone produced, reachable at
+N = 1, and the first pressure this lineage has put on `engcore.coupling`. Not
+recommended: drive-scoped namespacing (would not close it), `ComponentInstance`
+(nothing forced it at N = 2), a per-drive coupling outcome, a transient
+milestone, or a mechanics framework.
+
+Regression: **FULL 2467 → 2547**, FAST 1840 → 1920. **One** pre-existing test
+file edited — `tests/test_composite_system0.py::test_t6f`, the whole-tree
+allow-list guard that fails for every successor — with this milestone's three new
+files named individually and nothing under `src/` added to it. No assertion was
+changed and no tolerance loosened.

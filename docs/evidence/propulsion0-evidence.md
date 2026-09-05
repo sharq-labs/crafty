@@ -577,6 +577,12 @@ schema enforcement is complete on every read path, and that the measured evidenc
 
 ## §20 Next milestone, chosen from measured evidence
 
+> **Extension, not an amendment of this record:** `PROPULSION0-EXT` closed four coverage gaps
+> against this milestone — a valid load sweep, two machines in one composition, four missing
+> negative cases and the efficiency classification. It is recorded separately in
+> [`propulsion0-ext-evidence.md`](propulsion0-ext-evidence.md), which also **falsifies the
+> second half of F-1** (§16) and **restates F-2**. Nothing below is rewritten.
+
 **Recommended: a second drive in one composition** — two machines, or one machine and one
 independent heated element, in one process.
 
