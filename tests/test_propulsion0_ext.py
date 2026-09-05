@@ -846,6 +846,19 @@ def test_g2_eleven_of_the_fourteen_problem_ids_carry_no_drive_id():
     assert carries_drive_id == {
         left.electrical_problem_id, *left.series_join_ids
     }
+    # `architecture-falsifier`'s correction to the denominator: three more ids
+    # are derived and posed — the thermal-mass problems, which `compose` solves
+    # before the loop starts and which `declared_problem_ids` does not list.
+    # They carry no `drive_id` either, so the honest counts are 14 of 17
+    # derived ids, and 11 of the 14 the plan is checked against.
+    derived_l = ids_l | {
+        e.thermal_mass_problem_id for e in left.conducting_elements
+    }
+    derived_r = ids_r | {
+        e.thermal_mass_problem_id for e in right.conducting_elements
+    }
+    assert len(derived_l) == 17
+    assert len(derived_l & derived_r) == 14
 
 
 def test_g2_colliding_component_ids_are_refused_by_the_unedited_plan():
@@ -892,40 +905,94 @@ def test_g2_colliding_problem_ids_are_refused_by_the_unedited_run():
         )
 
 
-def test_g2_a_plan_composed_for_another_drive_is_still_accepted(circuit_spy):
-    """P6 — finding F-2, now reachable, confirmed, and HARMFUL.
+def test_g2_a_plan_composed_for_another_drive_is_accepted_and_is_wrong(circuit_spy):
+    """P6 — finding F-2, reachable at N = 2, confirmed, and HARMFUL at equal controls.
 
-    `run_propulsion_drive` validates only that the plan's problem ids are a
-    subset of the drive's. Two drives that share a `drive_id` and component ids
-    therefore accept each other's plans — and the plan carries the seed, the
-    tolerance and the iteration budget. Here a plan authored for a *different*
-    load, seeded 120 K away and with a tolerance five orders looser, is accepted
-    for this drive: the run reports `converged = True`, passes the energy
-    reconciliation to 1e-14, and returns an answer that is **wrong**.
+    **Corrected after `architecture-falsifier`.** The first version of this test
+    swapped a plan carrying a looser tolerance and a distant seed, and called
+    the resulting error an identity failure. It was not: a composed plan carries
+    no drive physics, so that demonstration was a *control* substitution wearing
+    an identity costume, and the named repair would not have prevented it.
 
-    That is the repository's own worst historical defect class — a result
-    consumed as trustworthy while the check that should have caught it looks
-    elsewhere. It is NOT repaired here: the repair is drive-scoped identity, the
-    brief forbids building it on this evidence, and the evidence document
-    carries the minimal candidate and its deletion criteria instead.
+    A plan does carry one thing that is neither a control nor an id: **which
+    quantity each declared edge transports**. `compose` takes
+    ``temperature_metric``, and the lumped body publishes two temperatures — the
+    final one and the steady-state one. So two drives in one process may
+    legitimately compose against different ones.
+
+    Here every control is held equal — same ``plan_id``, same seed, same
+    tolerance, same budget — and the only difference is the quantity the foreign
+    plan transports. `run_propulsion_drive` validates only that the plan's
+    problem ids are a subset of this drive's, so it accepts the foreign plan,
+    reports ``converged = True``, passes the energy reconciliation to 2.6e-15
+    **and converges 12 K away from this drive's own answer**.
+
+    That is this repository's own worst historical defect — a result consumed as
+    trustworthy while the check meant to catch it looks elsewhere — reproduced
+    at N = 2. And unlike the withdrawn version, the named repair *would* have
+    prevented it: with distinct component ids the foreign plan names edges this
+    drive does not pose, and ``_refuse_unresolved_edges`` refuses it. The
+    failure is therefore genuinely an identity failure. It is **not** repaired
+    here; the evidence document carries the minimal candidate semantic and its
+    deletion criteria instead.
     """
     own = build_drive(drive_id="DX")
     other = build_drive(drive_id="DX", load=mechanical_load(k_load=6.0e-7))
     assert pd.declared_problem_ids(own) == pd.declared_problem_ids(other)
 
-    truth = _run(own, tolerance=Q(1e-13, KELVIN), run_id="truth")
-    *_, foreign_plan = pd.compose(
-        other, seed=Q(420.0, KELVIN), tolerance=Q(5.0, KELVIN)
+    *_, own_plan = pd.compose(own, seed=SEED)
+    *_, foreign = pd.compose(
+        other, seed=SEED, temperature_metric=lump.STEADY_STATE_TEMPERATURE_METRIC
     )
-    swapped = pd.run_propulsion_drive(own, foreign_plan, run_id="swapped")
+    # every control identical: this is not a tolerance or a seed effect
+    assert foreign.plan_id == own_plan.plan_id
+    assert foreign.absolute_tolerance == own_plan.absolute_tolerance
+    assert foreign.max_iterations == own_plan.max_iterations
+    assert {e.initial_value.magnitude for e in foreign.torn} == {
+        e.initial_value.magnitude for e in own_plan.torn
+    }
+    # ...and exactly one thing differs: what the torn edges transport.
+    assert {d.source_quantity for d in foreign.dependencies} != {
+        d.source_quantity for d in own_plan.dependencies
+    }
+
+    truth = pd.run_propulsion_drive(own, own_plan, run_id="own")
+    swapped = pd.run_propulsion_drive(own, foreign, run_id="foreign")
 
     assert swapped.converged is True
     assert swapped.accounting.relative_balance_residual < 1e-13
-    true_speed = _speed(truth.coupled, own)
-    swapped_speed = _speed(swapped.coupled, own)
-    assert swapped_speed != pytest.approx(true_speed, rel=1e-6)
-    assert abs(swapped_speed - true_speed) / true_speed > 1e-4
+    true_temperatures = _temperatures(truth, own)
+    swapped_temperatures = _temperatures(swapped, own)
+    gap = abs(
+        swapped_temperatures[own.motor.component_id]
+        - true_temperatures[own.motor.component_id]
+    )
+    assert gap > 10.0
+    assert _speed(swapped.coupled, own) != pytest.approx(
+        _speed(truth.coupled, own), rel=1e-4
+    )
     assert circuit_spy.calls == []
+
+
+def test_g2_the_same_swap_is_refused_the_moment_the_ids_differ():
+    """...and that is what makes F-2 an IDENTITY failure rather than a control one.
+
+    The identical foreign plan, offered to a drive whose component ids differ,
+    is refused before anything executes — by `_refuse_unresolved_edges`, which
+    is the only binding between a plan and a composition that exists today. The
+    binding works; it is simply keyed on ids that two drives can share.
+    """
+    other = build_drive(drive_id="DX", load=mechanical_load(k_load=6.0e-7))
+    *_, foreign = pd.compose(
+        other, seed=SEED, temperature_metric=lump.STEADY_STATE_TEMPERATURE_METRIC
+    )
+    renamed = pd.PropulsionDrive(
+        drive_id="DX", source_voltage=Q(REFERENCE_VOLTS, "volt"),
+        feed=wire("other_feed"), motor=machine("other_M"), ret=wire("other_ret"),
+        load=mechanical_load(),
+    )
+    with pytest.raises(InvalidScientificProblem, match="does not pose"):
+        pd.run_propulsion_drive(renamed, foreign, run_id="renamed")
 
 
 def test_g2_a_single_drive_cannot_hold_two_machines(spy):
@@ -1005,15 +1072,86 @@ def test_g3_an_unsupported_operating_point_is_refused_before_any_solver(
     assert circuit_spy.calls == []
 
 
+
+def _ceiling_torque(drive):
+    """The ceiling, obtained from the LOAD MODEL'S OWN EVALUATOR.
+
+    Binds the published operating-point solver at a vanishing loop resistance —
+    where the speed tends to the supremum `V/k_e` — and reads the `load_torque`
+    the solver reports, which is `QUADRATIC_ROTATIONAL_LOAD_MODEL` evaluated by
+    its own realization. Constructs a solver, so it is never called under the
+    solver spy.
+    """
+    solver = pmod.DriveOperatingPointSolver()
+    problem_id = "drive_operating_point:ceiling-probe"
+    problem = pmod.build_operating_point_problem(
+        problem_id, supply_voltage=drive.source_voltage,
+        constants=drive.motor.constants, load=drive.load,
+    )
+    solver.bind_drive(
+        problem_id, supply_voltage=drive.source_voltage,
+        constants=drive.motor.constants, load=drive.load,
+        loop_resistance=Q(1.0e-9, cmat.RESISTANCE_UNIT),
+    )
+    raw = solver.solve(solver.prepare(problem))
+    return raw.values[pmod.LOAD_TORQUE_METRIC]
+
+
+def _gate_torque_boundary(drive):
+    """The smallest torque `admit_torque_demand` refuses — found by BISECTION.
+
+    `architecture-falsifier` C-13 found the tests computing the demand with the
+    same `k_load * speed**2` line the gate uses, so the guard shared the defect
+    it would have to catch. This function treats the gate as a black box and
+    shares no arithmetic with it at all: it brackets the boundary behaviourally
+    and returns it. It constructs no solver, so it is safe under the spy.
+    """
+    low, high = 1.0e-9, 1.0e9
+    assert not _refuses(pd.admit_torque_demand, drive, Q(low, NM))
+    assert _refuses(pd.admit_torque_demand, drive, Q(high, NM))
+    for _ in range(200):
+        middle = 0.5 * (low + high)
+        if middle <= low or middle >= high:
+            break
+        if _refuses(pd.admit_torque_demand, drive, Q(middle, NM)):
+            high = middle
+        else:
+            low = middle
+    return high
+
+
+def test_g3_the_torque_ceiling_agrees_with_the_load_models_own_evaluator():
+    """C-13's guard: the gate's restated law against the model's evaluator.
+
+    `admit_torque_demand` restates `tau = k_load*w^2`, which the rotational
+    domain owns and `DriveOperatingPointSolver` evaluates. The two authorities
+    are compared here through code that shares no expression with either: the
+    gate's boundary is found by bisecting the gate itself, and the model's is
+    the `load_torque` the solver reports as the loop resistance vanishes. They
+    must agree, and the day `RotationalLoad` gains a constant term they will
+    not — which is the failure this guard exists to catch.
+    """
+    for drive in (build_drive(), build_drive(load=mechanical_load(k_load=6.0e-7)),
+                  _motor_b()):
+        boundary = _gate_torque_boundary(drive)
+        assert _ceiling_torque(drive) == pytest.approx(boundary, rel=1e-6)
+        assert _refuses(pd.admit_torque_demand, drive, Q(boundary, NM))
+        assert not _refuses(
+            pd.admit_torque_demand, drive, Q(boundary * (1.0 - 1e-9), NM)
+        )
+
+
 @pytest.mark.parametrize("factor", [1.0, 1.5, 10.0])
 def test_g3_an_impossible_torque_demand_is_refused_before_any_solver(
     spy, circuit_spy, factor
 ):
     """A load torque the declared law cannot absorb below the speed ceiling."""
     drive = build_drive()
-    ceiling = drive.load.k_load_si * pd.no_load_speed(drive).magnitude_in(RAD_S) ** 2
+    # the boundary is found by bisecting the gate, never by restating the
+    # expression the gate uses (`architecture-falsifier` C-13)
+    boundary = _gate_torque_boundary(drive)
     with pytest.raises(InvalidScientificProblem, match="cannot meet"):
-        pd.admit_torque_demand(drive, Q(ceiling * factor, NM))
+        pd.admit_torque_demand(drive, Q(boundary * factor, NM))
     assert spy.calls == []
     assert circuit_spy.calls == []
 
@@ -1045,8 +1183,13 @@ def test_g3_the_two_demand_gates_are_one_ceiling_in_two_units(spy):
     """
     drive = build_drive()
     ceiling = pd.no_load_speed(drive).magnitude_in(RAD_S)
+    torque_ceiling = _gate_torque_boundary(drive)
     for speed in (0.5 * ceiling, 0.99 * ceiling, 1.01 * ceiling, 1.5 * ceiling):
-        torque = drive.load.k_load_si * speed * speed
+        # the load law is the SUBJECT of this test — it is the map the two
+        # gates are composed through — so stating it here is the claim, not a
+        # hidden duplication. The guard against the gate's restatement drifting
+        # from the model is the bisection cross-check above.
+        torque = torque_ceiling * (speed / ceiling) ** 2
         speed_refused = _refuses(pd.admit_speed_demand, drive, Q(speed, RAD_S))
         torque_refused = _refuses(pd.admit_torque_demand, drive, Q(torque, NM))
         assert speed_refused is torque_refused, speed
@@ -1072,15 +1215,17 @@ def test_g3_the_demand_gates_are_tight_but_not_sufficient(spy):
     drive = build_drive()
     reached = _run(drive, run_id="reached")
     achieved = _operating(reached, drive)[pmod.LOAD_TORQUE_METRIC].magnitude_in(NM)
-    ceiling = drive.load.k_load_si * pd.no_load_speed(drive).magnitude_in(RAD_S) ** 2
-    demand = 0.5 * (achieved + ceiling)
-    assert achieved < demand < ceiling
+    boundary = _gate_torque_boundary(drive)
+    demand = 0.5 * (achieved + boundary)
+    assert achieved < demand < boundary
     pd.admit_torque_demand(drive, Q(demand, NM))       # admitted...
     assert achieved < demand                            # ...and not delivered
     # the gate is tight: it refuses everything at or above the supremum and
-    # nothing below it, which is the strongest gate available without `R`.
-    assert _refuses(pd.admit_torque_demand, drive, Q(ceiling, NM))
-    assert not _refuses(pd.admit_torque_demand, drive, Q(ceiling * (1 - 1e-12), NM))
+    # nothing below it, which is the strongest gate available without `R`, and
+    # the supremum is the load model's own torque as the loop resistance
+    # vanishes.
+    assert _refuses(pd.admit_torque_demand, drive, Q(boundary, NM))
+    assert _ceiling_torque(drive) == pytest.approx(boundary, rel=1e-6)
 
 
 def test_g3_efficiency_outside_its_validity_range_is_refused_before_any_solver(
@@ -1126,8 +1271,15 @@ def test_g3_efficiency_outside_its_validity_range_is_refused_before_any_solver(
     with pytest.raises(InvalidScientificProblem, match="misreports its own"):
         pd.drive_efficiency(accounting(balance_residual=Q(30.0, watt)))
 
-    # The two boundaries of the derived range, each with a CLOSING balance —
-    # so it is the range that refuses them, not the reconciliation.
+    # The two boundaries, each with a CLOSING balance — so it is the range that
+    # refuses them, not the reconciliation.
+    #
+    # `architecture-falsifier` C-12: these two records are exactly why the
+    # DERIVED range is `0 <= eta <= 1` and not `0 < eta < 1`. Both satisfy every
+    # premise — positive source, four non-negative losses, exact closure — so
+    # neither is impossible, and the refusal message no longer says it is. The
+    # strict endpoints are this composition's own declaration, justified by
+    # `P_mech = k_load*w^3 > 0` for a strictly positive quadratic load.
     lossless = dict(
         feed_loss=Q(0.0, watt), return_loss=Q(0.0, watt),
         winding_loss=Q(0.0, watt), internal_mechanical_loss=Q(0.0, watt),
@@ -1162,6 +1314,17 @@ def test_g3_efficiency_of_a_run_that_never_converged_is_refused(circuit_spy):
         pd.drive_efficiency(run.accounting)
     with pytest.raises(InvalidScientificProblem, match="expects an EnergyAccounting"):
         pd.drive_efficiency(run.coupled)
+
+    # `architecture-falsifier` C-8, closed. The refusal used to live ONLY in
+    # `run_propulsion_drive`, which sets `accounting = None`. But
+    # `reconcile_drive_energy` is published and G2's own two-machine
+    # composition calls `run_fixed_point` directly and never builds a
+    # `DriveRun`, so the published pair reconstructed an efficiency for a
+    # budget-exhausted run: measured at 0.80268 against a true 0.80225, with a
+    # 1.4e-14 residual, because the balance closes at EVERY iterate. The gate
+    # now sits on the function that produces the number.
+    with pytest.raises(InvalidScientificProblem, match="rather than convergence"):
+        pd.reconcile_drive_energy(drive, run.coupled)
     assert circuit_spy.calls == []
 
 
@@ -1507,3 +1670,90 @@ def test_ext_gate_the_four_new_names_are_published_and_nothing_else_is():
         "drive_plan", "drive_problems", "native_circuit_solver",
         "reconcile_drive_energy", "run_propulsion_drive",
     }
+
+
+# =====================================================================
+# G1 — the three preregistered predictions the first pass left unmeasured
+# =====================================================================
+#
+# `architecture-falsifier` C-3 and C-4: §2.2 lists `P_wire = I^2*R_element` as
+# one of the nine unconditional relations and §2.7(2)-(3) predict `P_mech` and
+# `P_conv` increasing throughout the coupled sweep. None of the three was
+# asserted anywhere. They are asserted here rather than quietly dropped, and
+# the two conditional ones carry their conditions.
+
+def test_g1_both_lead_losses_rise_across_the_coupled_sweep(kload_sweep):
+    """§2.2's ninth relation, on the coupled path where it is not a theorem.
+
+    At fixed `R` this is `I^2*R` with `I` rising. Under coupling `R` rises too,
+    so it is doubly increasing — but `R`'s rise also depresses `I`, and the net
+    sign is a fixed-point property rather than an algebraic one. Asserted for
+    both leads and for the winding.
+    """
+    feed, ret, winding = [], [], []
+    for _k, _drive, run in kload_sweep:
+        feed.append(run.accounting.feed_loss.magnitude_in("watt"))
+        ret.append(run.accounting.return_loss.magnitude_in("watt"))
+        winding.append(run.accounting.winding_loss.magnitude_in("watt"))
+    for series in (feed, ret, winding):
+        assert _strictly(series, True) == []
+    # the two leads are declared separately and are geometrically identical, so
+    # they track each other to 1e-12 at every point. They are NOT bit-identical:
+    # they occupy different node spans in the MNA system and their losses are
+    # accumulated in different orders, which is float ordering, not aliasing —
+    # asserted as agreement rather than claimed as equality.
+    for left, right in zip(feed, ret):
+        assert left == pytest.approx(right, rel=1e-12)
+    assert feed != ret
+
+
+def test_g1_the_two_conditional_relations_hold_where_their_conditions_hold(
+    kload_sweep
+):
+    """§2.7(2) and §2.7(3), each with its condition evaluated at its own point.
+
+    `P_mech` rises in `k_load` only while `w > w_P`, and `P_conv` only while
+    `w > V/(2*k_e)`. Both thresholds are recomputed **per point** from that
+    point's own converged loop resistance, so this is the conditional
+    guarantee being checked, not a monotonicity being assumed.
+    """
+    mechanical, converted = [], []
+    for _k, drive, run in kload_sweep:
+        values = _operating(run, drive)
+        speed = values[pmod.ANGULAR_VELOCITY_METRIC].magnitude_in(RAD_S)
+        loop = run.coupled.final.result_for(
+            drive.series_join_ids[1]
+        ).value(pmod.SERIES_RESISTANCE_METRIC).magnitude_in(cmat.RESISTANCE_UNIT)
+        assert speed > _w_pmech(loop_ohm=loop), (speed, loop)
+        assert speed > _w_converted()
+        mechanical.append(
+            values[pmod.MECHANICAL_OUTPUT_POWER_METRIC].magnitude_in("watt")
+        )
+        converted.append(values[pmod.CONVERTED_POWER_METRIC].magnitude_in("watt"))
+    assert _strictly(mechanical, True) == []
+    assert _strictly(converted, True) == []
+
+
+def test_g1_the_conditional_guarantees_are_not_vacuous():
+    """...and the conditions really can fail, so they are conditions.
+
+    The same two relations, evaluated on the algebraic sweep beyond their own
+    thresholds: both reverse. A "conditional guarantee" whose condition never
+    fails is an unconditional one wearing a hedge.
+    """
+    grid = _log_grid(1.0e-8, 1.0e-3, 241)
+    points = [
+        _algebraic_point(k_load=k, b=REFERENCE_B, index=i)
+        for i, k in enumerate(grid)
+    ]
+    speeds = [p[pmod.ANGULAR_VELOCITY_METRIC] for p in points]
+    for metric, threshold in (
+        (pmod.MECHANICAL_OUTPUT_POWER_METRIC, _w_pmech()),
+        (pmod.CONVERTED_POWER_METRIC, _w_converted()),
+    ):
+        series = [p[metric] for p in points]
+        above = [v for v, w in zip(series, speeds) if w > threshold]
+        below = [v for v, w in zip(series, speeds) if w <= threshold]
+        assert len(above) > 10 and len(below) > 10, metric
+        assert _strictly(above, True) == [], metric      # holds above
+        assert _strictly(below, False) == [], metric     # reverses below

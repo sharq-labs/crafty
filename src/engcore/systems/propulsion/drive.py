@@ -1275,6 +1275,23 @@ def admit_torque_demand(drive: PropulsionDrive, demanded_torque: Quantity) -> No
     it as ``k_load * (V/k_e)^2``. Stated as its own refusal because a caller
     demanding a torque should be told about torque; it is **not** independent
     evidence from :func:`admit_speed_demand`, and the evidence says so.
+
+    **Ownership rule, because this function restates a declared law.**
+    ``tau = k_load*w^2`` is owned by
+    :data:`~engcore.domains.mechanical_rotational.QUADRATIC_ROTATIONAL_LOAD_MODEL`
+    and evaluated by :class:`~engcore.systems.propulsion.models.
+    DriveOperatingPointSolver`. Restating it here is a second authority, and
+    `architecture-falsifier` named the failure mode exactly: give
+    :class:`~engcore.domains.mechanical_rotational.RotationalLoad` a third term
+    — a constant Coulomb or gravity torque is an ordinary rotational load — and
+    this ceiling becomes silently wrong. **This function must therefore change
+    whenever ``RotationalLoad`` gains a term**, and the guard that makes that
+    checkable is
+    ``test_g3_the_torque_ceiling_agrees_with_the_load_models_own_evaluator``,
+    which obtains the same ceiling from the published solver and shares no
+    arithmetic with the line below. Composing the model here instead would
+    require a solve, and a gate that must execute a solver to refuse is not a
+    gate that runs before any solver exists.
     """
     demanded = _positive(demanded_torque, rot.TORQUE_UNIT, "demanded load torque")
     ceiling = no_load_speed(drive).magnitude_in(rot.ANGULAR_VELOCITY_UNIT)
@@ -1387,7 +1404,29 @@ def reconcile_drive_energy(
     second voltage source in the loop that metric is the *net* over all sources
     and no longer means "electrical input power". One name, two meanings, is a
     defect class this repository has caught before.
+
+    **It refuses a run that did not converge, and the refusal lives HERE.**
+    `PROPULSION0` placed that rule in :func:`run_propulsion_drive`, which sets
+    ``accounting = None`` unless the outcome is ``CRITERION_MET``. `PROPULSION0-EXT`
+    then composed two machines into one plan and executed them with
+    ``run_fixed_point`` directly — no ``DriveRun`` anywhere — and
+    `architecture-falsifier` observed that this published function would then
+    happily reconcile the last iterate of a budget-exhausted run and return an
+    efficiency for it. Measured, not predicted: a two-iteration run reconciles
+    to 1.4e-14 and yields 0.80268 against a true 0.80225, because the balance
+    closes at **every** iterate — within-iteration consistency is not
+    convergence. The gate is therefore at the function that produces the
+    number, not at one of its callers.
     """
+    if run.outcome is not CouplingOutcome.CRITERION_MET:
+        raise InvalidScientificProblem(
+            f"drive {drive.drive_id!r}: the coupling reported "
+            f"{run.outcome.value} rather than convergence, so there is no "
+            f"converged state to reconcile. The power balance closes at every "
+            f"iterate, so a residual computed here would certify a state the "
+            f"loop never reached — which is precisely the defect class this "
+            f"reconciliation exists to refuse"
+        )
     final = run.final
     electrical = final.result_for(drive.electrical_problem_id)
     operating = final.result_for(drive.motor.operating_point_problem_id)
@@ -1501,12 +1540,23 @@ def drive_efficiency(
     a second authority on a number ``EnergyAccounting`` already owns — the
     double-count this milestone exists to refuse.
 
-    **Its validity range is derived, not declared.** ``0 < eta < 1`` is a
-    *consequence* of the enforced balance plus the non-negativity of the four
-    loss channels, not an independent claim about machines. Which is exactly
-    why an accounting that violates it is refused: such a record cannot have
-    come from a reconciled run, and returning a number for it would be
-    reporting an efficiency for a state that does not conserve energy.
+    **What its validity range does and does not derive from — corrected.** The
+    balance plus the non-negativity of the four loss channels gives exactly
+    ``0 <= eta <= 1``, and no more. `architecture-falsifier` produced the
+    counterexamples from this milestone's own fixtures: an accounting with a
+    closing balance, a positive source, four non-negative losses and
+    ``mechanical_output = 0`` sits at ``eta = 0``, and a lossless one sits at
+    ``eta = 1``. Both are reachable records; neither is impossible.
+
+    So the **weak** inequality is derived and the **strict** endpoints are a
+    *declared refusal scoped to this composition*, justified by one property of
+    this drive and not of energy conservation: the declared load law is
+    ``tau_load = k_load*w^2`` with ``k_load > 0``, so ``P_mech = k_load*w^3 > 0``
+    at every positive operating speed, and the supply is a positive ideal
+    source. A four-quadrant or regenerative drive — an overhauling load driving
+    the machine, ``P_mech < 0`` — is **outside** what this relation is declared
+    over, and the refusal says so rather than claiming such a record cannot
+    exist.
 
     ``None`` — the value ``DriveRun.accounting`` carries when the coupling did
     not converge — is refused for the same reason the accounting is ``None``
@@ -1578,9 +1628,14 @@ def drive_efficiency(
     if not 0.0 < efficiency < 1.0:
         raise InvalidScientificProblem(
             f"efficiency {efficiency!r} is outside the range this relation is "
-            f"valid over: with four non-negative loss channels and a positive "
-            f"source, the balance forces 0 < eta < 1, so a value outside it "
-            f"reports an accounting that cannot have come from a reconciled run"
+            f"declared over. The balance and four non-negative loss channels "
+            f"derive 0 <= eta <= 1; the STRICT endpoints are this "
+            f"composition's own, because a strictly positive quadratic load "
+            f"driven by a positive ideal source has P_mech > 0 and at least "
+            f"one dissipative channel. A record at or beyond an endpoint — a "
+            f"lossless machine, or an overhauling load returning power — is "
+            f"not impossible, it is outside what this relation is declared "
+            f"over, and it is refused rather than extrapolated"
         )
     return Quantity(efficiency, "dimensionless")
 
