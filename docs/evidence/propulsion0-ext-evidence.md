@@ -11,7 +11,7 @@ data give **MODEL-CONSISTENT** results only; nothing here is validated against h
 | Baseline FULL (orchestrator, sequential) | 2467 passed / 0 failed / 0 errors, 1172.83 s |
 | Baseline FAST (this worktree) | 1840 passed / 0 failed / 627 deselected |
 | Final FAST | **1920 passed / 0 failed / 627 deselected** |
-| Final FULL (sequential, authoritative) | see §12 |
+| Final FULL (sequential, authoritative) | **2547 passed / 0 failed / 0 errors**, 943.31 s |
 | New tests | 80, all FAST |
 | Existing tests modified | 1 (one historical scope guard) — §11 |
 | New universal contracts forced | **NONE** |
@@ -467,7 +467,11 @@ No architectural test was weakened.
 | Targeted (`test_propulsion0_ext.py`) | 80 passed |
 | Targeted (`test_propulsion0.py`, unchanged) | 82 passed |
 | FAST (`-m "not expensive"`) | 1920 passed / 0 failed / 627 deselected |
-| FULL (sequential, `--basetemp=.pytest_tmp_propext_*`, no `-n auto`) | *(recorded below)* |
+| FULL (sequential, `--basetemp=.pytest_tmp_propext_full`, no `-n auto`) | **2547 passed / 0 failed / 0 errors**, 943.31 s |
+
+Baseline FULL was 2467. The delta is **exactly +80**, the number of tests this milestone
+adds: nothing was removed, renamed away or deselected. The `--basetemp` directory is covered
+by `.gitignore`'s `.pytest_tmp_*/` rule and is not committed.
 
 ---
 
@@ -478,7 +482,9 @@ No architectural test was weakened.
 | `57164d8` | Preregister the four coverage gaps — **alone**, not amended |
 | `42de91f` | Close four coverage gaps: sweep, two machines, refusals, efficiency |
 | `28349cf` | Close four adversarial findings against the extension |
-| *(round 2)* | Withdraw an unfalsifiable prediction and repair an inert guard |
+| `e480c49` | Withdraw an unfalsifiable prediction and repair an inert guard |
+| `aea9ad2` | Record the extension evidence and update the master context |
+| *(final)* | Record the measured FULL result |
 
 ---
 

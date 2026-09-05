@@ -3591,7 +3591,8 @@ recommended: drive-scoped namespacing (would not close it), `ComponentInstance`
 (nothing forced it at N = 2), a per-drive coupling outcome, a transient
 milestone, or a mechanics framework.
 
-Regression: **FULL 2467 → 2547**, FAST 1840 → 1920. **One** pre-existing test
+Regression: **FULL 2467 → 2547** (sequential, 943.31 s, 0 failed / 0 errors), FAST
+1840 → 1920. The FULL delta is exactly +80, the number of tests added. **One** pre-existing test
 file edited — `tests/test_composite_system0.py::test_t6f`, the whole-tree
 allow-list guard that fails for every successor — with this milestone's three new
 files named individually and nothing under `src/` added to it. No assertion was
