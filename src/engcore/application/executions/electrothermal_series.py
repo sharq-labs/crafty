@@ -53,6 +53,7 @@ from ...coupling import CoupledRun, FixedPointCouplingPlan
 from ...domains import thermal_lumped as lump
 from ...domains.electrical import material as mat
 from ...systems.electrothermal import (
+    AdmittedCoupledRun,
     CircuitSolver,
     CoupledElectroThermalSystem,
     CoupledStage,
@@ -60,7 +61,8 @@ from ...systems.electrothermal import (
     coupled_problems,
     native_circuit_solver,
     nominal_plan,
-    run_fixed_point_coupling,
+    require_coupled_admission,
+    run_admitted_coupling,
 )
 from ..contract import (
     IDENTIFIER_PATTERN,
@@ -215,14 +217,29 @@ class PreparedExecution:
     plan: FixedPointCouplingPlan
     circuit_solver: CircuitSolver
 
-    def run(self, run_id: str) -> CoupledRun:
-        """The first line that can execute anything. One call, no glue."""
-        return run_fixed_point_coupling(
+    def run(self, run_id: str) -> AdmittedCoupledRun:
+        """The first line that can execute anything. One call, no glue.
+
+        The pack iterates the composition and assesses, in the same call, whether
+        its models were applicable at the state the run reached — because the
+        layer that executed the science is the only one entitled to say. This
+        boundary performs no scientific act of its own: it asks for a verdict and
+        it enforces one, and it computes neither.
+
+        ``require_coupled_admission`` is what refuses. It is a separate call, and
+        deliberately so: the assessment is a finding that a direct caller may
+        legitimately hold and read, while the *shipped* path — whose consumer
+        cannot be relied upon to ask — must not hand over a result whose model is
+        not claimed to hold at the state it reached.
+        """
+        admitted = run_admitted_coupling(
             self.system,
             self.plan,
             run_id=run_id,
             circuit_solver=self.circuit_solver,
         )
+        require_coupled_admission(admitted)
+        return admitted
 
 
 def _stage(payload: Any, index: int) -> CoupledStage:

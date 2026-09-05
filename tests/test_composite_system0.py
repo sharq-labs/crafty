@@ -1587,6 +1587,26 @@ def test_t6f_the_working_tree_changed_only_where_the_prereg_said_it_would():
         "docs/evidence/propulsion0-ext-preregistration.md",
         "docs/evidence/propulsion0-ext-evidence.md",
         "tests/test_propulsion0_ext.py",
+        # ...and `TRUST-HARDENING`, the sixth milestone to need this repair, for
+        # the identical reason. It assesses model applicability on the one
+        # execution a consumer can reach, carries the verdict beside the coupled
+        # run, refuses a result whose model is not declared valid at the state it
+        # reached, and classifies that refusal as scientific rather than as a
+        # Crafty defect. Each file is named individually, so a stray edit is
+        # still loud, and COMPOSITE-SYSTEM0's own subjects — universal core,
+        # engcore.coupling, conductor_material.py and power_chain.py — all remain
+        # covered.
+        "docs/evidence/trust-hardening-preregistration.md",
+        "docs/evidence/trust-hardening-evidence.md",
+        "src/engcore/systems/electrothermal/coupled.py",
+        "src/engcore/systems/electrothermal/__init__.py",
+        "src/engcore/application/executions/electrothermal_series.py",
+        "src/engcore/application/contract.py",
+        "src/engcore/application/service.py",
+        "tests/test_coupling_pack_relocation.py",
+        "tests/test_api_mcp_v0.py",
+        "tests/test_composite_system0.py",
+        "tests/test_trust_hardening.py",
     }
     stray = sorted(set(diff) - allowed)
     assert not stray, f"files changed outside the preregistered set: {stray}"

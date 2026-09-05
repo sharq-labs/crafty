@@ -117,7 +117,11 @@ from ...domains.electrical.dc import (
 # one source of truth per name inside this pack.
 from ...domains.electrical.dc.problem import resistance_name
 from ...scientific.composition import QuantityDependency
-from ...scientific.errors import InvalidScientificProblem
+from ...scientific.errors import (
+    InvalidScientificProblem,
+    ScientificValidationError,
+)
+from ...scientific.models.definition import ValidityAssessment, ValidityStatus
 from ...scientific.ir.problem import ModelReference, ScientificProblem
 from ...scientific.results.provenance import ExecutionBinding, ProvenanceRecord
 from ...scientific.results.result import ScientificResult
@@ -570,6 +574,7 @@ def _property_result(
         ),
         inputs=dict(problem.parameter_values()) | {mat.TEMPERATURE: temperature},
         assumptions=mat.LINEAR_TCR_MODEL.assumptions,
+        environment=scientific_environment(),
     )
     return ScientificResult(
         result_id=run_id,
@@ -620,6 +625,7 @@ def _thermal_result(
             lump.TEMPERATURE: stage.body.initial_temperature,
         },
         assumptions=lump.LUMPED_CAPACITY_MODEL.assumptions,
+        environment=scientific_environment(),
     )
     return ScientificResult(
         result_id=run_id,
@@ -641,6 +647,67 @@ def _thermal_result(
     )
 
 
+#: TRUST-HARDENING P2. The resolved numerical stack, recorded on every result
+#: this pack produces.
+#:
+#: `ProvenanceRecord.environment` has existed, typed and serialized, since the
+#: record was minted, and **no producer in the tree filled it**. That is not a
+#: cosmetic gap. A frozen baseline in this repository drifted with the source,
+#: the interpreter, the CPU and every declared dependency version held fixed:
+#: what moved was the SIMD kernel OpenBLAS selects from CPUID at load time.
+#: Version strings alone cannot express that — two runs producing different
+#: numbers would record byte-identical environments — so `architecture`, which
+#: `numpy.show_runtime()` reports and nothing else in the stack tracks, is
+#: recorded beside them.
+#:
+#: This is caller-supplied, not auto-collected. `provenance.py` refuses to
+#: collect anything itself, on privacy grounds, and that policy stands: nothing
+#: here records a hostname, a path, a user or a timestamp. Only the resolved
+#: numerical stack, which is a scientific input to the answer.
+_ENVIRONMENT_CACHE: dict[str, str] | None = None
+
+
+def scientific_environment() -> Mapping[str, str]:
+    """The numerical stack that produced a result, for `ProvenanceRecord`.
+
+    Cached: it cannot change within a process, and `show_runtime` is not cheap
+    enough to call once per sub-solve of a fixed-point loop.
+    """
+    global _ENVIRONMENT_CACHE
+    if _ENVIRONMENT_CACHE is not None:
+        return _ENVIRONMENT_CACHE
+
+    import contextlib
+    import io
+    import platform
+
+    import numpy
+    import scipy
+
+    buffer = io.StringIO()
+    with contextlib.redirect_stdout(buffer):
+        numpy.show_runtime()
+    # `show_runtime` pretty-prints nested dicts rather than returning them, so
+    # the architecture arrives as one line of a repr. Take the quoted value and
+    # nothing else; an unrecognised format records the empty string rather than
+    # a fragment that would look like a real reading.
+    architecture = ""
+    for line in buffer.getvalue().splitlines():
+        if "'architecture'" in line:
+            _, _, tail = line.partition("'architecture'")
+            parts = tail.split("'")
+            architecture = parts[1] if len(parts) > 1 else ""
+            break
+
+    _ENVIRONMENT_CACHE = {
+        "python": platform.python_version(),
+        "numpy": numpy.__version__,
+        "scipy": scipy.__version__,
+        "blas_architecture": architecture,
+    }
+    return _ENVIRONMENT_CACHE
+
+
 def native_circuit_solver(
     circuit: DCCircuit, run_id: str
 ) -> ScientificResult:
@@ -651,7 +718,10 @@ def native_circuit_solver(
     rather than by passing ``None``.
     """
     return solve_circuit(
-        circuit, run_id=run_id, problem=build_dc_problem(circuit)
+        circuit,
+        run_id=run_id,
+        problem=build_dc_problem(circuit),
+        environment=scientific_environment(),
     )
 
 
@@ -709,6 +779,140 @@ def _executors(
         table[prop.problem_id] = property_call
         table[thermal.problem_id] = thermal_call
     return table
+
+
+@dataclass(frozen=True)
+class AdmittedCoupledRun:
+    """A coupled run, and the applicability of its models at the state it reached.
+
+    **Two verdicts, kept apart, because they answer different questions.**
+    ``run`` carries the numerical verdicts: did each sub-solve converge, and did
+    the checks that ran pass. ``applicability`` carries a separate question the
+    ``ValidationReport`` deliberately does not answer — *was the model valid at
+    this physical condition* — and it is held on its own field, never converted
+    into a :class:`ValidationCheck`. See
+    :func:`engcore.domains.electrical.material.assess_resistance_validity`, whose
+    docstring states the separation this record exists to preserve.
+
+    **Ephemeral. Not serialized, and deliberately not a universal contract.** It
+    exists because the verdict has nowhere else to live: ``ScientificResult`` and
+    ``CoupledRun`` are frozen against a preregistration commit, and an
+    application layer that computed the verdict itself would be performing a
+    scientific act it did not execute. The same shape already ships one package
+    away, as ``engcore.systems.propulsion.DriveRun``.
+
+    Delete this record, and fold its contents back, when any one of these becomes
+    true: a later milestone permitted to edit universal core gives
+    ``ScientificResult`` or ``CoupledRun`` a typed applicability field; a second
+    system pack needs the same carrier, at which point it should be promoted
+    rather than duplicated; or the admission decision turns out to need nothing
+    but the ``CoupledRun``.
+    """
+
+    run: CoupledRun
+    applicability: Mapping[str, ValidityAssessment]
+
+    @property
+    def inapplicable(self) -> tuple[str, ...]:
+        """Component ids whose model was outside its declared validity domain.
+
+        ``UNKNOWN`` is not reported here: a condition that could not be tested is
+        not a condition that failed, and conflating them would put NOT_RUN and
+        FAIL on one footing — the distinction the whole validation module exists
+        to keep.
+        """
+        return tuple(
+            component_id
+            for component_id, assessment in sorted(self.applicability.items())
+            if assessment.status is ValidityStatus.OUTSIDE_VALIDATED_DOMAIN
+        )
+
+
+def assess_coupled_applicability(
+    system: CoupledElectroThermalSystem, run: CoupledRun
+) -> dict[str, ValidityAssessment]:
+    """Was each stage's resistance model applicable at the state it converged to?
+
+    **Assess, never refuse.** Returning a finding is the whole contract; the
+    decision to act on it belongs to :func:`require_coupled_admission` and to
+    nothing else. ``power_chain.assess_run_applicability`` states the same rule
+    for its own consumer, and this is the same rule for this one.
+
+    **Evaluated on the converged state, and only there.** The coupling is
+    Gauss-Seidel from a seed, so intermediate iterates overshoot the fixed point
+    and re-approach it: a sweep can leave the declared domain while the answer
+    the run settles on sits inside it. Measured on this pack, four of eight
+    swept supply voltages converge in-domain having passed through iterates up to
+    64 K outside it. Assessing per iterate — or refusing there — would destroy
+    four correct answers, which is why this reads ``run.final_values`` and
+    nothing else.
+    """
+    assessments: dict[str, ValidityAssessment] = {}
+    for stage, property_problem, _thermal in stage_problems(system):
+        endpoint = (property_problem.problem_id, mat.TEMPERATURE)
+        temperature = run.final_values.get(endpoint)
+        if temperature is None:
+            raise InvalidScientificProblem(
+                f"the run carries no final value for {endpoint!r}; it did not "
+                f"execute this system"
+            )
+        assessments[stage.component_id] = mat.assess_resistance_validity(
+            property_problem, temperature
+        )
+    return assessments
+
+
+def require_coupled_admission(admitted: AdmittedCoupledRun) -> None:
+    """Raise unless every model was applicable at the state the run reached.
+
+    **The admission decision, and the only thing here that refuses.** It reads a
+    verdict it did not compute and decides whether the result may be consumed.
+    Assessment reports; admission refuses; they are separate functions on
+    purpose, because the same verdict is a finding to one caller and a stop to
+    another.
+
+    A caller that wants the numbers anyway can hold the
+    :class:`AdmittedCoupledRun` and read them: nothing here mutates a record,
+    and a refused run's results still construct, serialize and round-trip. A
+    failed run is still evidence. What this protects is the *shipped* path, whose
+    consumer cannot be relied upon to ask.
+    """
+    inapplicable = admitted.inapplicable
+    if not inapplicable:
+        return
+    detail = "; ".join(
+        f"{component_id!r}: {', '.join(admitted.applicability[component_id].violated)} "
+        f"outside the declared validity domain"
+        for component_id in inapplicable
+    )
+    raise ScientificValidationError(
+        f"admission refused; the run converged to a state at which the model is "
+        f"not declared valid: {detail}. The numbers are what the equations give; "
+        f"the model is not claimed to hold there"
+    )
+
+
+def run_admitted_coupling(
+    system: CoupledElectroThermalSystem,
+    plan: FixedPointCouplingPlan,
+    *,
+    run_id: str = "et-coupled",
+    circuit_solver: CircuitSolver = native_circuit_solver,
+) -> AdmittedCoupledRun:
+    """Iterate the composition, then assess applicability at the state it reached.
+
+    Assessment happens here, in the pack that executed the science, rather than
+    in a caller — including the application boundary, which is forbidden from
+    performing a scientific act it did not execute. **It does not refuse:** the
+    record is returned whatever the verdict, and
+    :func:`require_coupled_admission` is the separate step that decides.
+    """
+    run = run_fixed_point_coupling(
+        system, plan, run_id=run_id, circuit_solver=circuit_solver
+    )
+    return AdmittedCoupledRun(
+        run=run, applicability=assess_coupled_applicability(system, run)
+    )
 
 
 def run_fixed_point_coupling(

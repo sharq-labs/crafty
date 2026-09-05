@@ -28,14 +28,19 @@ from .resistor_body import (
     run_open_loop_pass,
 )
 from .coupled import (
+    AdmittedCoupledRun,
     CircuitSolver,
     CoupledElectroThermalSystem,
     CoupledStage,
+    assess_coupled_applicability,
     build_coupled_twin,
     coupled_dependencies,
     coupled_problems,
     native_circuit_solver,
     nominal_plan,
+    require_coupled_admission,
+    run_admitted_coupling,
+    scientific_environment,
     stage_problems,
     run_fixed_point_coupling,
 )
@@ -64,6 +69,7 @@ from .power_chain import (
 )
 
 __all__ = [
+    "AdmittedCoupledRun",
     "CHAIN_SCHEMA",
     "CircuitSolver",
     "CoupledElectroThermalSystem",
@@ -91,9 +97,13 @@ __all__ = [
     "electrothermal_dependencies",
     "electrothermal_problems",
     "initial_resistances",
+    "assess_coupled_applicability",
     "native_circuit_solver",
     "nominal_plan",
+    "require_coupled_admission",
+    "run_admitted_coupling",
     "run_fixed_point_coupling",
+    "scientific_environment",
     "run_open_loop_pass",
     "run_power_chain",
     "stage_problems",

@@ -71,6 +71,7 @@ from enum import Enum
 from typing import Any, Mapping
 
 from ..coupling import CoupledRun, is_ratio_scale
+from ..scientific.models.definition import ValidityAssessment
 from ..scientific.errors import ScientificCoreError, UnitCompatibilityError
 from ..scientific.results.result import ScientificResult
 from ..scientific.results.uncertainty import Uncertainty
@@ -484,6 +485,35 @@ def _participant(result: ScientificResult) -> dict[str, Any]:
         "attained_levels": sorted(
             level.value for level in result.attained_levels
         ),
+        # TRUST-HARDENING P3. What was executed, and what was checked.
+        #
+        # Two responses for a 5 V and a 10 V run of this execution previously
+        # differed only in their NUMBERS and never in what they said was run:
+        # the declaration the execution actually used reached no consumer. These
+        # two keys are read straight off records the result already carries —
+        # `ProvenanceRecord.inputs` and `ValidationCheck` — and nothing is
+        # derived, recomputed or inferred here.
+        #
+        # `checks` is what lets a caller tell WHICH numerical check failed rather
+        # than only that `validation_status` is not "pass". It is deliberately
+        # NOT where applicability appears: that verdict is a different question
+        # with a different answer, and it is published under `model_validity`.
+        "inputs": {
+            name: _quantity(result.provenance.inputs[name])
+            for name in sorted(result.provenance.inputs)
+        },
+        "checks": [
+            {
+                "name": check.name,
+                "outcome": check.outcome.value,
+                "establishes": (
+                    check.establishes.value if check.establishes else None
+                ),
+                "residual": check.residual,
+                "tolerance": check.tolerance,
+            }
+            for check in sorted(result.validation.checks, key=lambda c: c.name)
+        ],
         "models": [[model_id, version] for model_id, version in result.models],
         "solver": (
             None
@@ -497,11 +527,24 @@ def _participant(result: ScientificResult) -> dict[str, Any]:
     }
 
 
-def project_run(run: CoupledRun) -> dict[str, Any]:
-    """The whole external result. Domain-neutral: it reads only a ``CoupledRun``.
+def project_run(
+    run: CoupledRun,
+    *,
+    applicability: Mapping[str, ValidityAssessment] | None = None,
+) -> dict[str, Any]:
+    """The whole external result. Domain-neutral: it reads a ``CoupledRun`` and,
+    when the execution produced one, the model-applicability verdict beside it.
 
     Nothing here knows what an ohm, a watt or a kelvin is, which is why this
     function is in the transport-neutral layer and not in a transport.
+    ``ValidityAssessment`` is a universal-core type, so taking one names no
+    domain either.
+
+    **This projects a verdict; it never forms one.** ``applicability`` is
+    computed by the system pack that executed the science and is reported here
+    verbatim. When it is absent the response continues to say so, because an
+    application layer that synthesised a verdict would be performing a
+    scientific act it did not perform, and NOT_RUN is not PASS.
     """
     final = run.final
     outputs: list[dict[str, Any]] = []
@@ -590,16 +633,31 @@ def project_run(run: CoupledRun) -> dict[str, Any]:
             _participant(result)
             for result in sorted(final.results, key=lambda r: r.problem_id)
         ],
-        "model_validity": {
-            "assessed": False,
-            "reason": (
-                "the executed coupled path produces no model-applicability "
-                "verdict. Crafty has such an assessment for this domain, but "
-                "nothing in this execution calls it, and an application layer "
-                "that called it would be performing a scientific assessment "
-                "the execution did not perform. NOT_RUN is not PASS."
-            ),
-        },
+        "model_validity": (
+            {
+                "assessed": False,
+                "reason": (
+                    "this execution produced no model-applicability verdict, "
+                    "and an application layer that formed one would be "
+                    "performing a scientific assessment the execution did not "
+                    "perform. NOT_RUN is not PASS."
+                ),
+            }
+            if applicability is None
+            else {
+                "assessed": True,
+                "components": [
+                    {
+                        "component_id": component_id,
+                        "status": assessment.status.value,
+                        "satisfied": list(assessment.satisfied),
+                        "violated": list(assessment.violated),
+                        "unknown": list(assessment.unknown),
+                    }
+                    for component_id, assessment in sorted(applicability.items())
+                ],
+            }
+        ),
         "provenance": {
             "run_id": run.provenance.run_id,
             "software_version": run.provenance.software_version,

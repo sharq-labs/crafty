@@ -1619,7 +1619,29 @@ def test_ext_gate_universal_core_and_the_coupling_package_are_byte_untouched():
 
 
 def test_ext_gate_no_pre_existing_domain_or_pack_was_modified():
-    """Fail condition F2."""
+    """Fail condition F2.
+
+    **TRUST-HARDENING repair.** This guard reads ``git diff <this milestone's own
+    prereg commit> HEAD`` over whole trees, so it fails for every LATER milestone
+    that touches one of them, however correct that milestone is. The repository
+    already carries this repair five times, and this is the sixth; the form is
+    always the same and always the narrowest available — the later milestone's
+    files are named INDIVIDUALLY, so a stray edit anywhere else in these trees is
+    still loud, and not one file this milestone asserts unchanged is excluded.
+
+    `TRUST-HARDENING` edits five files across two of the protected trees, to
+    assess model applicability on the executed path, carry the verdict beside
+    the coupled run, refuse a result whose model is not declared valid at the
+    state it reached, and classify that refusal as scientific rather than as a
+    Crafty defect. Nothing it changed is a fact this milestone measured.
+    """
+    allowed = {
+        "src/engcore/systems/electrothermal/coupled.py",
+        "src/engcore/application/executions/electrothermal_series.py",
+        "src/engcore/application/contract.py",
+        "src/engcore/application/service.py",
+        "src/engcore/systems/electrothermal/__init__.py",
+    }
     for tree in (
         "src/engcore/systems/electrothermal/",
         "src/engcore/systems/fluidthermal/",
@@ -1630,7 +1652,7 @@ def test_ext_gate_no_pre_existing_domain_or_pack_was_modified():
         "src/crafty_http/",
         "src/crafty_mcp/",
     ):
-        assert _ext_touched(tree) == [], tree
+        assert set(_ext_touched(tree)) - allowed == set(), tree
 
 
 def test_ext_gate_no_source_file_was_added_and_only_two_were_edited():

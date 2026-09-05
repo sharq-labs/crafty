@@ -722,28 +722,102 @@ def test_k2_the_fresh_process_holds_no_reference_to_either_system_pack(et_case):
 # §H — the numbers did not move
 # =====================================================================
 
+#: TRUST-HARDENING P2. The relative band the converged baselines are asserted
+#: within, and the measurement it is derived from.
+#:
+#: The FT baseline was frozen as an exact double and **drifted**. Nothing in the
+#: source moved: same numpy, scipy, Python, CPU and tree. What moves is the SIMD
+#: kernel OpenBLAS selects from CPUID at load time, which no version number
+#: records. Sweeping ``OPENBLAS_CORETYPE`` over the kernels this CPU supports
+#: produces four distinct doubles for one unchanged computation:
+#:
+#:     Haswell / Zen / default   362.0282839384465
+#:     Nehalem / Barcelona       362.0282839384464
+#:     Core2 / Prescott          362.02828393844646
+#:     Sandybridge               362.02828393844635
+#:
+#: — a relative spread of 4.1e-16, and 5.5e-16 against the literal the recording
+#: machine produced. `1e-13` is ~180x that spread, so a kernel change passes.
+#: It is also 2.7e6 times TIGHTER than the 1.0e-4 K `absolute_tolerance` the run
+#: itself declares as convergence, so a physics regression still fails.
+#:
+#: Reproducibility here is an **attribution** claim, not a determinism claim.
+_BASELINE_REL = 1e-13
+
+
+def _numerical_stack() -> str:
+    """The resolved scientific stack, for a baseline failure message.
+
+    ``numpy.show_runtime()`` prints rather than returns, and its ``architecture``
+    line is the only field in the whole stack that tracks the axis that actually
+    moves. Version strings alone are insufficient: the four values above were
+    produced at one byte-identical version tuple.
+    """
+    import contextlib
+    import io
+    import platform
+
+    import numpy
+    import scipy
+
+    buffer = io.StringIO()
+    with contextlib.redirect_stdout(buffer):
+        numpy.show_runtime()
+    runtime = [
+        line.strip()
+        for line in buffer.getvalue().splitlines()
+        if "architecture" in line or "'version'" in line
+    ]
+    return (
+        f"numpy {numpy.__version__}, scipy {scipy.__version__}, "
+        f"python {platform.python_version()}; " + " ".join(runtime)
+    )
+
+
 @pytest.mark.expensive
 def test_h_the_frozen_numerical_baselines_are_unchanged(et_case, ft_case):
-    """Prereg §10, the values frozen BEFORE implementation, restated here.
+    """Prereg §10's frozen values, asserted at the strength each one supports.
 
-    Not `approx`: these are the exact doubles the baseline commit produced, and
-    the milestone's own falsification criterion F1 is that any one of them
-    moves. No tolerance is widened, because none is used.
+    **A tolerance IS in use, and now it is declared.** The original form asserted
+    all four numbers as exact doubles and said "No tolerance is widened, because
+    none is used" — which was false twice over: the FT run declares an
+    ``absolute_tolerance`` of 1.0e-4 K, and the literal pinned nine orders of
+    magnitude tighter than it. That assertion was not a falsification criterion,
+    it was a machine fingerprint: it fires on a BLAS kernel change, which carries
+    no scientific content, and cannot distinguish that from a physics regression.
+
+    Three strengths, by what each quantity is:
+
+    * **decisions** — outcome and sweep count — stay exact. They are choices, not
+      computed doubles, and are measured invariant across every kernel.
+    * **converged values** — asserted within `_BASELINE_REL`, derived above from
+      a measured cross-kernel spread and still far tighter than the run's own
+      convergence tolerance.
+    * **`final_iterate_change`** — deleted, not re-banded. `run_fixed_point`
+      terminates precisely when ``largest <= tolerance``, so any assertion that
+      the final change is within tolerance is already implied by the
+      ``CRITERION_MET`` assertion above it. Asserting it twice is not evidence,
+      and it is a difference of two nearly-equal doubles whose relative spread is
+      millions of times that of the values it is formed from.
     """
+    stack = _numerical_stack()
+
     _, _, et_run = et_case
     assert et_run.outcome is cpl.CouplingOutcome.CRITERION_MET
     assert et_run.iterations_run == 10
     (et_value,) = et_run.final_values.values()
-    assert et_value.magnitude_in(KELVIN) == 338.5770175652607
-    assert et_run.final_iterate_change.magnitude_in(KELVIN) == 4.7410196657438064e-07
+    assert et_value.magnitude_in(KELVIN) == pytest.approx(
+        338.5770175652607, rel=_BASELINE_REL
+    ), stack
 
     system, _, ft_run = ft_case
     assert ft_run.outcome is cpl.CouplingOutcome.CRITERION_MET
     assert ft_run.iterations_run == 16
     assert ft_run.final_values[
         (system.diffusivity_problem_id, prop.TEMPERATURE)
-    ].magnitude_in(KELVIN) == 362.0282839384463
-    assert ft_run.final_iterate_change.magnitude_in(KELVIN) == 5.0614276972282823e-05
+    ].magnitude_in(KELVIN) == pytest.approx(
+        362.0282839384463, rel=_BASELINE_REL
+    ), stack
 
 
 @pytest.mark.expensive

@@ -865,19 +865,54 @@ def test_h_the_five_distinctions_are_separately_representable(case_a, case_b, ca
     # execution success is absent entirely in CASE F, while nothing scientific
     # is claimed
     assert case_f["status"] == "execution_failed" and case_f["result"] is None
-    # and validity is never claimed at all
-    assert case_a["result"]["model_validity"]["assessed"] is False
+    # TRUST-HARDENING. Scientific validity is now assessed, and it is still the
+    # fifth INDEPENDENT distinction — which is the claim this test exists to
+    # make. CASE A carries a verdict of `in_domain` while CASE B, whose coupling
+    # did NOT converge, carries a verdict of its own: the two fields disagree in
+    # the direction that proves neither is derived from the other. Validity is
+    # not read off convergence, and convergence is not read off validity.
+    assert case_a["result"]["model_validity"]["assessed"] is True
+    assert [c["status"] for c in case_a["result"]["model_validity"]["components"]] == [
+        "in_domain"
+    ]
+    assert case_b["result"]["coupling"]["criterion_met"] is False
+    assert case_b["result"]["model_validity"]["assessed"] is True
 
 
-def test_h2_model_validity_is_reported_as_not_assessed_rather_than_omitted(case_a):
-    """NOT_RUN != PASS, and the honest answer is a measured negative finding:
-    the executed coupled path produces no model-applicability verdict, so no
-    transport can report one. Calling Crafty's own validity assessment from
-    the application layer would have been a scientific act performed by a
-    layer that did not execute the science."""
+def test_h2_model_validity_is_reported_as_assessed_by_the_execution(case_a):
+    """TRUST-HARDENING. The measured negative finding this test recorded has
+    been closed, and the assertion that closed it is the milestone's evidence.
+
+    It previously read `assessed is False` with `"NOT_RUN" in reason`, on the
+    stated ground that *the executed coupled path produces no model-applicability
+    verdict, so no transport can report one*. That ground is now false by
+    construction: `run_admitted_coupling` assesses in the pack that executed the
+    science, and the boundary reports what it produced.
+
+    **The third assertion is the one that must not move, and it does not.** The
+    application layer still never names Crafty's validity assessment. That was
+    the real content of the original test — *calling Crafty's own validity
+    assessment from the application layer would have been a scientific act
+    performed by a layer that did not execute the science* — and it survives
+    intact, because the verdict is computed one package away and only projected
+    here. A boundary that reports a verdict is not a boundary that forms one.
+    """
     validity = case_a["result"]["model_validity"]
-    assert validity["assessed"] is False
-    assert "NOT_RUN" in validity["reason"]
+    assert validity["assessed"] is True
+    assert validity["components"] == [
+        {
+            "component_id": "R1",
+            "status": "in_domain",
+            # Both of the model's declared conditions, named individually. The
+            # verdict is not a bare status: a reader can see WHICH conditions
+            # were tested, which is what makes `violated` meaningful when it is
+            # not empty, and what distinguishes it from `unknown`.
+            "satisfied": ["temperature", "reference_resistance"],
+            "violated": [],
+            "unknown": [],
+        }
+    ]
+    # Unchanged, and load-bearing: the science is performed by the pack.
     for _, source in _sources(APPLICATION_DIR):
         assert "assess_resistance_validity" not in source
 
@@ -958,7 +993,10 @@ def test_the_projection_is_far_smaller_than_the_internal_record(case_a):
 
     request = canonical_request()
     prepared = ets.prepare(request["inputs"], request["coupling"], "native")
-    internal = len(to_json(prepared.run("api-v0-case-a")))
+    # TRUST-HARDENING: `run` now returns the pack's `AdmittedCoupledRun`,
+    # which carries the CoupledRun beside the applicability verdict the
+    # execution produced. The measurement is of the coupled record, as before.
+    internal = len(to_json(prepared.run("api-v0-case-a").run))
     external = len(json.dumps(case_a, sort_keys=True))
     assert external < internal / 10
     assert internal > 100_000
@@ -1558,7 +1596,7 @@ def test_the_projection_refuses_to_understate_a_computation():
 
     request = canonical_request()
     prepared = ets.prepare(request["inputs"], request["coupling"], "native")
-    run = prepared.run("bulk-probe")
+    run = prepared.run("bulk-probe").run
     assert project_run_ok(run)
 
     reference = ScientificDataReference(

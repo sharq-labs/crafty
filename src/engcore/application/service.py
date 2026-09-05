@@ -43,7 +43,7 @@ from __future__ import annotations
 import traceback
 from typing import Any
 
-from ..scientific.errors import ScientificCoreError
+from ..scientific.errors import ScientificCoreError, ScientificValidationError
 from .catalog import EXECUTIONS
 from .contract import (
     RESPONSE_SCHEMA,
@@ -137,13 +137,15 @@ def execute(payload: Any) -> dict[str, Any]:
         )
 
         stage = _EXECUTION
-        run = prepared.run(request.run_id)
+        admitted = prepared.run(request.run_id)
 
         # Inside the try, and under its own stage. A response the boundary
         # cannot form is a Crafty defect, not a scientific verdict, and the
         # caller must be told which.
         stage = _PROJECTION
-        result = project_run(run)
+        result = project_run(
+            admitted.run, applicability=admitted.applicability
+        )
 
     except ExternalRequestRefused as exc:
         # A refusal about the document itself. On the admission stage it may
@@ -179,8 +181,18 @@ def execute(payload: Any) -> dict[str, Any]:
                 run_id=run_id,
             )
         if stage is _EXECUTION:
+            # Two different things fail on this stage and they are not the same
+            # answer. A solver that could not produce a number is a subsolver
+            # failure. A refusal to ADMIT a number that was produced is a
+            # scientific verdict — the science ran, and Crafty declines to hand
+            # it over — and it is the caller's answer, not Crafty's defect.
+            # Reporting the second as the first told the caller "you did nothing
+            # wrong, nothing scientific is claimed" over HTTP 500, when both
+            # halves of that sentence were false.
             return _refusal(
-                RefusalCode.SUBSOLVER_EXECUTION_FAILED,
+                RefusalCode.SCIENTIFIC_ADMISSION_REFUSED
+                if isinstance(exc, ScientificValidationError)
+                else RefusalCode.SUBSOLVER_EXECUTION_FAILED,
                 _EXECUTION,
                 str(exc),
                 error_type=type(exc).__name__,
