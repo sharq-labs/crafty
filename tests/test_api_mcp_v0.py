@@ -584,13 +584,36 @@ def case_f() -> dict:
 
 
 def test_f_a_mid_iteration_failure_is_not_an_admission_refusal(case_f):
-    """Class alone would misclassify this: ``InvalidScientificProblem`` is
-    raised both by a caller's bad declaration and from inside the loop. The
-    classifier reads the class **and** the position."""
+    """Class alone would misclassify this: the classifier reads the class **and**
+    the position. That principle is unchanged; **which class arrives changed.**
+
+    Until `ADMISSION-GATE-REPAIR` this case reached the DC domain, which refused the
+    non-positive resistance with ``InvalidScientificProblem`` — classified
+    ``subsolver_execution_failed``, HTTP 500. `TRUST-HARDENING` preregistered a
+    producer-side numerical gate that would have caught it one step earlier, and
+    that gate was never written. Now that it exists, the property solver's own
+    ``resistance_strictly_positive`` check fails, ``require_admission`` raises
+    ``ScientificValidationError``, and ``service.py`` classifies it
+    ``scientific_admission_refused``, HTTP 422.
+
+    **The new code is the correct one**, by the classifier's own account
+    (`service.py:190-196`): the science *ran* and produced a number, and Crafty
+    declines to hand it over — "the caller's answer, not Crafty's defect". The old
+    500 said *you did nothing wrong, nothing scientific is claimed*, and both
+    halves were false for a caller who declared a temperature coefficient that
+    drives resistance non-positive at the temperature the loop reaches.
+
+    The stage is still ``execution``, which is what proves position is still read:
+    an admission refusal raised at the *admission* stage is a different row in
+    ``service.py`` and carries a different ``error_type``.
+    """
     assert case_f["status"] == "execution_failed"
-    assert case_f["refusal"]["code"] == RefusalCode.SUBSOLVER_EXECUTION_FAILED.value
+    assert case_f["refusal"]["code"] == RefusalCode.SCIENTIFIC_ADMISSION_REFUSED.value
     assert case_f["refusal"]["stage"] == "execution"
-    assert case_f["refusal"]["error_type"] == "InvalidScientificProblem"
+    assert case_f["refusal"]["error_type"] == "ScientificValidationError"
+    # The producer named itself, so which of the three executors refused is
+    # readable from the response rather than inferred.
+    assert "resistance_strictly_positive" in case_f["refusal"]["detail"]
 
 
 def test_f2_an_execution_failure_carries_no_convergence_or_validity_claim(case_f):

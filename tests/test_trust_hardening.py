@@ -228,20 +228,49 @@ def test_p1_6_a_scientific_refusal_is_classified_as_one():
 
 
 def test_p1_7_numerical_admission_fires_on_none_of_the_swept_runs():
-    """P1-7. Enforcement point (a) is defence in depth, and this says so.
+    """P1-7, corrected by `ADMISSION-GATE-REPAIR`.
 
-    Recorded because a milestone that implied its numerical gate carried the
-    result would be overstating what it measured. Every declared requirement on
-    the exposed path is satisfied at every swept operating point; what the gate
-    buys is that a future failure is refused by the producer instead of
-    transported.
+    **The original form of this test was vacuous and is recorded as such.** It
+    passed `{check.name for check in result.validation.checks}` as the requirement
+    set — derived from the result under test — so it asserted "every check that ran,
+    ran". It could not distinguish a present gate from an absent one, and enforcement
+    point (a) was in fact absent from `systems/electrothermal/coupled.py` for the
+    whole of TRUST-HARDENING. Measured: with `require_admission` stubbed to a no-op,
+    the original assertions still passed.
+
+    The claim itself was true and is kept: the gate is defence in depth and fires on
+    nothing today. It is now stated against the **declared** requirement sets, which
+    are literals fixed before the run.
+
+    Full record: `docs/evidence/admission-gate-repair-preregistration.md` and its
+    evidence. The refusal behaviour lives in `tests/test_admission_gate_repair.py`,
+    whose tests fail when the gate is removed.
     """
+    # Literals, fixed before any run. Nothing here is read off a result.
+    required_by_prefix = {
+        "resistance-tcr": etc.PROPERTY_ADMISSION_REQUIREMENTS,
+        "thermal-lumped": etc.THERMAL_ADMISSION_REQUIREMENTS,
+        "electrical_dc:": frozenset({
+            "dimensional_consistency",
+            "linear_system_residual",
+            "kirchhoff_current_law",
+            "resistor_metric_consistency",
+            "voltage_source_relation",
+            "power_balance",
+        }),
+    }
+    assert all(required_by_prefix.values()), (
+        "an empty requirement set would make this test vacuous again"
+    )
+
     for volts in (5.0, 10.0, 12.0, 24.0):
         admitted = _admitted(volts, run_id=f"p17-{volts}")
         for result in admitted.run.final.results:
-            assert result.validation.admission_issues(
-                {check.name for check in result.validation.checks}
-            ) == ()
+            declared = next(
+                names for prefix, names in required_by_prefix.items()
+                if result.problem_id.startswith(prefix)
+            )
+            assert result.validation.admission_issues(declared) == ()
 
 
 def test_p1_8_the_residue_the_verdict_does_not_cover():

@@ -1607,6 +1607,20 @@ def test_t6f_the_working_tree_changed_only_where_the_prereg_said_it_would():
         "tests/test_api_mcp_v0.py",
         "tests/test_composite_system0.py",
         "tests/test_trust_hardening.py",
+        # ...and `ADMISSION-GATE-REPAIR`, the **seventh** milestone to need this
+        # repair, by the identical narrow form. It adds the three
+        # `require_admission` call sites `TRUST-HARDENING` preregistered and did
+        # not write. It edits no NEW source file — `coupled.py` is already listed
+        # above — so nothing under `src/` is added here.
+        "docs/evidence/admission-gate-repair-preregistration.md",
+        "docs/evidence/admission-gate-repair-evidence.md",
+        "tests/test_admission_gate_repair.py",
+        # Stray at `31ddcc7` and never recorded: the EXECUTION-IDENTITY
+        # preregistration was committed alone before this guard was next run, so
+        # this guard has been failing for TWO reasons while only one — the
+        # untracked working-tree file — was declared. Named here so the count is
+        # honest; that milestone is still open.
+        "docs/evidence/execution-identity-preregistration.md",
     }
     stray = sorted(set(diff) - allowed)
     assert not stray, f"files changed outside the preregistered set: {stray}"

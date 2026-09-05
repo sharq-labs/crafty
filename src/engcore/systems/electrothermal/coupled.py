@@ -183,6 +183,20 @@ DEPENDENCY_HEAT = "joule-dissipation-heats-body"
 DEPENDENCY_TEMPERATURE = "body-temperature-sets-property-state"
 DEPENDENCY_RESISTANCE = "property-resistance-sets-circuit-element"
 
+#: What this consumer demands of a property result before it will transport its
+#: resistance. Stated here because ``electrical.material`` publishes no
+#: ``validation_requirements`` of its own — a consumer-invented requirement,
+#: weaker evidence than a producer-published one, and labelled as such. The
+#: electrical problem needs no entry here: ``build_dc_problem`` publishes its
+#: own six, and those are what the circuit result is gated against.
+PROPERTY_ADMISSION_REQUIREMENTS = frozenset({"resistance_strictly_positive"})
+
+#: The same, for the lumped thermal result. ``thermal_lumped`` publishes none
+#: either, and ``systems/fluidthermal/coupled.py`` names this identical check
+#: for the identical reason — one solver, two consumers, neither of which can
+#: make the producer declare it.
+THERMAL_ADMISSION_REQUIREMENTS = frozenset({"lumped_balance_residual"})
+
 SOURCE_ID = "V1"
 REFERENCE_NODE = "gnd"
 
@@ -576,14 +590,15 @@ def _property_result(
         assumptions=mat.LINEAR_TCR_MODEL.assumptions,
         environment=scientific_environment(),
     )
-    return ScientificResult(
+    report = solver.validate(prepared, raw)
+    result = ScientificResult(
         result_id=run_id,
         problem_id=problem.problem_id,
         values=metrics,
         models=((model.model_id, model.version),),
         solver=solver.identity,
         convergence=raw.convergence,
-        validation=solver.validate(prepared, raw),
+        validation=report,
         uncertainty={
             name: Uncertainty.unknown(
                 "no uncertainty quantification is performed on the declared "
@@ -594,6 +609,12 @@ def _property_result(
         assumptions=mat.LINEAR_TCR_MODEL.assumptions,
         provenance=provenance,
     )
+    # Consumer-invented requirement, guarded before the value is transported.
+    report.require_admission(
+        PROPERTY_ADMISSION_REQUIREMENTS,
+        context=f"electrothermal property result {run_id!r}",
+    )
+    return result
 
 
 def _thermal_result(
@@ -627,14 +648,15 @@ def _thermal_result(
         assumptions=lump.LUMPED_CAPACITY_MODEL.assumptions,
         environment=scientific_environment(),
     )
-    return ScientificResult(
+    report = solver.validate(prepared, raw)
+    result = ScientificResult(
         result_id=run_id,
         problem_id=problem.problem_id,
         values=metrics,
         models=((model.model_id, model.version),),
         solver=solver.identity,
         convergence=raw.convergence,
-        validation=solver.validate(prepared, raw),
+        validation=report,
         uncertainty={
             name: Uncertainty.unknown(
                 "no uncertainty quantification is performed on the lumped "
@@ -645,6 +667,12 @@ def _thermal_result(
         assumptions=lump.LUMPED_CAPACITY_MODEL.assumptions,
         provenance=provenance,
     )
+    # Consumer-invented requirement, guarded before the value is transported.
+    report.require_admission(
+        THERMAL_ADMISSION_REQUIREMENTS,
+        context=f"electrothermal body result {run_id!r}",
+    )
+    return result
 
 
 #: TRUST-HARDENING P2. The resolved numerical stack, recorded on every result
@@ -727,10 +755,19 @@ def native_circuit_solver(
 
 def _electrical_result(
     *, run_id: str, system: CoupledElectroThermalSystem,
+    problem: ScientificProblem,
     resistances: Mapping[str, Quantity],
     circuit_solver: CircuitSolver,
 ) -> ScientificResult:
-    return circuit_solver(system.circuit_at(resistances), run_id)
+    result = circuit_solver(system.circuit_at(resistances), run_id)
+    # Producer-published requirement, guarded before the value is transported.
+    # Applied to whatever the seam returned, so the native and the external
+    # provider are gated identically and neither adapter is edited.
+    result.validation.require_admission(
+        problem.validation_requirements,
+        context=f"electrothermal circuit result {run_id!r}",
+    )
+    return result
 
 
 def _executors(
@@ -756,8 +793,8 @@ def _executors(
             for stage in system.stages
         }
         return _electrical_result(
-            run_id=run_id, system=system, resistances=resistances,
-            circuit_solver=circuit_solver,
+            run_id=run_id, system=system, problem=electrical,
+            resistances=resistances, circuit_solver=circuit_solver,
         )
 
     table[electrical.problem_id] = electrical_call
