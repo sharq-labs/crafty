@@ -61,8 +61,8 @@ NEW_SOURCE_FILES = (
 # Declarations under test. Fixture values, MODEL-CONSISTENT only.
 # =====================================================================
 
-def thermal(hA: float = 0.15, duration: float = 30.0) -> pd._ThermalDeclaration:
-    return pd._ThermalDeclaration(
+def thermal(hA: float = 0.15, duration: float = 30.0) -> pd.ThermalDeclaration:
+    return pd.ThermalDeclaration(
         ambient_conductance=Q(hA, "watt/kelvin"),
         ambient_temperature=Q(300.0, KELVIN),
         initial_temperature=Q(300.0, KELVIN),
@@ -1067,8 +1067,8 @@ def test_t12_the_single_declaration_survives_the_round_trip_but_the_catalogue_li
     # ...and the payload contains the material once, not twice.
     payload = drive.to_dict()["feed"]
     assert set(payload) == {
-        "kind", "component_id", "length", "cross_sectional_area", "material",
-        "thermal",
+        "schema", "kind", "component_id", "length", "cross_sectional_area",
+        "material", "thermal",
     }
 
     # The catalogue link does not survive, and that is the recorded limitation.
@@ -1164,7 +1164,17 @@ def _sources():
     }
 
 
-def test_t14_no_new_module_branches_on_a_domain_product_or_material_name():
+def test_t14_no_new_module_compares_inline_against_a_string_literal():
+    """Narrowed to exactly what it checks.
+
+    The original name claimed "no module branches on a domain, product or
+    material name", and `architecture-falsifier` found the in-tree
+    counterexample it could not see: ``PropulsionDrive.from_dict`` compares
+    ``kind != expected`` where the literals are hoisted into a loop tuple, so
+    both operands are ``ast.Name`` and the scan is blind to them. The claim is
+    now the narrow one this scan can actually support, and the branching it
+    could not see is covered by the companion test below.
+    """
     for path, source in _sources().items():
         tree = ast.parse(source)
         for node in ast.walk(tree):
@@ -1177,6 +1187,38 @@ def test_t14_no_new_module_branches_on_a_domain_product_or_material_name():
                 assert not literals, (path, literals)
             if isinstance(node, ast.Match):  # pragma: no cover - none exist
                 raise AssertionError(f"{path} dispatches with a match statement")
+
+
+def test_t14_the_only_string_branching_is_a_deserialization_kind_tag():
+    """What the scan above cannot see, enumerated and bounded.
+
+    There is exactly one place in the pack where a string literal decides
+    anything, and it is a payload kind tag inside ``from_dict`` — the same
+    device ``PowerChain.from_dict`` already uses. It is not domain conditional
+    logic, it does not select physics, and it lives in a system pack rather
+    than in universal core. Bounded here so the exception is explicit.
+    """
+    branching: list[tuple[str, str]] = []
+    for path, source in _sources().items():
+        tree = ast.parse(source)
+        for function in ast.walk(tree):
+            if not isinstance(function, ast.FunctionDef):
+                continue
+            for node in ast.walk(function):
+                if not isinstance(node, ast.Constant) or not isinstance(
+                    node.value, str
+                ):
+                    continue
+                if node.value in {"drive_wire", "drive_motor"}:
+                    branching.append((path, function.name))
+    assert {name for _path, name in branching} <= {"to_dict", "from_dict"}, branching
+    # ...and the tag is enforced, so a payload naming the wrong kind is refused
+    # rather than coerced.
+    drive = build_drive()
+    payload = drive.to_dict()
+    payload["motor"] = dict(payload["motor"], kind="drive_wire")
+    with pytest.raises(InvalidScientificProblem, match="requires 'drive_motor'"):
+        pd.PropulsionDrive.from_dict(payload)
 
 
 def test_t14_no_rpm_constant_appears_anywhere_in_the_new_code():
@@ -1241,14 +1283,44 @@ def test_gate_no_universal_contract_was_minted():
             assert word not in source, f"{path} defines {word!r}"
 
 
-def test_gate_universal_core_and_the_coupling_package_are_byte_untouched():
-    """Fail condition F2, read from git rather than from a hand-kept list."""
-    for tree in ("src/engcore/scientific/", "src/engcore/coupling/"):
-        diff = subprocess.run(
-            ["git", "diff", "--name-only", "4e3b8fe", "HEAD", "--", tree],
+#: This milestone's preregistration commit. Both gates below read git against
+#: it — and both are written so they do NOT reproduce the defect this milestone
+#: had to repair twice.
+#:
+#: ``--diff-filter=MD`` restricts the diff to files that were **modified or
+#: deleted**, so a later milestone that ADDS a file under a protected tree does
+#: not fail a guard about *this* milestone's edits, while any edit to or removal
+#: of a pre-existing file stays loud forever. `architecture-falsifier` named the
+#: omission: a guard that fails for every successor is a guard that will be
+#: edited by every successor.
+#:
+#: And both read the working tree as well as the commit graph, because "byte
+#: untouched" has to be true of the bytes the test actually imported — an
+#: uncommitted edit to universal core would otherwise be executed and not seen.
+_PREREG_COMMIT = "4e3b8fe"
+
+
+def _touched(tree: str) -> list[str]:
+    committed = subprocess.run(
+        ["git", "diff", "--name-only", "--diff-filter=MD", _PREREG_COMMIT,
+         "HEAD", "--", tree],
+        cwd=str(REPO_ROOT), capture_output=True, text=True, check=True,
+    ).stdout.split()
+    working = [
+        line[3:].strip().strip('"')
+        for line in subprocess.run(
+            ["git", "status", "--porcelain", "--", tree],
             cwd=str(REPO_ROOT), capture_output=True, text=True, check=True,
-        ).stdout.strip()
-        assert diff == "", (tree, diff)
+        ).stdout.splitlines()
+        if line.strip() and not line.startswith("??")
+    ]
+    return sorted(set(committed) | set(working))
+
+
+def test_gate_universal_core_and_the_coupling_package_are_byte_untouched():
+    """Fail condition F2, read from git and from the working tree."""
+    for tree in ("src/engcore/scientific/", "src/engcore/coupling/"):
+        assert _touched(tree) == [], tree
 
 
 def test_gate_no_pre_existing_domain_or_pack_was_modified():
@@ -1264,11 +1336,32 @@ def test_gate_no_pre_existing_domain_or_pack_was_modified():
         "src/crafty_mcp/",
     )
     for tree in protected:
-        diff = subprocess.run(
-            ["git", "diff", "--name-only", "4e3b8fe", "HEAD", "--", tree],
-            cwd=str(REPO_ROOT), capture_output=True, text=True, check=True,
-        ).stdout.strip()
-        assert diff == "", (tree, diff)
+        assert _touched(tree) == [], tree
+
+
+def test_the_scope_gates_can_fail_and_do_not_fail_on_an_addition():
+    """The guards must be able to fail, and must not fail for a successor.
+
+    Proved on synthetic git output rather than trusted: `--diff-filter=MD`
+    keeps modifications and deletions and drops additions, which is exactly the
+    difference between "this milestone edited something it promised not to" and
+    "a later milestone added a file".
+    """
+    filtered = subprocess.run(
+        ["git", "diff", "--name-only", "--diff-filter=MD", _PREREG_COMMIT,
+         "HEAD", "--", "src/"],
+        cwd=str(REPO_ROOT), capture_output=True, text=True, check=True,
+    ).stdout.split()
+    unfiltered = subprocess.run(
+        ["git", "diff", "--name-only", _PREREG_COMMIT, "HEAD", "--", "src/"],
+        cwd=str(REPO_ROOT), capture_output=True, text=True, check=True,
+    ).stdout.split()
+    # This milestone only ADDS under src/, so the two differ by exactly the
+    # new files — which is the property that keeps the guard usable later.
+    assert filtered == []
+    assert set(unfiltered) == set(NEW_SOURCE_FILES)
+    # ...and the guard is not vacuous: it sees a real modification.
+    assert _touched("tests/") != []
 
 
 def test_gate_the_shared_coupling_objects_are_used_by_identity():
@@ -1472,7 +1565,7 @@ def test_the_thermal_mass_is_derived_and_not_declared():
     )
     declaration = next(
         node for node in ast.walk(tree)
-        if isinstance(node, ast.ClassDef) and node.name == "_ThermalDeclaration"
+        if isinstance(node, ast.ClassDef) and node.name == "ThermalDeclaration"
     )
     fields = {
         node.target.id for node in declaration.body
@@ -1516,3 +1609,183 @@ def test_provenance_still_cannot_carry_the_material_name(reference):
         isinstance(v, Q) for v in resistivity.provenance.inputs.values()
     )
     assert not resistivity.provenance.metadata
+
+
+# =====================================================================
+# Corrections required by `architecture-falsifier`, each with the
+# counterexample that forced it
+# =====================================================================
+
+def test_the_energy_identity_is_enforced_at_the_record_boundary_too(spy):
+    """D-1. A gate at the composition boundary does not protect the solver.
+
+    The falsifier's path: `DriveOperatingPointSolver` is published, so a caller
+    holding it could bind an inconsistent constant pair, get a number out of
+    `solve`, and consume it while `validate` reported FAIL — the repository's
+    own worst historical defect reproduced one level below the gate meant to
+    prevent it.
+    """
+    inconsistent = rot.MachineConstants(
+        torque_constant=Q(0.0295, rot.TORQUE_CONSTANT_UNIT),
+        back_emf_constant=Q(0.01475, rot.BACK_EMF_CONSTANT_UNIT),
+        source="fixture: an energy-inconsistent pair",
+    )
+    solver = pmod.DriveOperatingPointSolver()
+    with pytest.raises(InvalidScientificProblem, match="energy conservation"):
+        solver.bind_drive(
+            "drive_operating_point:probe",
+            supply_voltage=Q(24.0, "volt"),
+            constants=inconsistent,
+            load=mechanical_load(),
+            loop_resistance=Q(0.53, "ohm"),
+        )
+    # Nothing was bound, so nothing can be prepared or solved either.
+    with pytest.raises(InvalidScientificProblem, match="no drive is bound"):
+        solver.prepare(
+            pmod.build_operating_point_problem(
+                "drive_operating_point:probe",
+                supply_voltage=Q(24.0, "volt"),
+                constants=machine().constants,
+                load=mechanical_load(),
+            )
+        )
+
+
+def test_the_energy_check_does_not_assume_the_two_unit_strings_are_coherent():
+    """D-2. The comparison basis comes from the units layer, not from a guess.
+
+    The falsifier's counterexample: respell `TORQUE_CONSTANT_UNIT` as
+    `millinewton*meter/ampere` and a bare-magnitude comparison is wrong by
+    1000x while every test still passes. The factor below is what removes the
+    assumption, and it is obtained through the units layer by the one route the
+    dimensionality-string defect does not block: the RATIO of the two units,
+    which reduces to dimensionless.
+    """
+    assert rot._SI_COHERENCE_FACTOR == pytest.approx(1.0, rel=1e-15)
+    ratio = Q(1.0, rot.BACK_EMF_CONSTANT_UNIT) / Q(1.0, rot.TORQUE_CONSTANT_UNIT)
+    assert ratio.magnitude_in("dimensionless") == pytest.approx(1.0, rel=1e-15)
+    # The same route answers correctly for a non-coherent spelling, which is
+    # what makes the guard more than decoration.
+    rescaled = (
+        Q(1.0, rot.BACK_EMF_CONSTANT_UNIT)
+        / Q(1.0, "millinewton * meter / ampere")
+    ).magnitude_in("dimensionless")
+    assert rescaled == pytest.approx(1000.0, rel=1e-12)
+
+
+def test_one_material_may_not_carry_two_thermophysical_declarations(spy):
+    """D-4. The falsifier's counterexample, refused.
+
+    Two `ThermophysicalConductor` records over the same `cmat.COPPER` with
+    different densities used to construct, run, serialize and reach the twin —
+    both described as "Declared property of material 'copper'". After
+    serialization the link is the NAME, so a consumer would have read one copper
+    with two densities. That is the duplicate this milestone claims not to have
+    created.
+    """
+    odd = pmat.ThermophysicalConductor(
+        conductor_material=cmat.COPPER,
+        density=Q(8000.0, pmat.DENSITY_UNIT),
+        specific_heat=pmat.COPPER_THERMOPHYSICAL.specific_heat,
+        source="fixture: a second, disagreeing property set for one copper",
+    )
+    with pytest.raises(InvalidScientificProblem, match="two different"):
+        build_drive(ret=wire("wire_b", material=odd))
+    assert spy.calls == []
+    # Two DIFFERENT materials remain perfectly legal — the refusal is about one
+    # material with two declarations, not about heterogeneity.
+    build_drive(feed=wire("wire_a", material=pmat.ALUMINIUM_THERMOPHYSICAL))
+
+
+def test_every_sub_payload_carries_a_schema_token(reference):
+    """D-3. An unversioned sub-payload inside a versioned envelope is a trap.
+
+    The falsifier's counterexample: add a field to `MaterialConductor` and every
+    already-written drive payload silently rehydrates the default, because
+    `require_schema` cannot fire on a key that is not there — and every
+    round-trip test still passes.
+    """
+    drive, _, _, _, _, _, _ = reference
+    payload = drive.to_dict()
+    assert payload["schema"] == pd.DRIVE_SCHEMA
+    for key in ("feed", "motor", "return"):
+        assert payload[key]["schema"] == pd.CONDUCTING_ELEMENT_SCHEMA
+        assert payload[key]["thermal"]["schema"] == pd.THERMAL_DECLARATION_SCHEMA
+        assert payload[key]["material"]["schema"] == (
+            pmat.THERMOPHYSICAL_CONDUCTOR_SCHEMA
+        )
+    # ...and each token is enforced on read, not merely emitted.
+    for mutate in (
+        lambda p: p["feed"].__setitem__("schema", "wrong/1"),
+        lambda p: p["feed"]["thermal"].__setitem__("schema", "wrong/1"),
+    ):
+        broken = pd.PropulsionDrive.from_dict(payload).to_dict()
+        mutate(broken)
+        with pytest.raises(Exception):
+            pd.PropulsionDrive.from_dict(broken)
+
+
+def test_the_thermal_mass_solver_refuses_a_swapped_property_set():
+    """C-9. The rebind guard now covers BOTH halves of the declaration."""
+    drive = build_drive()
+    element = drive.feed
+    solver = pmat.ConductorThermalMassSolver()
+    solver.bind_conductor(
+        element.conductor, element.material, element.thermal_mass_problem_id
+    )
+    # Same conductor, different thermophysical property set.
+    other = pmat.ThermophysicalConductor(
+        conductor_material=cmat.COPPER,
+        density=Q(8000.0, pmat.DENSITY_UNIT),
+        specific_heat=pmat.COPPER_THERMOPHYSICAL.specific_heat,
+        source="fixture",
+    )
+    with pytest.raises(InvalidScientificProblem, match="already bound"):
+        solver.bind_conductor(
+            element.conductor, other, element.thermal_mass_problem_id
+        )
+    # Rebinding the SAME declaration stays idempotent.
+    solver.bind_conductor(
+        element.conductor, element.material, element.thermal_mass_problem_id
+    )
+
+
+def test_the_two_binary_claims_state_opposite_chaining_rules():
+    """C-6. The arity result is asymmetric, and both records say so.
+
+    Chaining is licensed for the series claim and denied by the heat claim,
+    because a partial sum of two loss channels is not itself a channel
+    dissipating into the body. A four-element loop costs one more problem
+    instance; a third loss channel costs a new model record.
+    """
+    series = " ".join(pmod.SERIES_LOOP_RESISTANCE_MODEL.assumptions)
+    heat = " ".join(pmod.MOTOR_HEAT_GENERATION_MODEL.assumptions)
+    assert "instantiating this claim once per join" in series
+    assert "does NOT license" in heat
+    assert "a different model record rather than a second instance" in heat
+
+
+def test_the_public_api_can_build_a_drive_without_reaching_for_a_private_name():
+    """C-5. A pack whose public surface cannot construct its own subject."""
+    import engcore.systems.propulsion as pack
+
+    assert "ThermalDeclaration" in pack.__all__
+    assert pack.ThermalDeclaration is pd.ThermalDeclaration
+    built = pack.PropulsionDrive(
+        drive_id="public",
+        source_voltage=Q(24.0, "volt"),
+        feed=pack.DriveWire(
+            conductor=conductor("wire_a", pack.COPPER_THERMOPHYSICAL),
+            material=pack.COPPER_THERMOPHYSICAL,
+            thermal=pack.ThermalDeclaration(
+                ambient_conductance=Q(0.15, "watt/kelvin"),
+                ambient_temperature=Q(300.0, KELVIN),
+                initial_temperature=Q(300.0, KELVIN),
+                duration=Q(30.0, "second"),
+            ),
+        ),
+        motor=machine(),
+        ret=wire("wire_b"),
+        load=mechanical_load(),
+    )
+    assert built.drive_id == "public"

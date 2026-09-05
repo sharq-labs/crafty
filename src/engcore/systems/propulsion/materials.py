@@ -556,12 +556,15 @@ class ConductorThermalMassSolver:
     ) -> None:
         key = str(problem_id)
         existing = self._bound.get(key)
-        if existing is not None and existing[0] != conductor:
+        # BOTH halves. An earlier form compared only the conductor, which let
+        # the thermophysical property set be swapped behind a problem id while
+        # the docstring claimed a different physical object was refused.
+        if existing is not None and existing != (conductor, material):
             raise InvalidScientificProblem(
-                f"problem {key!r} is already bound to a different conductor; "
-                f"silently swapping the object behind a problem id would let "
-                f"two results claim one identity while describing different "
-                f"systems"
+                f"problem {key!r} is already bound to a different conductor or "
+                f"a different thermophysical property set; silently swapping "
+                f"either behind a problem id would let two results claim one "
+                f"identity while describing different systems"
             )
         self._bound[key] = (conductor, material)
 

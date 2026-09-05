@@ -56,15 +56,22 @@ derived one from the other could not be given an inconsistent pair, and a
 consistency law that cannot be violated cannot be enforced either. The pair is
 refused at construction by :func:`require_energy_consistent_constants`.
 
-A measured limitation of universal core forces that check to compare SI
-magnitudes in each constant's own named unit rather than through
-``Quantity.require_compatible``. ``Quantity.is_compatible_with`` compares
-dimensionality **strings**, and the units backend renders the one dimension of
-``volt*second/radian`` as ``[mass] * [length] ** 2 / [time] ** 2 / [current]``
-and of ``newton*meter/ampere`` as
-``[length] ** 2 * [mass] / [time] ** 2 / [current]`` — two spellings of the same
-dimension that compare unequal. Recorded as a finding about
-``engcore.scientific.units.quantity``; universal core is not edited here.
+A measured limitation of universal core shapes how that check is written.
+``Quantity.is_compatible_with`` compares dimensionality **strings**, and the
+units backend renders the one dimension of ``volt*second/radian`` as
+``[mass] * [length] ** 2 / [time] ** 2 / [current]`` and of
+``newton*meter/ampere`` as ``[length] ** 2 * [mass] / [time] ** 2 / [current]``
+— two spellings of one dimension that compare unequal. So ``k_e`` cannot be
+converted into ``k_t``'s unit directly.
+
+It is still not compared as two bare floats. :data:`_SI_COHERENCE_FACTOR`
+obtains the conversion from the units layer by a route the defect does not
+block — the **ratio** of the two units, which reduces to dimensionless — so the
+check depends on no undeclared agreement between two module-level strings. The
+defect is recorded as a finding about ``engcore.scientific.units.quantity``;
+universal core is not edited here, and the defect is fail-closed: string
+equality is strictly stronger than dimensional equality, so it produces false
+refusals and never false acceptances.
 """
 
 from __future__ import annotations
@@ -129,6 +136,7 @@ __all__ = [
     "VISCOUS_ROTATIONAL_LOSS_MODEL",
     "MachineConstants",
     "RotationalLoad",
+    "ENERGY_IDENTITY_RELATIVE_TOLERANCE",
     "positive_root_of_speed_balance",
     "require_energy_consistent_constants",
     "rotational_model_registry",
@@ -694,6 +702,29 @@ class MachineConstants:
 #: is not a measurement agreeing with a model, it is one number written twice.
 ENERGY_IDENTITY_RELATIVE_TOLERANCE = 1e-12
 
+#: How many :data:`TORQUE_CONSTANT_UNIT` there are in one
+#: :data:`BACK_EMF_CONSTANT_UNIT`, obtained from the units layer itself.
+#:
+#: A first version of the check below compared ``k_e`` and ``k_t`` as bare SI
+#: magnitudes and was correct *only because* the two declared unit strings
+#: happen to be SI-coherent — an undeclared, unchecked dependency between two
+#: module-level constants. `architecture-falsifier` produced the counterexample:
+#: respell :data:`TORQUE_CONSTANT_UNIT` as ``millinewton * meter / ampere`` and
+#: the conservation law is wrong by 1000x while every test still passes.
+#:
+#: This factor removes the assumption instead of documenting it. Note *how* it
+#: is obtained: the two units cannot be compared directly, because
+#: ``Quantity.is_compatible_with`` compares dimensionality strings and the
+#: backend spells this one dimension two ways (see the module docstring). Their
+#: **ratio**, however, reduces to dimensionless in one spelling, so the units
+#: layer answers the question through a route its own defect does not block.
+#: For the units as declared the factor is exactly 1.0, so nothing about the
+#: check's behaviour changes today; what changes is that it can no longer be
+#: silently invalidated by an edit two constants away.
+_SI_COHERENCE_FACTOR = (
+    Quantity(1.0, BACK_EMF_CONSTANT_UNIT) / Quantity(1.0, TORQUE_CONSTANT_UNIT)
+).magnitude_in("dimensionless")
+
 
 def require_energy_consistent_constants(constants: MachineConstants) -> None:
     """Refuse a machine that would create or destroy energy. **Enforcement.**
@@ -714,12 +745,17 @@ def require_energy_consistent_constants(constants: MachineConstants) -> None:
         raise InvalidScientificProblem(
             "require_energy_consistent_constants expects a MachineConstants"
         )
-    k_t, k_e = constants.k_t_si, constants.k_e_si
+    # k_e expressed in the torque constant's own declared unit, so the
+    # comparison never assumes the two unit strings are SI-coherent.
+    k_t = constants.k_t_si
+    k_e = constants.k_e_si * _SI_COHERENCE_FACTOR
     scale = max(abs(k_t), abs(k_e))
     if abs(k_t - k_e) > ENERGY_IDENTITY_RELATIVE_TOLERANCE * scale:
         raise InvalidScientificProblem(
-            f"machine constants violate energy conservation: k_e = {k_e!r} "
-            f"V*s/rad and k_t = {k_t!r} N*m/A must be numerically equal in SI, "
+            f"machine constants violate energy conservation: k_e = "
+            f"{constants.k_e_si!r} {BACK_EMF_CONSTANT_UNIT} and k_t = "
+            f"{k_t!r} {TORQUE_CONSTANT_UNIT} must be the same number once "
+            f"expressed in one unit, "
             f"because the converted electrical power k_e*omega*I and the "
             f"converted mechanical power k_t*I*omega are the same power. The "
             f"relative difference is "

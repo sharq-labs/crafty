@@ -29,8 +29,8 @@ edge out of its declared output. The plan's refusal is never tripped, no
 universal fan-in semantics are minted, and every summed number carries an
 ``ExecutionBinding``.
 
-Arity, and why these are binary
--------------------------------
+Arity, and why these are binary — and where the two claims differ
+------------------------------------------------------------------
 :data:`SERIES_LOOP_RESISTANCE_MODEL` takes **exactly two** resistances and is
 instantiated **N-1 times** for an N-element loop. A model that took "the three
 resistances of a feed, a winding and a return" would have written the exercised
@@ -39,6 +39,14 @@ model*. Binary keeps the arity in the number of *problem instances*, where
 topology belongs. The association is left-to-right in the declared element
 order; in floating point the order affects the last bits, and the order is a
 declared fact of the composition rather than an implementation detail.
+
+**The two are not symmetric, and an earlier draft of this docstring wrongly
+said they were.** Chaining is licensed for the series claim and *denied* by the
+heat claim, because a partial sum of two loss channels is not itself a channel
+dissipating into the body. So a four-element loop costs one more *problem
+instance*, while a third loss channel — iron loss, say — costs a new *model
+record*. That asymmetry is a real limit on the arity result and it is stated on
+both records rather than left to be discovered.
 
 A single generic "add two quantities of the same dimension" model was designed
 and rejected: it would carry no assumptions and no validity domain, it would be
@@ -331,6 +339,13 @@ MOTOR_HEAT_GENERATION_MODEL = ScientificModelDefinition(
         "not claim otherwise",
         "there are exactly two channels; a third heat source is a third input "
         "and therefore a different claim, not a wider one",
+        "UNLIKE the series-resistance claim, this one does NOT license "
+        "chaining. A partial sum of two channels is not itself a channel "
+        "dissipating into the body, so an intermediate instance is not an "
+        "admissible operand, and a third loss channel requires a different "
+        "model record rather than a second instance of this one. Stated "
+        "because the sibling binary claim licenses exactly the opposite and "
+        "the two must not be read as one pattern",
     ),
     validity=ValidityDomain(
         conditions=(),
@@ -1032,6 +1047,18 @@ class DriveOperatingPointSolver:
         loop_resistance: Quantity,
         realization: ModelRealizationDefinition = DRIVE_OPERATING_POINT_REALIZATION,
     ) -> None:
+        # Energy conservation is checked HERE as well as at the pack's
+        # admission gate, and the duplication is the point.
+        #
+        # `architecture-falsifier` found the path: this solver is published, so
+        # a caller holding it directly could bind an inconsistent constant pair,
+        # get a number out of `solve`, and consume it while `validate` reported
+        # FAIL — which is precisely the repository's own worst historical
+        # defect (a validation FAIL whose value was consumed anyway, converging
+        # 18 K wrong) reproduced one level below the gate that was supposed to
+        # prevent it. A gate at the composition boundary does not protect the
+        # record boundary, so the record boundary carries its own.
+        rot.require_energy_consistent_constants(constants)
         self._bound[str(problem_id)] = PreparedOperatingPoint(
             supply_voltage_v=_admissible(
                 supply_voltage, VOLTAGE_UNIT, f"supply voltage of {problem_id!r}"

@@ -127,6 +127,8 @@ __all__ = [
     "DEPENDENCY_TOTAL_HEAT",
     "DRIVE_SCHEMA",
     "ENERGY_RELATIVE_TOLERANCE",
+    "CONDUCTING_ELEMENT_SCHEMA",
+    "THERMAL_DECLARATION_SCHEMA",
     "CircuitSolver",
     "DriveElement",
     "DriveRun",
@@ -135,6 +137,7 @@ __all__ = [
     "Motor",
     "PropulsionDrive",
     "RESISTOR_POWER_METRIC",
+    "ThermalDeclaration",
     "admit_drive",
     "assess_run_applicability",
     "build_drive_twin",
@@ -150,6 +153,16 @@ __all__ = [
 ]
 
 DRIVE_SCHEMA = schema_string("propulsion_series_drive")
+#: The two sub-payloads this pack owns. They exist because this pack writes its
+#: own conductor encoding (see `_ConductingElement._common_dict`), and an
+#: unversioned sub-payload inside a versioned envelope is a migration waiting to
+#: happen: `require_schema` cannot fire on a key that is not there, so a field
+#: added to a composed record would be silently absorbed as a default and every
+#: round-trip test would still pass. `architecture-falsifier` produced exactly
+#: that counterexample; these two tokens close it while the payload is still
+#: unfrozen and the fix is free.
+CONDUCTING_ELEMENT_SCHEMA = schema_string("propulsion_conducting_element")
+THERMAL_DECLARATION_SCHEMA = schema_string("propulsion_thermal_declaration")
 
 DEPENDENCY_HEAT = "joule-dissipation-heats-body"
 DEPENDENCY_TEMPERATURE = "body-temperature-sets-material-state"
@@ -204,9 +217,22 @@ class DriveElement(Protocol):
     `COMPOSITE-SYSTEM0` named a tripwire in advance: *a third element kind that
     poses its own problems — at that point the union should be re-examined, not
     grown.* This milestone fires it, and this protocol is the re-examination.
-    A typed protocol costs nothing, mints no universal record, and makes a
-    fourth element kind a matter of implementing three members rather than of
-    widening an ``isinstance`` union in five places.
+
+    **It is a type annotation, not an extension point, and an earlier draft of
+    this docstring wrongly claimed otherwise.** `architecture-falsifier`
+    produced the counterexample: a class satisfying all three members still
+    cannot enter a :class:`PropulsionDrive`, because that record declares three
+    concrete slots, ``isinstance``-checks them, hard-returns the same three from
+    :attr:`~PropulsionDrive.conducting_elements`, returns exactly two series
+    joins, and assigns circuit nodes positionally over a fixed five-node span.
+    A fourth element kind is **not** additive today.
+
+    What the protocol does buy is real but smaller: it names, in one place, the
+    three members this pack requires of anything in the loop, so the requirement
+    is readable instead of scattered across five call sites. Building a generic
+    element list to make it a true extension point would be the speculative move
+    this lineage refuses — there is no fourth kind. The honest response to the
+    tripwire is this record plus the correction above, not machinery.
     """
 
     @property
@@ -229,7 +255,7 @@ def _positive(value: Any, unit: str, label: str) -> Quantity:
 
 
 @dataclass(frozen=True)
-class _ThermalDeclaration:
+class ThermalDeclaration:
     """The lumped declaration **minus** the capacity, which is derived.
 
     ``ThermalBody`` takes ``heat_capacity`` as a constructor field, and here
@@ -264,6 +290,7 @@ class _ThermalDeclaration:
 
     def to_dict(self) -> dict[str, Any]:
         return {
+            "schema": THERMAL_DECLARATION_SCHEMA,
             "ambient_conductance": self.ambient_conductance.to_dict(),
             "ambient_temperature": self.ambient_temperature.to_dict(),
             "initial_temperature": self.initial_temperature.to_dict(),
@@ -271,7 +298,8 @@ class _ThermalDeclaration:
         }
 
     @classmethod
-    def from_dict(cls, payload: Mapping[str, Any]) -> "_ThermalDeclaration":
+    def from_dict(cls, payload: Mapping[str, Any]) -> "ThermalDeclaration":
+        require_schema(payload, THERMAL_DECLARATION_SCHEMA)
         return cls(
             ambient_conductance=Quantity.from_dict(payload["ambient_conductance"]),
             ambient_temperature=Quantity.from_dict(payload["ambient_temperature"]),
@@ -292,7 +320,7 @@ class _ConductingElement:
 
     conductor: cmat.MaterialConductor
     material: pmat.ThermophysicalConductor
-    thermal: _ThermalDeclaration
+    thermal: ThermalDeclaration
 
     def __post_init__(self) -> None:
         if not isinstance(self.conductor, cmat.MaterialConductor):
@@ -353,6 +381,7 @@ class _ConductingElement:
     #: rather than absorbed.
     def _common_dict(self) -> dict[str, Any]:
         return {
+            "schema": CONDUCTING_ELEMENT_SCHEMA,
             "component_id": self.conductor.component_id,
             "length": self.conductor.length.to_dict(),
             "cross_sectional_area": self.conductor.cross_sectional_area.to_dict(),
@@ -362,6 +391,7 @@ class _ConductingElement:
 
     @staticmethod
     def _common_fields(payload: Mapping[str, Any]) -> dict[str, Any]:
+        require_schema(payload, CONDUCTING_ELEMENT_SCHEMA)
         material = pmat.ThermophysicalConductor.from_dict(payload["material"])
         return {
             # ONE material object, shared by the electrical and the thermal
@@ -375,7 +405,7 @@ class _ConductingElement:
                 ),
             ),
             "material": material,
-            "thermal": _ThermalDeclaration.from_dict(payload["thermal"]),
+            "thermal": ThermalDeclaration.from_dict(payload["thermal"]),
         }
 
 
@@ -457,7 +487,7 @@ class Motor(_ConductingElement):
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "kind": "motor",
+            "kind": "drive_motor",
             **self._common_dict(),
             "constants": self.constants.to_dict(),
         }
@@ -526,6 +556,29 @@ class PropulsionDrive:
                 f"{self.motor.back_emf_source_id!r} collides with a declared "
                 f"element or with the supply"
             )
+        # ONE physical material, ONE declaration — enforced, not assumed.
+        #
+        # `architecture-falsifier` found that the per-element check (an
+        # element's two property halves must be the same material object) says
+        # nothing ACROSS elements: two `ThermophysicalConductor` records over
+        # the same `cmat.COPPER` with different densities constructed, ran,
+        # serialized and reached the twin, both described as "Declared property
+        # of material 'copper'". After serialization the link is the material's
+        # NAME, so a name-keyed consumer would have seen one copper with two
+        # densities. That is the duplicate this milestone claims not to have
+        # created, so it is refused here rather than left to convention.
+        by_material: dict[int, pmat.ThermophysicalConductor] = {}
+        for element in self.conducting_elements:
+            key = id(element.conductor.material)
+            first = by_material.setdefault(key, element.material)
+            if first != element.material:
+                raise InvalidScientificProblem(
+                    f"drive {drive_id!r} declares two different "
+                    f"thermophysical property sets for one material "
+                    f"{element.material.name!r}. One physical material has one "
+                    f"declaration; two would serialize under one name and be "
+                    f"indistinguishable to any consumer that reads it back"
+                )
 
     # ---- accessors ------------------------------------------------------
     @property
@@ -624,7 +677,12 @@ class PropulsionDrive:
     @classmethod
     def from_dict(cls, payload: Mapping[str, Any]) -> "PropulsionDrive":
         require_schema(payload, DRIVE_SCHEMA)
-        for key, expected in (("feed", "drive_wire"), ("motor", "motor"),
+        # The kind tags are deliberately distinct from the ROLE names above
+        # ("feed"/"motor"/"ret"), which appear only as human labels in refusal
+        # messages. Sharing the token "motor" between a role label and a
+        # payload kind made a structural test unable to tell dispatch from
+        # prose; the tags are now unambiguous.
+        for key, expected in (("feed", "drive_wire"), ("motor", "drive_motor"),
                               ("return", "drive_wire")):
             kind = payload[key].get("kind")
             if kind != expected:
@@ -709,6 +767,16 @@ def derive_thermal_masses(
 
     What is refused either way is a line of caller arithmetic: this is the same
     discipline that makes the resistance bootstrap execute two real models.
+
+    **The scope of "derived, not declared" is IN PROCESS.** The returned
+    results carry model, realization, solver and ``ExecutionBinding``; the
+    :class:`~engcore.domains.thermal_lumped.ThermalBody` they feed carries only
+    the number, and :class:`DriveRun` — which holds the derivation results — is
+    deliberately not serialized. So a persisted artifact records the capacity
+    without recording that it came from ``rho_m L A c_p``. The twin's
+    ``TwinDatum`` description says so in prose, which is weaker than an
+    ``ExecutionBinding``. Recorded as a limitation; the day ``c_p(T)`` is
+    declared, the edge route closes it at zero contract cost.
     """
     bodies: dict[str, lump.ThermalBody] = {}
     results: dict[str, ScientificResult] = {}
@@ -1200,8 +1268,14 @@ def reconcile_drive_energy(
     the validation report said ``FAIL``, the value was consumed anyway and the
     coupling converged 18 K from the truth.
 
-    Each relation compares numbers produced through **different channels**, so
-    none of them compares a number against itself:
+    Three relations. ``R1`` is genuinely independent — its residual is exactly
+    ``I*omega*(k_e - k_t)``, so it is the one that catches a violated
+    conservation law, and an injection test proves it fires. ``R2`` and ``R3``
+    are **not** independent of each other: ``R3`` is close to ``R2`` multiplied
+    by the same ``E`` both sides consumed, so it adds sign detection at the
+    electromechanical boundary rather than a third physical channel. The
+    preregistration's §5.1 called all three independent; that over-counts by
+    about one, and the correction is recorded rather than left standing.
 
     ``R1`` the supply's delivered power — from node voltages and the source's
     branch current, computed by modified nodal analysis — against the sum of
