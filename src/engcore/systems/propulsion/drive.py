@@ -1541,8 +1541,10 @@ def drive_efficiency(
     double-count this milestone exists to refuse.
 
     **What its validity range does and does not derive from — corrected.** The
-    balance plus the non-negativity of the four loss channels gives exactly
-    ``0 <= eta <= 1``, and no more. `architecture-falsifier` produced the
+    balance plus the non-negativity of the four loss channels gives
+    ``eta <= 1``; adding ``mechanical_output >= 0`` — a premise the four
+    checked losses do **not** contain, and which nothing here checks separately
+    — gives ``0 <= eta <= 1``, and no more. `architecture-falsifier` produced the
     counterexamples from this milestone's own fixtures: an accounting with a
     closing balance, a positive source, four non-negative losses and
     ``mechanical_output = 0`` sits at ``eta = 0``, and a lossless one sits at
@@ -1562,6 +1564,20 @@ def drive_efficiency(
     not converge — is refused for the same reason the accounting is ``None``
     there at all: a ratio of two terms of an equation nothing claims to have
     solved is not an efficiency.
+
+    **Where the convergence guard reaches, and where it structurally cannot.**
+    It is complete over every ``CoupledRun``: :func:`reconcile_drive_energy`
+    now refuses a non-converged outcome at the point the numbers are produced,
+    so no published route from a run yields an efficiency for a state the loop
+    never reached. It is **absent** at this record boundary, and cannot be
+    added here without making :class:`EnergyAccounting` carry a run reference
+    or an outcome token — a field on a published record added so that a guard
+    can exist, which is the failure mode this milestone was told to refuse. The
+    reason it cannot be inferred instead is measured: **the balance closes at
+    every iterate**, so no arithmetic over these six terms can distinguish a
+    converged state from an unconverged one. A hand-assembled
+    ``EnergyAccounting`` is therefore outside what this relation is guarded
+    against, and that is stated rather than papered over.
     """
     if accounting is None:
         raise InvalidScientificProblem(
@@ -1629,7 +1645,9 @@ def drive_efficiency(
         raise InvalidScientificProblem(
             f"efficiency {efficiency!r} is outside the range this relation is "
             f"declared over. The balance and four non-negative loss channels "
-            f"derive 0 <= eta <= 1; the STRICT endpoints are this "
+            f"derive eta <= 1, and a non-negative mechanical output would give "
+            f"0 <= eta <= 1; the STRICT endpoints, and the sign of the output, "
+            f"are this "
             f"composition's own, because a strictly positive quadratic load "
             f"driven by a positive ideal source has P_mech > 0 and at least "
             f"one dissipative channel. A record at or beyond an endpoint — a "
