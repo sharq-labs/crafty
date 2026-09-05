@@ -1005,7 +1005,7 @@ class MotorHeatGenerationSolver(_BinarySumSolver):
 
 
 @dataclass(frozen=True)
-class PreparedOperatingPoint:
+class _PreparedOperatingPoint:
     supply_voltage_v: float
     loop_resistance_ohm: float
     k_t: float
@@ -1026,7 +1026,7 @@ class DriveOperatingPointSolver:
     _SOLVER_ID = "engcore.propulsion.series_drive_operating_point"
 
     def __init__(self, settings: SolverSettings | None = None) -> None:
-        self._bound: dict[str, PreparedOperatingPoint] = {}
+        self._bound: dict[str, _PreparedOperatingPoint] = {}
         self.settings = settings or SolverSettings()
 
     @property
@@ -1059,7 +1059,7 @@ class DriveOperatingPointSolver:
         # prevent it. A gate at the composition boundary does not protect the
         # record boundary, so the record boundary carries its own.
         rot.require_energy_consistent_constants(constants)
-        self._bound[str(problem_id)] = PreparedOperatingPoint(
+        self._bound[str(problem_id)] = _PreparedOperatingPoint(
             supply_voltage_v=_admissible(
                 supply_voltage, VOLTAGE_UNIT, f"supply voltage of {problem_id!r}"
             ),
@@ -1114,7 +1114,7 @@ class DriveOperatingPointSolver:
         )
 
     def solve(self, prepared: PreparedSolve) -> RawSolverOutput:
-        p: PreparedOperatingPoint = prepared.payload
+        p: _PreparedOperatingPoint = prepared.payload
         started = time.perf_counter()
 
         omega = rot.positive_root_of_speed_balance(
@@ -1211,7 +1211,7 @@ class DriveOperatingPointSolver:
         is what proves the refusal is not the only thing standing between the
         platform and a machine that creates energy.
         """
-        p: PreparedOperatingPoint = prepared.payload
+        p: _PreparedOperatingPoint = prepared.payload
         if not raw.succeeded:
             return ValidationReport(
                 checks=(

@@ -11,7 +11,7 @@ material-dependent wires::
                 │            │                           │
                 └────── rho(T), R(T), C(rho_m,c_p) ──────┘
 
-Fourteen separately posed problems, twenty-one declared edges, three torn
+Fourteen separately posed problems, twenty declared edges, three torn
 endpoints — all three in kelvin — one twin, and **not one line of new coupling
 machinery**. ``engcore.coupling`` and ``engcore.scientific`` are byte-untouched.
 
@@ -556,28 +556,37 @@ class PropulsionDrive:
                 f"{self.motor.back_emf_source_id!r} collides with a declared "
                 f"element or with the supply"
             )
-        # ONE physical material, ONE declaration — enforced, not assumed.
+        # ONE physical material, ONE declaration — enforced, not assumed, and
+        # keyed by the identity that SURVIVES SERIALIZATION.
         #
-        # `architecture-falsifier` found that the per-element check (an
-        # element's two property halves must be the same material object) says
-        # nothing ACROSS elements: two `ThermophysicalConductor` records over
-        # the same `cmat.COPPER` with different densities constructed, ran,
-        # serialized and reached the twin, both described as "Declared property
-        # of material 'copper'". After serialization the link is the material's
-        # NAME, so a name-keyed consumer would have seen one copper with two
-        # densities. That is the duplicate this milestone claims not to have
-        # created, so it is refused here rather than left to convention.
-        by_material: dict[int, pmat.ThermophysicalConductor] = {}
+        # `architecture-falsifier` found the per-element check (an element's two
+        # property halves must be the same material object) says nothing ACROSS
+        # elements: two `ThermophysicalConductor` records over one copper with
+        # different densities constructed, ran, serialized and reached the twin,
+        # both captioned "Declared property of material 'copper'".
+        #
+        # Its second round then found the first repair **moved** the
+        # counterexample instead of closing it. Keying by ``id(...)`` compared
+        # only elements holding the same material OBJECT, so a record rebuilt
+        # by ``cmat.material_from_dict`` — which constructs a fresh instance
+        # per call — landed in a different bucket and was never checked. The
+        # guard was therefore a no-op on **every deserialized drive**, which is
+        # precisely the boundary its own comment names as the harmful one.
+        #
+        # The key is now the material's NAME, because that is what the payload
+        # carries and what a consumer reading it back would key on. Two
+        # elements naming one material must present the same declaration —
+        # electrical half, thermophysical half and stated source alike.
+        by_material: dict[str, pmat.ThermophysicalConductor] = {}
         for element in self.conducting_elements:
-            key = id(element.conductor.material)
-            first = by_material.setdefault(key, element.material)
+            first = by_material.setdefault(element.material.name, element.material)
             if first != element.material:
                 raise InvalidScientificProblem(
-                    f"drive {drive_id!r} declares two different "
-                    f"thermophysical property sets for one material "
-                    f"{element.material.name!r}. One physical material has one "
-                    f"declaration; two would serialize under one name and be "
-                    f"indistinguishable to any consumer that reads it back"
+                    f"drive {drive_id!r} declares two different property sets "
+                    f"for one material {element.material.name!r}. One physical "
+                    f"material has one declaration; two would serialize under "
+                    f"one name and be indistinguishable to any consumer that "
+                    f"reads them back"
                 )
 
     # ---- accessors ------------------------------------------------------
@@ -836,7 +845,7 @@ def drive_dependencies(
     *,
     temperature_metric: str = lump.TEMPERATURE_METRIC,
 ) -> tuple[QuantityDependency, ...]:
-    """Twenty-one directed edges. Which value flows where is stated, never inferred.
+    """Twenty directed edges. Which value flows where is stated, never inferred.
 
     **No endpoint receives two of them.** That is not luck: the two places where
     two sources would otherwise meet one endpoint — the machine's heat input and

@@ -784,8 +784,13 @@ def test_t7_an_invalid_thermophysical_property_is_refused(spy, field, value):
 
 def test_t7_a_material_outside_its_declared_range_is_refused_at_admission(spy):
     """Admission itself is live, not only the constructors."""
+    # A DISTINCT name, deliberately: reusing "copper" would now be refused by
+    # the one-material-one-declaration guard at construction, which is the
+    # wrong gate for this case. This test is about ADMISSION refusing a
+    # property set that does not cover the seed.
     narrow = dataclasses.replace(
         cmat.COPPER,
+        name="copper (narrow fixture)",
         minimum_temperature=Q(350.0, KELVIN),
         maximum_temperature=Q(450.0, KELVIN),
         reference_temperature=Q(360.0, KELVIN),
@@ -1339,28 +1344,52 @@ def test_gate_no_pre_existing_domain_or_pack_was_modified():
         assert _touched(tree) == [], tree
 
 
-def test_the_scope_gates_can_fail_and_do_not_fail_on_an_addition():
-    """The guards must be able to fail, and must not fail for a successor.
+#: The trees this milestone owns. The meta-test below is scoped to THESE and
+#: never to the whole of ``src/``.
+#:
+#: `architecture-falsifier`'s second round caught the first version of this
+#: test doing exactly what the two guards it repaired did: it ran ``git diff``
+#: over all of ``src/`` and pinned the result against a frozen five-tuple, so
+#: it would have failed for any successor that added or modified anything
+#: anywhere under ``src/`` — the guard-rot this milestone repaired twice,
+#: recreated in the same commit and in a stricter form. Scoped down here so the
+#: filter semantics is still proved and no successor inherits it.
+_OWN_TREES = (
+    "src/engcore/systems/propulsion/",
+    "src/engcore/domains/mechanical_rotational.py",
+)
 
-    Proved on synthetic git output rather than trusted: `--diff-filter=MD`
-    keeps modifications and deletions and drops additions, which is exactly the
-    difference between "this milestone edited something it promised not to" and
-    "a later milestone added a file".
+
+def test_the_scope_gates_can_fail_and_do_not_fail_on_an_addition():
+    """The filter semantics, proved over this milestone's own trees only.
+
+    ``--diff-filter=MD`` keeps modifications and deletions and drops additions,
+    which is exactly the difference between "this milestone edited something it
+    promised not to" and "a later milestone added a file". Both halves are
+    demonstrated: the drop, over trees that contain only additions; and the
+    keep, over ``tests/``, where this milestone really did modify files.
     """
-    filtered = subprocess.run(
-        ["git", "diff", "--name-only", "--diff-filter=MD", _PREREG_COMMIT,
-         "HEAD", "--", "src/"],
-        cwd=str(REPO_ROOT), capture_output=True, text=True, check=True,
-    ).stdout.split()
-    unfiltered = subprocess.run(
-        ["git", "diff", "--name-only", _PREREG_COMMIT, "HEAD", "--", "src/"],
-        cwd=str(REPO_ROOT), capture_output=True, text=True, check=True,
-    ).stdout.split()
-    # This milestone only ADDS under src/, so the two differ by exactly the
-    # new files — which is the property that keeps the guard usable later.
-    assert filtered == []
-    assert set(unfiltered) == set(NEW_SOURCE_FILES)
-    # ...and the guard is not vacuous: it sees a real modification.
+    def diff(args, tree):
+        return subprocess.run(
+            ["git", "diff", "--name-only", *args, _PREREG_COMMIT, "HEAD",
+             "--", tree],
+            cwd=str(REPO_ROOT), capture_output=True, text=True, check=True,
+        ).stdout.split()
+
+    added: set[str] = set()
+    for tree in _OWN_TREES:
+        # Everything this milestone did in its own trees was an ADDITION, so
+        # the filtered diff must be empty and the unfiltered one must not be.
+        assert diff(["--diff-filter=MD"], tree) == [], tree
+        added |= set(diff([], tree))
+    assert added == set(NEW_SOURCE_FILES)
+
+    # ...and the filter is not simply swallowing everything: this milestone
+    # MODIFIED two pre-existing test files, and the filtered diff sees them.
+    modified = diff(["--diff-filter=MD"], "tests/")
+    assert "tests/test_api_mcp_v0.py" in modified
+    assert "tests/test_composite_system0.py" in modified
+    # ...and the working-tree half of the gate is live too.
     assert _touched("tests/") != []
 
 
@@ -1692,6 +1721,34 @@ def test_one_material_may_not_carry_two_thermophysical_declarations(spy):
     with pytest.raises(InvalidScientificProblem, match="two different"):
         build_drive(ret=wire("wire_b", material=odd))
     assert spy.calls == []
+
+    # The SECOND adversarial round found the first repair moved this
+    # counterexample rather than closing it: keyed by object identity, a
+    # material record rebuilt from a payload landed in a different bucket and
+    # was never compared, so the guard was a no-op on every deserialized drive.
+    # Both of the boundaries that reopened it are now closed.
+    clone = cmat.material_from_dict(cmat.COPPER.to_dict())
+    assert clone == cmat.COPPER and clone is not cmat.COPPER
+    cloned_odd = pmat.ThermophysicalConductor(
+        conductor_material=clone,
+        density=Q(8000.0, pmat.DENSITY_UNIT),
+        specific_heat=pmat.COPPER_THERMOPHYSICAL.specific_heat,
+        source="fixture: an equal-but-distinct copper with a second density",
+    )
+    with pytest.raises(InvalidScientificProblem, match="two different"):
+        build_drive(ret=wire("wire_b", material=cloned_odd))
+
+    # ...and the same refusal fires on the deserialization path, where every
+    # material object is freshly constructed and object identity is gone.
+    payload = build_drive().to_dict()
+    payload["return"]["material"] = dict(
+        payload["return"]["material"],
+        density=Q(8000.0, pmat.DENSITY_UNIT).to_dict(),
+    )
+    with pytest.raises(InvalidScientificProblem, match="two different"):
+        pd.PropulsionDrive.from_dict(payload)
+    assert spy.calls == []
+
     # Two DIFFERENT materials remain perfectly legal — the refusal is about one
     # material with two declarations, not about heterogeneity.
     build_drive(feed=wire("wire_a", material=pmat.ALUMINIUM_THERMOPHYSICAL))

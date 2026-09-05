@@ -3383,3 +3383,122 @@ claimed; `engcore/domains/` was **not**, and §69.4 says why.
 external representation of model applicability, a second execution shape that is
 not an iterative coupling, and anything about concurrency — should each wait for
 a second real consumer to force their shape.
+
+---
+
+# 70. PROPULSION0 — completed
+
+```text
+Decision status:        PROPOSED
+Evidence:               L1 EXERCISED (one motor in three physics, one drive,
+                        one operating point)
+                        L2 EXCLUDED BY PREREGISTRATION
+Milestone execution:    COMPLETE — verdict KEEP
+```
+
+Full record: `docs/evidence/propulsion0-preregistration.md` (immutable, committed
+alone before any source file existed) and `docs/evidence/propulsion0-evidence.md`.
+**Not a freeze.** Base `6b31ddd` (COMPOSITE-SYSTEM0).
+
+*Holdings note, reported not repaired:* §55.5 and §61 remain stale — they end at
+`API-MCP-V0` while the repository carries evidence for `COUPLING-PACK-RELOCATION`,
+`MIN-CROSS-DOMAIN-FOUNDATION`, `MIN-FIELD-SUPPORT-FOUNDATION`, `REAL-FLUID-PDE`,
+`FLUID-THERMAL-SCALAR-COUPLING`, `EXECUTABLE-SCIENTIFIC-SPEC`,
+`PLANNER-PROVIDED-CAPABILITIES`, `NGSPICE-CROSS-PLATFORM-PORTABILITY` and
+`COMPOSITE-SYSTEM0`. Out of this milestone's scope.
+
+**Claim tested.** One real physical entity — a motor — participating
+*simultaneously* in electrical, rotational-mechanical and thermal physics while
+staying coupled to material-dependent wires, using only the contracts that
+already exist.
+
+**Architecture chosen** (`architecture-decision-reviewer`: ACCEPT WITH CHANGES,
+five axes). A new single-file domain `domains/mechanical_rotational.py` holding
+five reusable rotational claims; a new system pack `systems/propulsion/` holding
+the three claims that belong to the *assembly*; the electromechanical relation
+solved as a **closed-form operating point** rather than as a torn cycle. One
+reviewer dissent (placement of the composed material record) was declared in the
+preregistration in advance and not adopted, with the reason stated there.
+
+**Universal contracts forced: NONE.** `engcore/scientific/` and
+`engcore/coupling/` are byte-unchanged, asserted from git *and* from the working
+tree. So are every pre-existing domain and system pack.
+
+**Contracts deliberately not forced**, each attempted first:
+`PhysicalEntityReference`, `ComponentInstance`, `Port`, `Connector`,
+`SystemDefinition`, universal `Material`, `MechanicalSystem`, `StateVector`,
+`FanInRule`, per-endpoint coupling tolerances, `CouplingScheme`, a relaxation
+knob, a new `CouplingOutcome` member.
+
+**Motor fidelity.** An idealised DC-equivalent machine: `E = k_e w`,
+`tau_e = k_t I`, `tau_loss = b w`, `tau_load = k_load w^2`, and
+`tau_e = tau_load + tau_loss` at `dw/dt = 0`. **No inertia, no inductance, no
+transient, no iron loss, no dq axes, no propeller.** `rpm` is a units-layer
+conversion; no `60` or `2*pi` exists in the new code. The winding is a
+`MaterialConductor`, so `R(T)` is the **existing** mechanism reused by object
+identity — no second `R(T)` framework.
+
+**Energy admission behaviour.** `k_e` and `k_t` are declared independently and
+the SI identity is **enforced at three points**: `admit_drive` (before any
+solver object exists, proven by a spy at zero constructions),
+`DriveOperatingPointSolver.bind_drive` (the record boundary, added after the
+falsifier found the published solver reachable around the gate), and
+`reconcile_drive_energy` on the executed path, which **raises**. Each is shown
+*capable of failing* by injection. Measured balance:
+`P_source 116.68245 W = 1.25414 + 1.25414 + 10.01723 + 93.60885 + 10.54809 W`,
+residual **1.22e-15 relative** against a declared 1e-9.
+
+**Material cross-physics.** ONE declaration drove BOTH: switching a lead from
+copper to aluminium moved `R_a` +62.0 % and `C_a` −29.8 % from one changed
+record, and a control case isolates the thermal-mass pathway. The
+`conductor_material` promotion trigger's "only two moves" premise is
+**measurably false** for a consumer above both domains — but the trigger is
+**deferred, not defeated**: its stated condition (a non-electrical *domain*)
+is never satisfied, one copper now has two records with disjoint property sets,
+and the serialized link between them is the material's *name*. A replacement
+trigger is on the new record.
+
+**Physical identity: YES, no contract forced.** One `Motor.component_id` yields
+**eight** distinct derived identities with no aliasing. `COMPOSITE-SYSTEM0`'s
+named tripwire (a third element kind) fired and was answered with a pack-local
+protocol — which the falsifier then correctly downgraded to *a type annotation,
+not an extension point*: a fourth element kind is **not** additive today.
+
+**Fan-in: NOT forced.** Two fan-in sites, both discharged by binary derived
+scientific models instantiated N−1 times; the naive alternatives are executably
+refused by the unedited plan. Measured cost: the two claims are **not
+symmetric** — chaining is licensed for the series sum and denied for the machine
+heat, so a fourth loop element costs a problem instance while a third loss
+channel costs a model record.
+
+**Provider result.** ngspice substitution succeeded with **zero** adapter change
+— the back-EMF is an ordinary `DCVoltageSource` — agreeing to 2.6e-14 relative.
+
+**Remaining blockers: none.** Eight deferred findings are recorded in
+`docs/evidence/propulsion0-evidence.md` §16, the sharpest being that
+`Quantity.is_compatible_with` compares dimensionality *strings* (fail-closed;
+universal core, not repaired here) and that problem ids are namespaced by
+`component_id` rather than `drive_id`, which breaks at two drives in one process.
+
+## 70.1 Next milestone
+
+**A second drive in one composition** — two machines, or one machine and one
+independent heated element, in one process. Chosen from measured evidence, not
+roadmap order: it is the only reopen trigger this milestone measured that is
+reachable without new physics, certain to break three already-identified things
+(problem-id namespacing, plan-to-drive binding, and the fixed-slot
+`PropulsionDrive`), and the smallest test of whether the eight-identity result
+generalises past N = 1 — the one place this milestone's strongest claim is
+weakest.
+
+Explicitly not recommended on this evidence: a mechanics framework (no second
+consumer of any rotational record), a universal `Material` (the trigger is
+deferred, not fired), per-endpoint coupling tolerances (no consumer that cannot
+be reformulated), and an inertial/transient milestone (it reopens the
+electromechanical formulation axis before the N = 2 question is answered).
+
+Regression: **FULL 2385 → 2467**, FAST 1760 → 1840. Two pre-existing test files
+edited, both historical scope guards that read `git diff <their own prereg>` and
+therefore fail for every later milestone; the repository already carried this
+repair four times. New files are named individually in both, no assertion was
+changed and no tolerance loosened.

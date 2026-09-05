@@ -54,7 +54,11 @@ is a conservation law.
 :class:`MachineConstants` nevertheless declares *both*, because a record that
 derived one from the other could not be given an inconsistent pair, and a
 consistency law that cannot be violated cannot be enforced either. The pair is
-refused at construction by :func:`require_energy_consistent_constants`.
+constructible and then **refused** by
+:func:`require_energy_consistent_constants`, which is called at the composition
+gate *and* at the record boundary where a machine is bound to a solve — never
+from ``__post_init__``, because a record that could not hold a violating pair
+would give the enforcement nothing to catch.
 
 A measured limitation of universal core shapes how that check is written.
 ``Quantity.is_compatible_with`` compares dimensionality **strings**, and the
@@ -719,8 +723,14 @@ ENERGY_IDENTITY_RELATIVE_TOLERANCE = 1e-12
 #: **ratio**, however, reduces to dimensionless in one spelling, so the units
 #: layer answers the question through a route its own defect does not block.
 #: For the units as declared the factor is exactly 1.0, so nothing about the
-#: check's behaviour changes today; what changes is that it can no longer be
-#: silently invalidated by an edit two constants away.
+#: check's behaviour changes today. What changes is precisely this and no more:
+#: the **check** no longer depends on an unstated agreement between two module
+#: constants. The closed form in the system pack still multiplies ``k_t`` and
+#: ``k_e`` as bare SI floats, so respelling either unit would still make that
+#: arithmetic wrong — it would simply surface as a raised energy-reconciliation
+#: failure instead of as a silently passing check. Making the arithmetic itself
+#: unit-string-independent would be speculative hardening against an edit
+#: nobody has made, and is deliberately not done.
 _SI_COHERENCE_FACTOR = (
     Quantity(1.0, BACK_EMF_CONSTANT_UNIT) / Quantity(1.0, TORQUE_CONSTANT_UNIT)
 ).magnitude_in("dimensionless")
@@ -737,9 +747,11 @@ def require_energy_consistent_constants(constants: MachineConstants) -> None:
     put a number that violates conservation into a record that reads as
     attributable.
 
-    Compared as SI magnitudes in each constant's own named unit. See the module
-    docstring for the measured units-layer limitation that makes a
-    ``require_compatible`` between the two impossible today.
+    ``k_e`` is expressed in the torque constant's own declared unit through
+    :data:`_SI_COHERENCE_FACTOR`, so the comparison assumes nothing about how
+    either unit is spelled. See the module docstring for the measured
+    units-layer limitation that makes a ``require_compatible`` between the two
+    impossible today, and for what this check does and does not buy.
     """
     if not isinstance(constants, MachineConstants):
         raise InvalidScientificProblem(
