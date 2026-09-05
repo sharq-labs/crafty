@@ -1576,6 +1576,17 @@ def test_t6f_the_working_tree_changed_only_where_the_prereg_said_it_would():
         # The two historical scope guards PROPULSION0 had to repair, for the
         # same reason this file already excludes test_api_mcp_v0.py once.
         "docs/CRAFTY_MASTER_CONTEXT.md",
+        # ...and PROPULSION0-EXT's three additions, for the identical reason and
+        # by the identical repair. This guard reads `git diff <COMPOSITE-SYSTEM0
+        # prereg> HEAD` over the WHOLE tree, so it fails for every later
+        # milestone however correct that milestone is; the files are named
+        # INDIVIDUALLY so a stray edit anywhere else is still loud. That
+        # milestone edits no NEW source file — every new function went into a
+        # file already listed above — so nothing under `src/` is added here, and
+        # not one file COMPOSITE-SYSTEM0 asserts unchanged is excluded.
+        "docs/evidence/propulsion0-ext-preregistration.md",
+        "docs/evidence/propulsion0-ext-evidence.md",
+        "tests/test_propulsion0_ext.py",
     }
     stray = sorted(set(diff) - allowed)
     assert not stray, f"files changed outside the preregistered set: {stray}"

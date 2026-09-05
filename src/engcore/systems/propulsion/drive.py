@@ -139,15 +139,19 @@ __all__ = [
     "RESISTOR_POWER_METRIC",
     "ThermalDeclaration",
     "admit_drive",
+    "admit_speed_demand",
+    "admit_torque_demand",
     "assess_run_applicability",
     "build_drive_twin",
     "compose",
     "declared_problem_ids",
     "derive_thermal_masses",
     "drive_dependencies",
+    "drive_efficiency",
     "drive_plan",
     "drive_problems",
     "native_circuit_solver",
+    "no_load_speed",
     "reconcile_drive_energy",
     "run_propulsion_drive",
 ]
@@ -1207,6 +1211,86 @@ def admit_drive(drive: PropulsionDrive, *, seed_temperature: Quantity) -> None:
         )
 
 
+# =====================================================================
+# Demands — refused from declarations alone, before any solver exists
+# =====================================================================
+
+def no_load_speed(drive: PropulsionDrive) -> Quantity:
+    """The **exact supremum** of shaft speed over every admissible loop resistance.
+
+    Not a fixture bound and not a rule of thumb. It falls out of the two
+    relations the pack already declares. The loop KVL says
+    ``I = (V - k_e*w)/R``, so a positive current requires ``k_e*w < V``; and
+    multiplying the speed balance by ``R`` and letting ``R -> 0`` gives
+    ``(b*R + k_t*k_e)*w -> k_t*V``, i.e. ``w -> V/k_e``. So ``V/k_e`` is
+    approached as the loop resistance vanishes and is never attained for any
+    ``R > 0``: it is the least upper bound, not a conservative one.
+
+    That is what makes the two refusals below **gates and not guesses**. They
+    need no loop resistance, so they need no solver, so they can refuse a
+    demand before anything has been executed — and because ``R > 0`` only
+    raises the voltage a demand needs, refusing here is fail-closed.
+
+    What it is **not**: a feasibility oracle. A demand this admits may still be
+    unreachable at the drive's actual loop resistance. Admission is not a
+    promise, and no code here pretends otherwise.
+    """
+    if not isinstance(drive, PropulsionDrive):
+        raise InvalidScientificProblem("no_load_speed expects a PropulsionDrive")
+    return Quantity(
+        drive.source_voltage.magnitude_in("volt") / drive.motor.constants.k_e_si,
+        rot.ANGULAR_VELOCITY_UNIT,
+    )
+
+
+def admit_speed_demand(drive: PropulsionDrive, demanded_speed: Quantity) -> None:
+    """Refuse a demanded operating point that **no** loop resistance can reach.
+
+    An unsupported operating point is not a numerical accident to be discovered
+    by a solver that returns a negative current: it is a statement about the
+    declarations, and it is answered from them.
+    """
+    ceiling = no_load_speed(drive)
+    demanded = _positive(
+        demanded_speed, rot.ANGULAR_VELOCITY_UNIT, "demanded shaft speed"
+    )
+    limit = ceiling.magnitude_in(rot.ANGULAR_VELOCITY_UNIT)
+    if demanded.magnitude_in(rot.ANGULAR_VELOCITY_UNIT) >= limit:
+        raise InvalidScientificProblem(
+            f"drive {drive.drive_id!r} cannot support the demanded operating "
+            f"point {demanded!r}: its supply and back-EMF constant bound the "
+            f"shaft strictly below {ceiling!r}, which is the supremum over "
+            f"every positive loop resistance and is itself unattainable. The "
+            f"demand has no real solution in the valid range for any loop "
+            f"resistance whatsoever, so it is refused rather than solved"
+        )
+
+
+def admit_torque_demand(drive: PropulsionDrive, demanded_torque: Quantity) -> None:
+    """Refuse a load torque the declared load law cannot absorb at any speed.
+
+    The load law fixes the speed at which it absorbs a given torque —
+    ``tau = k_load*w^2`` has one positive root — so a torque demand is a speed
+    demand in different units, and the ceiling of :func:`no_load_speed` bounds
+    it as ``k_load * (V/k_e)^2``. Stated as its own refusal because a caller
+    demanding a torque should be told about torque; it is **not** independent
+    evidence from :func:`admit_speed_demand`, and the evidence says so.
+    """
+    demanded = _positive(demanded_torque, rot.TORQUE_UNIT, "demanded load torque")
+    ceiling = no_load_speed(drive).magnitude_in(rot.ANGULAR_VELOCITY_UNIT)
+    limit = drive.load.k_load_si * ceiling * ceiling
+    magnitude = demanded.magnitude_in(rot.TORQUE_UNIT)
+    if magnitude >= limit:
+        raise InvalidScientificProblem(
+            f"drive {drive.drive_id!r} cannot meet the demanded load torque "
+            f"{demanded!r}: the declared load law would absorb it only at "
+            f"{(magnitude / drive.load.k_load_si) ** 0.5!r} rad/s, at or above "
+            f"the {ceiling!r} rad/s supremum this supply and back-EMF constant "
+            f"allow. No positive loop resistance makes the demand meetable, so "
+            f"it is refused before anything is posed"
+        )
+
+
 def assess_run_applicability(
     drive: PropulsionDrive, run: CoupledRun
 ) -> dict[str, ValidityAssessment]:
@@ -1386,6 +1470,119 @@ def reconcile_drive_energy(
         current_disagreement=Quantity(current_gap, "dimensionless"),
         converted_power_disagreement=Quantity(converted_gap, "dimensionless"),
     )
+
+
+def drive_efficiency(
+    accounting: EnergyAccounting | None,
+    *,
+    relative_tolerance: float = ENERGY_RELATIVE_TOLERANCE,
+) -> Quantity:
+    """Efficiency, classified: a **state-dependent relation**, not a thing.
+
+    `PROPULSION0` computed every power term and never said what efficiency *is*.
+    The brief's question is whether it is a material property, a model
+    parameter, a solver output or a state-dependent relation — and *"do not mix
+    them"*. The answer this composition supports is the fourth, and the shape of
+    this function is the answer:
+
+    * **not a material property** — it moves when only the load coefficient
+      moves, with every material record byte-identical;
+    * **not a model parameter** — no model in this pack or in
+      ``domains.mechanical_rotational`` names it as an input, and every
+      composition converges without it;
+    * **not a solver output** — no solver computes it and no
+      ``ScientificResult`` carries it;
+    * **a relation over numbers that already exist** — its two operands are
+      terms the reconciliation has already checked against three others.
+
+    So it is a **pure function and nothing else**. No field on any record, no
+    schema token, no serialization, no posed problem, no dependency edge, no
+    model record, no solver, no capability. Storing this ratio anywhere would be
+    a second authority on a number ``EnergyAccounting`` already owns — the
+    double-count this milestone exists to refuse.
+
+    **Its validity range is derived, not declared.** ``0 < eta < 1`` is a
+    *consequence* of the enforced balance plus the non-negativity of the four
+    loss channels, not an independent claim about machines. Which is exactly
+    why an accounting that violates it is refused: such a record cannot have
+    come from a reconciled run, and returning a number for it would be
+    reporting an efficiency for a state that does not conserve energy.
+
+    ``None`` — the value ``DriveRun.accounting`` carries when the coupling did
+    not converge — is refused for the same reason the accounting is ``None``
+    there at all: a ratio of two terms of an equation nothing claims to have
+    solved is not an efficiency.
+    """
+    if accounting is None:
+        raise InvalidScientificProblem(
+            "no efficiency exists for a run that did not converge: the "
+            "accounting is absent precisely because the power terms describe a "
+            "state the coupling never reached, and their ratio would report an "
+            "efficiency for an equation nothing claims to have solved"
+        )
+    if not isinstance(accounting, EnergyAccounting):
+        raise InvalidScientificProblem(
+            "drive_efficiency expects an EnergyAccounting"
+        )
+    source = accounting.source_power.magnitude_in("watt")
+    output = accounting.mechanical_output.magnitude_in("watt")
+    if source <= 0.0:
+        raise InvalidScientificProblem(
+            f"efficiency is undefined for a drive whose source delivers "
+            f"{accounting.source_power!r}: a non-positive input is outside the "
+            f"range over which the ratio means anything"
+        )
+    losses = (
+        accounting.feed_loss.magnitude_in("watt"),
+        accounting.return_loss.magnitude_in("watt"),
+        accounting.winding_loss.magnitude_in("watt"),
+        accounting.internal_mechanical_loss.magnitude_in("watt"),
+    )
+    if any(loss < 0.0 for loss in losses):
+        raise InvalidScientificProblem(
+            f"efficiency is undefined for an accounting with a negative loss "
+            f"channel {losses!r}: a dissipative channel that returns power is "
+            f"not a state this relation is valid over"
+        )
+    # The record boundary carries its own check, for the reason `bind_drive`
+    # does: `EnergyAccounting` is published, so a caller can construct one
+    # without ever going through `reconcile_drive_energy`, and a ratio taken
+    # over terms that do not balance would be a number with no equation behind
+    # it. This is the same enforcement duplication `PROPULSION0` adopted after
+    # `architecture-falsifier` found the published-solver path.
+    #
+    # The balance is **recomputed from the six terms**, not read from
+    # ``balance_residual``. Trusting the stored field would let a record assert
+    # its own consistency, which is exactly the class of defect the record
+    # boundary exists to catch — and the stored field is then checked against
+    # the recomputation, so a record that misreports its own residual is
+    # refused too.
+    residual = source - (output + sum(losses))
+    scale = max(abs(source), 1.0)
+    if abs(residual) > relative_tolerance * scale:
+        raise InvalidScientificProblem(
+            f"efficiency is undefined for an accounting whose power balance "
+            f"does not close: the six terms leave {residual!r} W unaccounted, "
+            f"{abs(residual) / scale:.3e} relative, above "
+            f"{relative_tolerance:.1e}. The ratio is a relation over a "
+            f"conserved balance and has no meaning without one"
+        )
+    stated = accounting.balance_residual.magnitude_in("watt")
+    if abs(stated - residual) > relative_tolerance * scale:
+        raise InvalidScientificProblem(
+            f"the accounting states a balance residual of {stated!r} W while "
+            f"its own six terms leave {residual!r} W: a record that misreports "
+            f"its own closure is refused rather than read"
+        )
+    efficiency = output / source
+    if not 0.0 < efficiency < 1.0:
+        raise InvalidScientificProblem(
+            f"efficiency {efficiency!r} is outside the range this relation is "
+            f"valid over: with four non-negative loss channels and a positive "
+            f"source, the balance forces 0 < eta < 1, so a value outside it "
+            f"reports an accounting that cannot have come from a reconciled run"
+        )
+    return Quantity(efficiency, "dimensionless")
 
 
 # =====================================================================
