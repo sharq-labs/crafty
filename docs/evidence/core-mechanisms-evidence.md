@@ -204,3 +204,371 @@ so the child resolved `engcore` from the **editable install** rather than the
 mutated scratch tree, and the mutation test came back green against unmutated
 source. Fixed by pinning `PYTHONPATH` to the `src` the parent imported from.
 The guard caught a defect in its own guard on the day it was written.
+
+---
+
+## TASK 2 — applicability, from a note on one path to a field on every result
+
+`ScientificResult` had no applicability field at all. The verdict existed on
+exactly **one** path: the coupled electro-thermal pack's own
+`AdmittedCoupledRun`, projected by the application layer as `model_validity`.
+
+**Not fixed by editing four domains.** Four omitted it because the core
+permitted omission; a fifth would omit it for the same reason. The permission
+changed.
+
+### Three states, and why three
+
+| State | Meaning | Legal payload |
+|---|---|---|
+| `ASSESSED` | a validity domain was run | mapping, **possibly empty** — "assessed, and no model declared a domain" is a real answer |
+| `NOT_ASSESSED` | a stated position, with a **required** reason | no assessments |
+| `UNDECLARED` | nobody said anything | no reason, no assessments |
+
+They cannot be confused: `state` is serialized in every state, round-trips,
+and cannot be constructed inconsistently (`NOT_ASSESSED` without a reason is
+refused; `UNDECLARED` *with* one is refused — a record that carries a reason
+has said something).
+
+`scientific_result` moves to **/3** by the rule DATA-BOUNDARY0 set for /2. A
+/2 payload loads as `UNDECLARED`, never as `NOT_ASSESSED`: absence stays
+absence.
+
+### The five paths
+
+| Path | Result | What it produced |
+|---|---|---|
+| `kinetics/cstr` | **ASSESSED** | see below |
+| `fluids/transport2d` | **ASSESSED** | was already computing `mesh_validity` and burying it in `metadata["mesh_validity_assessment"]`, an untyped side-channel nothing could check |
+| `electrical/dc` | **ASSESSED**, per component | the resistor model's condition is `resistance > 0` and a circuit has many; a per-model verdict would be one answer for components that can disagree |
+| `systems/electrothermal` | already carried it | on its own record; `project_run` now derives the wire payload from the typed report so the two cannot drift |
+| `domains/thermal/conduction1d` | **UNDECLARED** | **FROZEN TREE.** Reported, not worked around |
+
+### What the CSTR's rescued assessment actually says
+
+The solver computed `assessment = CSTR_MODEL.assess_validity(...)` before any
+integration, rendered `assessment.status.value` into a note, and dropped the
+rest. The note said, in full:
+
+    'model validity assessment: in_domain'
+
+The structured verdict that now survives on the record says:
+
+    {
+      "state": "assessed",
+      "assessments": {
+        "kinetics.cstr.nonisothermal_first_order": {
+          "status": "in_domain",
+          "satisfied": ["temperature", "concentration", "k0",
+                        "activation_energy", "residence_time"],
+          "violated": [], "unknown": []
+        }
+      }
+    }
+
+**Five named conditions**, where the note carried one word. And the reader can
+now see something the note actively hid: this is an assessment **of the
+declaration, before integration** — not of the trajectory. A run can be
+admitted here and still leave the envelope while integrating; that is a
+different question, answered by the validation stage. "in_domain" as a bare
+string invited exactly that conflation.
+
+### Fail-closed — and its honest limit
+
+`project_run` refuses to project a result that says **nothing**. That is the
+boundary where numbers become an answer someone builds on:
+
+    ScientificCoreError: projecting an execution result: model applicability
+    is UNDECLARED — the path that produced this result said nothing about
+    whether its model applies to the case it was run on. Declare it: pass
+    applicability=ApplicabilityReport.assessed(...) with what a ValidityDomain
+    said, or ApplicabilityReport.not_assessed('<why>') to state that position
+    on the record
+
+**The limit, stated rather than papered over:** making the field mandatory at
+construction would require editing `src/engcore/domains/thermal/`, which this
+round may not touch. So a result can still be **constructed** undeclared; it
+cannot be **projected** undeclared.
+
+Only silence is refused. A stated position projects and is reported. A
+stricter form that refused `NOT_ASSESSED` too was written first and backed
+out: it destroyed a real capability rather than protecting anything.
+
+### A `pytest.raises` hazard found while migrating
+
+An existing test asserting the bulk-data refusal began passing **for the wrong
+reason** — the applicability refusal raised the same exception type first, and
+`pytest.raises(ScientificCoreError)` cannot tell two causes apart until the
+`match=` is checked. Repaired by declaring applicability in that probe.
+
+---
+
+## TASK 3 — the evidentiary rule, and every route into a ValidationCheck
+
+**The premise did not hold, and the real state was worse.** There is no
+`record_check` in this repository and no `GUARD 2`.
+`ValidationCheck.__post_init__` enforced **no evidentiary rule on any axis**.
+The guard described as "complete on one axis and blind to another" was
+complete on none:
+
+    ValidationCheck(name="claims", outcome=PASS,
+                    establishes=ValidationLevel.BENCHMARK_VALIDATED)
+    # accepted; report.attained_levels -> ['benchmark_validated']
+
+### The full enumeration of routes to a `ValidationCheck`
+
+Measured with a spy on `__post_init__`, not reasoned about.
+
+| # | Route | Before | After |
+|---|---|---|---|
+| 1 | `ValidationCheck(...)` | ran | ran |
+| 2 | `ValidationCheck.from_dict(...)` | ran (delegates to 1) | ran |
+| 3 | `dataclasses.replace(...)` | ran (calls `__init__`) | ran |
+| 4 | `copy.copy(...)` | **DID NOT RUN** | ran, via `__reduce__` |
+| 5 | `copy.deepcopy(...)` | **DID NOT RUN** | ran, via `__reduce__` |
+| 6 | `pickle` round-trip | **DID NOT RUN** | ran, via `__reduce__` |
+| 7 | `ValidationReport(checks=(...))` | accepted a non-check; refused one only **incidentally**, by `AttributeError` from a duplicate-name scan reaching `.name` | refuses for a stated reason |
+| 8 | `ValidationReport.with_check(...)` | takes an already-built check → 1–6 | same |
+| 9 | `object.__new__` + `object.__setattr__` | reachable by **no** construction rule | unchanged — vandalism, not a route |
+
+4, 5 and 6 are the finding: three routes that *look* like they copy a record
+rather than build one, each reconstructing a frozen dataclass without running
+a single rule.
+
+### The rule
+
+A check that **passes** and establishes a quantitative level must carry a
+residual against a tolerance, **or** named evidence. `DIMENSIONALLY_VALID` is
+exempt: it is not a numerical claim. A passing check whose residual exceeds
+its own tolerance is refused outright.
+
+**A stricter form was written first and backed out.** Forbidding `establishes`
+on any non-passing check turned the suite red for a good reason: on a
+`NOT_RUN` or `FAIL` check that field records *what was attempted*, and "we
+tried to establish benchmark validation and could not" is genuinely different
+from "we never tried". Only a passing check reaches `attained_levels`, so only
+a passing check can make an unbacked claim count. **The same lesson as TASK 2,
+learned twice in one round.**
+
+### Two records in the suite could not survive it, and both were defects
+
+* `test_scientific_core.py` asserted a passing benchmark check establishing
+  `BENCHMARK_VALIDATED` with nothing attached — the exact shape the rule
+  refuses.
+* `test_admission_gate_repair.py`'s `_withhold` rebuilt every check from four
+  fields, **silently dropping `residual`, `tolerance` and `evidence` from all
+  six**, while claiming to change one outcome. Repaired with
+  `dataclasses.replace`.
+
+---
+
+## TASK 4 — refuse at construction, and refuse the SAME things
+
+A result holding an unserializable value constructed happily; the process died
+later inside `json.dumps` with a `TypeError` naming no field, no record and no
+run.
+
+### The disagreement was already real, and ran both ways
+
+| Value | `encode()` | construction (before) | `json.dumps(to_dict())` (before) |
+|---|---|---|---|
+| `object()` | refuses, naming the type | **accepts** | `TypeError` |
+| an `Enum` | **accepts** | accepts | **`TypeError`** |
+
+Two refusals over one value space, disagreeing in both directions.
+
+**The fix is not a second check.** There is now one acceptance rule with two
+callers: `require_encodable` does not re-implement anything, it *runs*
+`encode`, and `to_dict()` emits `encode(self.metadata)` rather than the raw
+mapping. A mutation replacing `encode` with an equivalent-looking `json.dumps`
+inside `require_encodable` reddens the suite, because they are not equivalent.
+
+### Reported, not fixed
+
+`_canonical_bytes` in `engcore/design/memory.py` has **no explicit refusal at
+all** — the "new explicit refusal" the task refers to does not exist in this
+tree. It is a bare `json.dumps` raising `TypeError`. It therefore cannot yet
+disagree with the rule installed here, because it states no rule. Left alone,
+with a test asserting the gap: that module is the subject of a frozen test
+file, and the records it hashes are built from typed references rather than
+from the untyped metadata channel this task is about.
+
+---
+
+## TASK 5 — provenance claiming a source that was never there
+
+**The premise named fields that do not exist.** There is no `dependencies`
+field on `ProvenanceRecord` and no `from_execution` anywhere in this tree.
+What carries the identical defect is every claim the record makes about a
+source. Measured before the fix, **all** of these were accepted:
+
+| Claim | Why it is a claim about a source that was never there |
+|---|---|
+| `parent_run_id = ""` | a lineage claim naming nothing |
+| `parent_run_id = "   "` | the same, wearing whitespace |
+| `parent_run_id = <its own run_id>` | a record that is its own source |
+| `parent_run_id = "  r  "` vs `run_id = "r"` | the same, evading a naive comparison |
+| `models = (("", ""),)` | a participant that took part without saying what |
+| `derived(..., parent_run_id=<anything>)` | a false lineage claim through the sanctioned API — which **held the truth** |
+
+All refused now. The self-reference case matters most: a source has to have
+existed *before* the thing derived from it, so a record naming itself is not a
+weak claim but an impossible one.
+
+**Made to fail on purpose**, through the route that is not a keyword argument:
+a stored payload whose `parent_run_id` equals its `run_id` no longer loads.
+Deserialization is how such a claim actually arrives — nobody types one.
+
+### The guard that has never been seen to fail
+
+`require_sources_exist(known_run_ids)` answers "did that run happen", and it
+**cannot** be automatic: this module collects nothing on its own by an explicit
+privacy and determinism position, so a record cannot know which runs happened.
+
+**No shipped path calls it.** Every production lineage claim in this repository
+is taken from a record already in hand — `resistor_body.py` and
+`multirotor/study.py` both pass the `run_id` of a result they are holding — so
+it would never fire there. A test measures that claim from the tree rather than
+asserting it, so the day a caller appears the statement stops being true
+loudly. Recorded as a limit; it is not presented as enforcement.
+
+---
+
+## TASK 6 — a crossing must state WHEN the value it carries is true
+
+**The premise was partly wrong, and measuring it found the real gap.** The
+temperature crossing is *not* undeclared and does *not* cross by
+`component_id` match: it has been a `QuantityDependency` naming source problem,
+source quantity, target problem, target quantity and dimension since
+`ET-VERTICAL`, and the association is structural.
+
+What was missing is the **instant** — and the hazard is stated in the
+composition module's own docstring with nothing checking it. A lumped body
+publishes two kelvin-valued metrics, `final_temperature` and
+`steady_state_temperature`, which **converge to different numbers**. A coupling
+selects between them by passing a metric NAME. Both carry kelvin, so the
+dimension check passes on either.
+
+### The crossing, before and after
+
+Before, the two configurations were distinguishable only by which string a
+caller passed. After:
+
+    { "schema": "quantity_dependency/2",
+      "source_problem_id": "thermal-lumped-R1",
+      "source_quantity": "final_temperature",
+      "target_problem_id": "resistance-tcr-R1",
+      "target_quantity": "temperature",
+      "unit_exemplar": "kelvin",
+      "source_instant": "end_of_interval" }
+
+and the steady-state configuration differs **in the record**:
+
+    body-temperature-sets-property-state:R1:
+        end_of_interval   vs   asymptotic_steady_state
+
+while the dimension set is **identical** across both — confirming the dimension
+check was never going to be what separated them.
+
+### Fail-closed at three levels
+
+* **required, no default** — a coupling that does not state the instant does
+  not construct: `TypeError: ... missing 1 required positional argument:
+  'source_instant'`. That is the error the sixth domain gets;
+* **`quantity_dependency/1` is refused, not defaulted** — there is no honest
+  instant to invent for a record whose author never stated one;
+* **`transfer_instant_of` refuses an unknown metric** — the next kelvin-valued
+  metric that domain publishes must state its time level or no coupling wires
+  it.
+
+### One table, not five opinions
+
+The metric to instant mapping lives in the domain that **publishes** the
+metrics, not in each of the four system packs that transport a temperature out
+of a body. Five packs holding five mappings could disagree about when
+`final_temperature` is true — the same defect one level up. A test measures
+that exactly one module holds the table. Each pack **derives** the instant from
+the metric it is transporting, so the declaration and the value cannot
+disagree; a mutation that hard-codes it reddens the suite.
+
+### Can `repair.py` now invert?
+
+**`repair.py` does not exist in this repository**, on any branch, in any
+commit. Neither does the inversion capability the task describes, nor the
+refusal text it quotes — `grep` over the whole tree returns nothing. So the
+question cannot be answered as asked, and is reported rather than answered.
+
+The substantive half **can** be answered: the crossing is now a declared
+transfer with a stated source, quantity and instant, readable from the record
+without executing anything, and checkable — `check_against` validates the
+endpoints and dimension, and the instant makes the two configurations
+distinguishable. Whatever inverts a condition can now read *which* temperature,
+from *which* problem, at *which* time level, out of a record rather than out of
+an orchestration function's control flow.
+
+### NEEDS — what a general transfer framework would require
+
+Deliberately **not** built. The smallest checkable thing was built instead. A
+general one would need, at minimum:
+
+1. **Instants that are values, not levels.** `END_OF_INTERVAL` is meaningless
+   across participants with different interval lengths. A general framework
+   needs a shared time coordinate and a statement of *which* interval.
+2. **Support and transfer semantics for non-scalars.** Every crossing here is a
+   scalar. A field crossing needs the source support, the target support and
+   the interpolation between them — which is why `data_references` is
+   deliberately not consulted by endpoint resolution today.
+3. **A conservation statement.** Nothing says a transferred flux is conserved
+   across the interface; for scalars nobody has needed it, and for a coupled
+   energy balance it is the first thing to check.
+4. **Reference frames and datums.** Same-dimension, same-instant quantities can
+   still disagree about origin — the existing `shares_origin` / ratio-scale
+   check in `engcore.coupling.scales` is the seed of this and covers only
+   affine scale.
+5. **Bidirectional connectors.** `QuantityDependency` is causal and one-way by
+   an explicit decision. Potential/flow pairs are a different, much larger
+   contract.
+6. **A transfer record in provenance.** The declared crossings are inspectable
+   *before* a run but are not written into `ProvenanceRecord` after it — so a
+   stored result does not carry what fed it. This is the nearest missing piece
+   and the one a drone would want first.
+
+---
+
+## The pre-existing defect this round surfaced and did not fix
+
+`tests/test_api_mcp_v0_transports.py::test_both_transports_agree_that_a_size_fault_is_a_transport_fault`
+fails intermittently in the full suite and passes alone. Characterized by
+hammering the oversize path 60 times against a real server:
+
+     26  HTTPError 413 body=['error']            <- the declared behaviour
+     20  HTTPError 413 BODY UNREADABLE ConnectionAbortedError
+     12  ConnectionAbortedError [WinError 10053]
+      2  ConnectionResetError   [WinError 10054]
+
+**Roughly 57 % of the time a Windows client does not observe the declared
+413.** `crafty_http/server.py` answers an oversize request and closes
+**without draining the request body** — a deliberate decision, documented
+in-source ("the undrained body would otherwise be parsed as the next request
+on a keep-alive connection"), whose observable consequence on Windows
+contradicts what the guard asserts.
+
+Not fixed: it is outside all six tasks, `src/crafty_http/` is frozen by other
+milestones' guards, and it produces no wrong scientific number — both outcomes
+are transport faults. Reported because every SCIENTIFIC failure seen in this
+round was this one test.
+
+---
+
+## Mutation guards
+
+`tests/mutation_guards.py` carries **24** deliberate defects, one or more per
+task. `tests/test_mutation_guards.py` copies the tree, applies each in a
+scratch worktree, and runs only the tests that mutation claims to break in a
+fresh interpreter, requiring them to fail. All 24 redden the suite.
+
+One of them found a defect in this round's own test on the day it was written:
+`registry-check-not-at-the-run-boundary` came back green because the influence
+test spawned its child with a bare `sys.executable`, so the child resolved
+`engcore` from the editable install rather than from the mutated tree. Fixed by
+pinning `PYTHONPATH`.
