@@ -743,6 +743,127 @@ def test_the_report_refuses_a_non_check_for_a_stated_reason():
             ValidationReport(checks=(entry,))
 
 
+# =====================================================================
+# TASK 4 — refuse at construction, and refuse the SAME things
+#
+# The second half is the harder half. Two refusals over the same value space
+# that do not agree is a worse defect than either alone — and they did not
+# agree: `encode()` refused an unserializable value with a ScientificCoreError
+# naming its type, while a record's own `to_dict()` passed the value straight
+# through and the process died later inside `json.dumps` with a TypeError that
+# named no field, no record and no run.
+# =====================================================================
+
+
+def _bare_result(**kwargs):
+    from engcore.scientific.results.provenance import ProvenanceRecord
+    from engcore.scientific.results.result import ScientificResult
+
+    return ScientificResult(
+        result_id="r", values={}, provenance=ProvenanceRecord(run_id="r"), **kwargs
+    )
+
+
+def test_an_unrecordable_value_is_refused_at_construction():
+    """Naming the field and the type, where the caller still knows which
+    field they were filling in."""
+    with pytest.raises(ScientificCoreError) as excinfo:
+        _bare_result(metadata={"probe": object()})
+    message = str(excinfo.value)
+    assert "'probe'" in message          # the field
+    assert "object" in message           # the type
+    assert "provenance does not exist" in message
+
+
+def test_provenance_refuses_it_too():
+    """A result whose provenance cannot be recorded has no provenance."""
+    from engcore.scientific.results.provenance import ProvenanceRecord
+
+    with pytest.raises(ScientificCoreError, match="provenance metadata key 'p'"):
+        ProvenanceRecord(run_id="r", metadata={"p": object()})
+
+
+def test_the_two_refusals_cannot_disagree():
+    """ONE acceptance rule, with two callers — not two rules that happen to
+    line up today.
+
+    Asserted over a value space that includes the case where they DID
+    disagree: an Enum is accepted by `encode` and was accepted by
+    construction, and then `json.dumps(to_dict())` died on it. Now
+    construction admits exactly what serialization can write, and
+    serialization writes exactly what construction admitted.
+    """
+    import enum
+    import json
+    from engcore.scientific.serialization import encode, to_json
+
+    class Colour(enum.Enum):
+        RED = "red"
+
+    space = [
+        None, True, 3, 4.5, "text",
+        Colour.RED,
+        {"b": 2, "a": 1},
+        [1, 2, 3], (1, 2), {1, 2}, frozenset({3}),
+        object(), lambda: None, iter([]), complex(1, 2), b"bytes",
+    ]
+    for value in space:
+        try:
+            encode(value)
+        except ScientificCoreError:
+            encode_accepts = False
+        else:
+            encode_accepts = True
+
+        try:
+            result = _bare_result(metadata={"v": value})
+        except ScientificCoreError:
+            construction_accepts = False
+        else:
+            construction_accepts = True
+
+        assert encode_accepts == construction_accepts, (
+            f"{type(value).__name__}: encode says {encode_accepts}, "
+            f"construction says {construction_accepts}"
+        )
+
+        if construction_accepts:
+            # ...and anything construction admitted must actually serialize,
+            # which is the half that used to raise TypeError from json.
+            json.loads(to_json(result))
+
+
+def test_a_result_that_exists_can_always_be_recorded():
+    """The invariant the two halves add up to."""
+    import json
+    from engcore.scientific.serialization import to_json
+
+    result = _bare_result(metadata={"nested": {"z": 1, "a": [1, {"k": "v"}]}})
+    payload = json.loads(to_json(result))
+    assert payload["metadata"]["nested"]["a"][1]["k"] == "v"
+
+
+def test_design_memory_canonical_bytes_still_has_no_explicit_refusal():
+    """The disagreement the task asked about, reported rather than assumed.
+
+    `_canonical_bytes` in `engcore/design/memory.py` is a bare `json.dumps`
+    with NO explicit refusal — the "new explicit refusal" the task refers to
+    does not exist in this tree. So it cannot yet disagree with the rule
+    installed here; it simply raises `TypeError` where the core raises a
+    scientific error. That is recorded as a KNOWN GAP rather than fixed:
+    `design/memory.py` is the subject of a frozen test module, and the
+    records it hashes are built from typed references rather than from the
+    untyped metadata channel this task is about.
+    """
+    import inspect
+    from engcore.design import memory
+
+    source = inspect.getsource(memory._canonical_bytes)
+    assert "raise" not in source
+    with pytest.raises(TypeError):
+        memory._canonical_bytes({"x": object()})
+
+
 _INFLUENCE = """
 import json
 from engcore.scientific.units.quantity import registry, Quantity

@@ -178,6 +178,38 @@ MUTATIONS: tuple[Mutation, ...] = (
         ),
         why="route 7 back to refusing only incidentally, via AttributeError",
     ),
+    # ---- TASK 4, one acceptance rule ---------------------------------
+    Mutation(
+        name="result-metadata-unchecked-again",
+        path="src/engcore/scientific/results/result.py",
+        old='            require_encodable(value, context=f"result metadata key {key!r}")\n',
+        new="",
+        breaks=(
+            "tests/test_core_mechanisms.py::test_an_unrecordable_value_is_refused_at_construction",
+            "tests/test_core_mechanisms.py::test_the_two_refusals_cannot_disagree",
+        ),
+        why="a result that exists in memory and cannot be recorded, admitted again",
+    ),
+    Mutation(
+        name="provenance-metadata-unchecked-again",
+        path="src/engcore/scientific/results/provenance.py",
+        old='            require_encodable(value, context=f"provenance metadata key {key!r}")\n',
+        new="",
+        breaks=(
+            "tests/test_core_mechanisms.py::test_provenance_refuses_it_too",
+        ),
+        why="provenance that cannot be written down is provenance that does not exist",
+    ),
+    Mutation(
+        name="two-rules-instead-of-one",
+        path="src/engcore/scientific/serialization.py",
+        old="    try:\n        encode(value)\n    except ScientificCoreError as exc:\n",
+        new="    try:\n        json.dumps(value)\n    except (TypeError, ValueError) as exc:\n",
+        breaks=(
+            "tests/test_core_mechanisms.py::test_the_two_refusals_cannot_disagree",
+        ),
+        why="a SECOND acceptance rule that looks equivalent and is not — json.dumps refuses the Enum that encode accepts",
+    ),
 )
 
 

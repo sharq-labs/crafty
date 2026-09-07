@@ -18,7 +18,13 @@ from typing import Any, Mapping
 from ..errors import ScientificCoreError
 from ..ir.problem import ModelReference
 from ..realizations.definition import RealizationReference
-from ..serialization import require_schema, require_schema_any, schema_string
+from ..serialization import (
+    encode,
+    require_encodable,
+    require_schema,
+    require_schema_any,
+    schema_string,
+)
 from ..solvers.protocol import SolverIdentity
 from ..units.quantity import Quantity, require_pristine_registry
 
@@ -252,7 +258,10 @@ class ProvenanceRecord:
         object.__setattr__(
             self, "environment", {str(k): str(v) for k, v in self.environment.items()}
         )
-        object.__setattr__(self, "metadata", dict(self.metadata))
+        metadata = dict(self.metadata)
+        for key, value in metadata.items():
+            require_encodable(value, context=f"provenance metadata key {key!r}")
+        object.__setattr__(self, "metadata", metadata)
 
     # ---- derived views over the canonical bindings ----------------------
     @property
@@ -365,7 +374,7 @@ class ProvenanceRecord:
             "environment": dict(sorted(self.environment.items())),
             "timestamp": self.timestamp,
             "parent_run_id": self.parent_run_id,
-            "metadata": dict(sorted(self.metadata.items(), key=lambda kv: kv[0])),
+            "metadata": encode(self.metadata),
         }
 
     @classmethod

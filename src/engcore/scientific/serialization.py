@@ -79,6 +79,34 @@ def encode(value: Any) -> Any:
     )
 
 
+def require_encodable(value: Any, *, context: str) -> None:
+    """Refuse now what :func:`encode` would refuse later.
+
+    The point is not that a second check exists; it is that there is only
+    ONE acceptance rule. Two refusals over the same value space that do not
+    agree is a worse defect than either alone, and that disagreement was
+    real: :func:`encode` refused an unserializable value with a
+    :class:`ScientificCoreError` naming its type, while a record's own
+    ``to_dict()`` passed the value through untouched and the process died
+    later inside ``json.dumps`` with a ``TypeError`` that named no field, no
+    record and no run.
+
+    So this does not re-implement the rule — it *runs* it. Whatever
+    :func:`encode` accepts, construction accepts; whatever it refuses,
+    construction refuses, at the point where the caller still knows which
+    field they were filling in.
+    """
+    try:
+        encode(value)
+    except ScientificCoreError as exc:
+        raise ScientificCoreError(
+            f"{context} holds a value of type {type(value).__name__} that "
+            f"cannot be recorded ({exc}). A result that exists in memory and "
+            f"cannot be written down is a result whose provenance does not "
+            f"exist, so it is refused here rather than at serialization time"
+        ) from exc
+
+
 def to_json(record: Any, *, indent: int | None = None) -> str:
     """Deterministic JSON for any record exposing ``to_dict()``."""
     payload = record.to_dict() if hasattr(record, "to_dict") else encode(record)

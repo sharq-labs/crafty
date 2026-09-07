@@ -45,6 +45,9 @@ CORE_FILES = frozenset({
     "src/engcore/scientific/results/__init__.py",
     # TASK 3 — the evidentiary rule, and the three routes that bypassed it.
     "src/engcore/scientific/results/validation.py",
+    # TASK 4 — one acceptance rule, run at construction instead of crashing
+    # inside json.dumps.
+    "src/engcore/scientific/serialization.py",
 })
 
 #: Files OUTSIDE the universal core that this milestone changes, and the

@@ -16,7 +16,12 @@ from dataclasses import dataclass, field
 from typing import Any, Mapping
 
 from ..errors import ScientificCoreError
-from ..serialization import require_schema_any, schema_string
+from ..serialization import (
+    encode,
+    require_encodable,
+    require_schema_any,
+    schema_string,
+)
 from ..solvers.protocol import ConvergenceState, SolverIdentity
 from ..units.quantity import Quantity
 from ..units.validation import check_unit_map
@@ -138,7 +143,14 @@ class ScientificResult:
         object.__setattr__(self, "assumptions", tuple(self.assumptions))
         object.__setattr__(self, "warnings", tuple(self.warnings))
         object.__setattr__(self, "artifacts", tuple(self.artifacts))
-        object.__setattr__(self, "metadata", dict(self.metadata))
+        metadata = dict(self.metadata)
+        for key, value in metadata.items():
+            # Refused HERE, naming the field and the type, rather than
+            # crashing inside `json.dumps` with a TypeError that names
+            # neither. `metadata` is this record's one untyped channel and so
+            # the one place an unrecordable value can enter it.
+            require_encodable(value, context=f"result metadata key {key!r}")
+        object.__setattr__(self, "metadata", metadata)
 
         references = tuple(self.data_references)
         seen: set[str] = set()
@@ -250,7 +262,10 @@ class ScientificResult:
             "artifacts": list(self.artifacts),
             "data_references": [r.to_dict() for r in self.data_references],
             "provenance": self.provenance.to_dict(),
-            "metadata": dict(sorted(self.metadata.items(), key=lambda kv: kv[0])),
+            # Through `encode`, so what comes out is JSON-ready rather than
+            # whatever was put in. Construction already refused anything
+            # `encode` cannot take, so this cannot fail here.
+            "metadata": encode(self.metadata),
         }
 
     @classmethod
