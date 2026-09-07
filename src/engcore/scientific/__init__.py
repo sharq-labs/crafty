@@ -114,6 +114,8 @@ from .realizations import (
 )
 from .results import (
     VARIABLE_BULK_LINKAGE_SCHEMA,
+    ApplicabilityReport,
+    ApplicabilityState,
     ExecutionBinding,
     ProvenanceRecord,
     ScientificDataReference,
@@ -248,6 +250,8 @@ __all__ = [
     "ScientificDataReference",
     "ScientificResult",
     "ValidationReport",
+    "ApplicabilityReport",
+    "ApplicabilityState",
     "ValidationCheck",
     "ValidationOutcome",
     "ValidationLevel",

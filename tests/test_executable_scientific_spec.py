@@ -924,12 +924,16 @@ def test_no_src_file_was_added_or_edited():
         text=True,
         check=True,
     )
+    from core_mechanisms_scope import CORE_FILES, DOMAIN_FILES
+
     changed = _excluding_api_mcp_v0(
         set(diff.stdout.split())
         - {_PORTABILITY_EXCEPTION}
         - _PLANNER_DISCOVERY_EXCEPTIONS
         - _FIELD_SUPPORT_FOUNDATION_EXCEPTIONS
         - _API_MCP_V0_EXCEPTIONS
+        - CORE_FILES
+        - DOMAIN_FILES
     )
     assert changed == set(), f"src/ was modified: {sorted(changed)}"
     untracked = subprocess.run(

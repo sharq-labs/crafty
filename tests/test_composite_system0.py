@@ -1518,6 +1518,7 @@ def test_t6e_the_new_modules_hold_no_untyped_property_dictionary():
 #: the tree exactly in both directions, so a name parked here that nothing
 #: changed fails just as loudly as an undeclared core edit.
 from core_mechanisms_scope import CORE_FILES as _CORE_MECHANISMS_CORE_FILES
+from core_mechanisms_scope import DOMAIN_FILES as _CORE_MECHANISMS_DOMAIN_FILES
 
 
 def test_t6f_the_working_tree_changed_only_where_the_prereg_said_it_would():
@@ -1656,8 +1657,20 @@ def test_t6f_the_working_tree_changed_only_where_the_prereg_said_it_would():
         "tests/test_propulsion0.py",
         "tests/test_propulsion0_ext.py",
         "docs/evidence/core-mechanisms-evidence.md",
+        # TASK 2 additionally moves `scientific_result` to /3, so every guard
+        # that pinned the exact schema string is updated to the new pin, and
+        # the guards that freeze whole domain trees subtract the same declared
+        # list. All named individually, as above.
+        "tests/test_cross_domain_coverage.py",
+        "tests/test_data_boundary0.py",
+        "tests/test_electrothermal_vertical.py",
+        "tests/test_exec_spec_structured_input.py",
+        "tests/test_hostile_core_domain_stress.py",
+        "tests/test_min_cross_domain_foundation.py",
+        "tests/test_min_foundation_electrothermal.py",
     }
     allowed |= _CORE_MECHANISMS_CORE_FILES
+    allowed |= _CORE_MECHANISMS_DOMAIN_FILES
     stray = sorted(set(diff) - allowed)
     assert not stray, f"files changed outside the preregistered set: {stray}"
 

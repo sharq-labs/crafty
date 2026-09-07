@@ -879,6 +879,9 @@ _API_MCP_V0_EXCEPTIONS = {
 }
 
 
+from core_mechanisms_scope import CORE_FILES, DOMAIN_FILES
+
+
 def test_h_no_universal_core_or_committed_evidence_was_modified():
     """FAIL CONDITION §13.7."""
     for path in ("src/", "experiments/cross_domain_coverage/", "experiments/exec_spec_residue/"):
@@ -895,6 +898,8 @@ def test_h_no_universal_core_or_committed_evidence_was_modified():
             - _PLANNER_DISCOVERY_EXCEPTIONS
             - _FIELD_SUPPORT_FOUNDATION_EXCEPTIONS
             - _API_MCP_V0_EXCEPTIONS
+            - CORE_FILES
+            - DOMAIN_FILES
         )
         assert changed == set(), f"{path} was modified: {sorted(changed)}"
     untracked = subprocess.run(

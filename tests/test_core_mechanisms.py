@@ -22,7 +22,7 @@ import sys
 import pytest
 
 from core_mechanisms_scope import BASE, CORE_FILES
-from engcore.scientific.errors import UnitRegistryFrozen
+from engcore.scientific.errors import ScientificCoreError, UnitRegistryFrozen
 from engcore.scientific.units.quantity import (
     Quantity,
     _mutator_names,
@@ -256,6 +256,304 @@ def test_the_fingerprint_is_stable_across_ordinary_work():
 # is mandatory on every ScientificResult, so a domain cannot decline it by
 # not calling anything — including a domain that does not know it exists.
 # ---------------------------------------------------------------------
+
+# =====================================================================
+# TASK 2 — applicability is a field of the result, not a note beside it
+#
+# It was populated on ONE path of five. Four domains said nothing, and the
+# CSTR computed a full assessment, rendered `status.value` into a note, and
+# discarded the condition names. The fix is to the CORE's permission, not to
+# four domains: three states that cannot be confused, on every result, always.
+# =====================================================================
+
+
+def test_the_three_states_are_impossible_to_confuse():
+    """"Assessed and empty", "deliberately not assessed" and "nobody said" are
+    three different answers. Collapsing any two is how a result comes to look
+    more examined than it is."""
+    from engcore.scientific.models.definition import (
+        ValidityAssessment, ValidityStatus,
+    )
+    from engcore.scientific.results.applicability import (
+        ApplicabilityReport, ApplicabilityState,
+    )
+
+    empty = ApplicabilityReport.assessed({})
+    stated = ApplicabilityReport.not_assessed("this path solves no model")
+    silent = ApplicabilityReport.undeclared()
+
+    assert empty.state is ApplicabilityState.ASSESSED
+    assert stated.state is ApplicabilityState.NOT_ASSESSED
+    assert silent.state is ApplicabilityState.UNDECLARED
+    assert len({empty.state, stated.state, silent.state}) == 3
+
+    # ...and a reader holding only the payload can tell them apart.
+    assert empty.to_dict()["state"] == "assessed"
+    assert stated.to_dict()["state"] == "not_assessed"
+    assert silent.to_dict()["state"] == "undeclared"
+    assert empty.to_dict()["assessments"] == {}
+    assert silent.to_dict()["assessments"] == {}
+    assert empty.to_dict() != silent.to_dict()
+
+    # Only the assessed one is an assessment.
+    assert empty.was_assessed
+    assert not stated.was_assessed
+    assert not silent.was_assessed
+
+    # Round-trip preserves the distinction rather than normalising it away.
+    for report in (empty, stated, silent):
+        assert ApplicabilityReport.from_dict(report.to_dict()) == report
+
+    real = ApplicabilityReport.assessed(
+        {"R1": ValidityAssessment(status=ValidityStatus.IN_DOMAIN,
+                                  satisfied=("temperature",))}
+    )
+    assert ApplicabilityReport.from_dict(real.to_dict()) == real
+
+
+def test_the_states_cannot_be_constructed_inconsistently():
+    """The state and the payload cannot disagree."""
+    from engcore.scientific.errors import ScientificCoreError
+    from engcore.scientific.models.definition import (
+        ValidityAssessment, ValidityStatus,
+    )
+    from engcore.scientific.results.applicability import (
+        ApplicabilityReport, ApplicabilityState,
+    )
+
+    assessment = ValidityAssessment(status=ValidityStatus.IN_DOMAIN)
+
+    # 'not assessed' is a POSITION, and a position needs a reason.
+    with pytest.raises(ScientificCoreError, match="requires a reason"):
+        ApplicabilityReport(state=ApplicabilityState.NOT_ASSESSED)
+
+    # ...and silence cannot carry one, or it is not silence.
+    with pytest.raises(ScientificCoreError, match="has said something"):
+        ApplicabilityReport(state=ApplicabilityState.UNDECLARED, reason="hm")
+
+    # A record that did not assess cannot report what the assessment found.
+    for state in (ApplicabilityState.UNDECLARED, ApplicabilityState.NOT_ASSESSED):
+        with pytest.raises(ScientificCoreError, match="cannot also report"):
+            ApplicabilityReport(
+                state=state, reason="x", assessments={"R1": assessment}
+            )
+
+
+def test_every_result_says_something_about_applicability():
+    """There is no way to have a result with nothing in this field.
+
+    The default is UNDECLARED — a visible declaration, not an empty mapping
+    that reads like an assessment finding nothing.
+    """
+    from engcore.scientific.results.applicability import ApplicabilityState
+    from engcore.scientific.results.provenance import ProvenanceRecord
+    from engcore.scientific.results.result import ScientificResult
+
+    result = ScientificResult(
+        result_id="r1", values={}, provenance=ProvenanceRecord(run_id="r1")
+    )
+    assert result.applicability.state is ApplicabilityState.UNDECLARED
+    assert result.to_dict()["applicability"]["state"] == "undeclared"
+
+    with pytest.raises(ScientificCoreError, match="UNDECLARED"):
+        result.require_applicability()
+
+
+def test_a_bare_mapping_is_refused_as_the_applicability_field():
+    """The exact shape the four silent domains would have reached for."""
+    from engcore.scientific.results.provenance import ProvenanceRecord
+    from engcore.scientific.results.result import ScientificResult
+
+    with pytest.raises(ScientificCoreError, match="ApplicabilityReport"):
+        ScientificResult(
+            result_id="r1", values={},
+            provenance=ProvenanceRecord(run_id="r1"),
+            applicability={},
+        )
+
+
+def test_an_older_payload_loads_as_undeclared_and_never_as_a_position():
+    """Absence stays absence. A /2 record's author stated nothing, and
+    inventing NOT_ASSESSED for it would put a position into a record whose
+    author never took one."""
+    from engcore.scientific.results.applicability import ApplicabilityState
+    from engcore.scientific.results.provenance import ProvenanceRecord
+    from engcore.scientific.results.result import (
+        RESULT_SCHEMA, RESULT_SCHEMA_V2, ScientificResult,
+    )
+
+    assert RESULT_SCHEMA == "scientific_result/3"
+    payload = ScientificResult(
+        result_id="r1", values={}, provenance=ProvenanceRecord(run_id="r1")
+    ).to_dict()
+    old = {k: v for k, v in payload.items() if k != "applicability"}
+    old["schema"] = RESULT_SCHEMA_V2
+    restored = ScientificResult.from_dict(old)
+    assert restored.applicability.state is ApplicabilityState.UNDECLARED
+    assert restored.applicability.reason == ""
+
+
+def test_electrical_dc_declares_applicability_per_component():
+    """LIVE, not declared. Wiring is the test.
+
+    Keyed by ``component_id`` rather than by model: the resistor model's one
+    condition is ``resistance > 0`` and a circuit has many resistances, so a
+    per-model verdict would be one answer for components that can disagree.
+    """
+    from engcore.domains.electrical.dc.circuit import DCCircuit
+    from engcore.domains.electrical.dc.components import (
+        DCVoltageSource, ElectricalNode, Resistor,
+    )
+    from engcore.domains.electrical.dc.solver import solve_circuit
+    from engcore.scientific.results.applicability import ApplicabilityState
+    from engcore.scientific.units.quantity import Quantity
+
+    circuit = DCCircuit(
+        circuit_id="applicability-probe",
+        nodes=(
+            ElectricalNode("gnd", is_reference=True),
+            ElectricalNode("n1"),
+            ElectricalNode("n2"),
+        ),
+        resistors=(
+            Resistor("R1", "n1", "n2", Quantity(1.0, "kohm")),
+            Resistor("R2", "n2", "gnd", Quantity(2.0, "kohm")),
+        ),
+        voltage_sources=(
+            DCVoltageSource("V1", "n1", "gnd", Quantity(10.0, "volt")),
+        ),
+    )
+    result = solve_circuit(circuit, run_id="applicability-probe")
+    report = result.applicability
+
+    assert report.state is ApplicabilityState.ASSESSED
+    assert sorted(report.assessments) == ["R1", "R2"]
+    assert report.violated == ()
+    result.require_applicability()  # does not raise
+    assert result.to_dict()["applicability"]["state"] == "assessed"
+
+
+def test_the_frozen_thermal_path_is_visibly_undeclared():
+    """The fifth path, reported rather than worked around.
+
+    ``src/engcore/domains/thermal/`` may not be edited by this milestone, so
+    its result cannot declare an assessment. What the mechanism buys even here
+    is that the silence is now VISIBLE and refusable, rather than
+    indistinguishable from an assessment that found nothing.
+    """
+    from engcore.domains.thermal.conduction1d.problem import (
+        ConductionSlab, SlabDiscretization,
+    )
+    from engcore.domains.thermal.conduction1d.solver import solve_slab
+    from engcore.scientific.results.applicability import ApplicabilityState
+    from engcore.scientific.units.quantity import Quantity
+
+    slab = ConductionSlab(
+        slab_id="applicability-probe",
+        length=Quantity(0.1, "meter"),
+        diffusivity=Quantity(1.2e-5, "m**2/s"),
+        end_time=Quantity(60.0, "second"),
+        discretization=SlabDiscretization(32, 40),
+    )
+    result = solve_slab(slab, run_id="thermal-undeclared-probe")
+    assert result.applicability.state is ApplicabilityState.UNDECLARED
+    assert result.to_dict()["applicability"]["state"] == "undeclared"
+    with pytest.raises(ScientificCoreError, match="UNDECLARED"):
+        result.require_applicability()
+
+
+def test_the_projection_refuses_an_undeclared_applicability():
+    """THE FAIL-CLOSED PROOF for TASK 2, and the honest limit on it.
+
+    `project_run` is the boundary where numbers become an answer somebody
+    builds on. An execution that reaches it saying nothing about applicability
+    is refused. This is enforcement, not declaration — but note what it is
+    NOT: making the field mandatory on `ScientificResult` itself would require
+    editing `src/engcore/domains/thermal/`, which this milestone may not
+    touch. So a result can still be CONSTRUCTED undeclared; it cannot be
+    PROJECTED undeclared.
+
+    A stated position projects, because refusing one would destroy a real
+    capability rather than protect anything.
+    """
+    from api_v0_case import canonical_request
+    from engcore.application import contract
+    from engcore.application.executions import electrothermal_series as ets
+    from engcore.scientific.results.applicability import ApplicabilityReport
+
+    request = canonical_request()
+    prepared = ets.prepare(request["inputs"], request["coupling"], "native")
+    run = prepared.run("applicability-projection-probe").run
+
+    with pytest.raises(ScientificCoreError, match="UNDECLARED"):
+        contract.project_run(run)
+
+    # ...and a STATED position is reported, not refused.
+    projected = contract.project_run(
+        run,
+        applicability=ApplicabilityReport.not_assessed(
+            "this probe does not assess applicability"
+        ),
+    )
+    assert projected["model_validity"]["state"] == "not_assessed"
+    assert projected["model_validity"]["assessed"] is False
+
+
+def test_every_result_producer_is_accounted_for():
+    """The enumeration, so that "four of five" is measured and not asserted.
+
+    Declaring is not testing — but an enumeration read from the tree is the
+    one thing a live test cannot give: it names every producer, including the
+    ones nothing in this suite exercises, so a NEW producer that declares
+    nothing shows up here as a change rather than as silence.
+    """
+    import ast
+
+    root = pathlib.Path(__file__).resolve().parents[1] / "src" / "engcore"
+    declaring: set[str] = set()
+    silent: set[str] = set()
+    for path in sorted(root.rglob("*.py")):
+        text = path.read_text(encoding="utf-8")
+        if "ScientificResult(" not in text:
+            continue
+        name = path.relative_to(root).as_posix()
+        # AST, not a substring: `systems/electrothermal/coupled.py` contains
+        # `applicability=` on its OWN record (`AdmittedCoupledRun`) and not on
+        # any ScientificResult, so a substring scan called it migrated when it
+        # is not. The question is specifically what the RESULT carries.
+        for node in ast.walk(ast.parse(text)):
+            if not isinstance(node, ast.Call):
+                continue
+            called = node.func
+            if not (isinstance(called, ast.Name) and called.id == "ScientificResult"):
+                continue
+            keywords = {k.arg for k in node.keywords}
+            (declaring if "applicability" in keywords else silent).add(name)
+
+    assert declaring == {
+        "domains/electrical/dc/solver.py",
+        "domains/fluids/transport2d/solver.py",
+        "domains/kinetics/cstr/solver.py",
+    }, sorted(declaring)
+
+    # Everything else leaves the field UNDECLARED — visibly, and refusably.
+    # `domains/thermal/` is frozen by this milestone's rules and is the fifth
+    # path; the rest are producers CORE-MECHANISMS did not migrate, and this
+    # is exactly the list a follow-up has to work through.
+    assert "domains/thermal/conduction1d/solver.py" in silent
+    assert silent == {
+        "domains/electrical/ngspice.py",
+        "domains/thermal/conduction1d/solver.py",
+        "domains/thermal_conduction1d_bulk.py",
+        "domains/thermal_conduction1d_schemes.py",
+        "systems/aerospace/multirotor/reference.py",
+        "systems/electrothermal/coupled.py",
+        "systems/electrothermal/power_chain.py",
+        "systems/electrothermal/resistor_body.py",
+        "systems/fluidthermal/coupled.py",
+        "systems/propulsion/drive.py",
+    }, sorted(silent)
+
 
 _INFLUENCE = """
 import json

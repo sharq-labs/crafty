@@ -566,6 +566,14 @@ def test_g4_no_field_beyond_two_names_and_prose_r1():
 
 
 def test_g5_frozen_domain_trees_are_byte_unchanged():
+    # CORE-MECHANISMS gives `ScientificResult` a typed applicability field and
+    # migrates the paths that were already computing a verdict and discarding
+    # it. Its files are declared once in tests/core_mechanisms_scope.py, named
+    # individually, and must match the tree exactly — a stray edit in these
+    # trees is still loud. `domains/thermal/conduction1d/` is NOT among them:
+    # it is frozen by that milestone's own rules and stays byte-unchanged.
+    from core_mechanisms_scope import DOMAIN_FILES
+
     for path in (
         "src/engcore/domains/thermal/conduction1d/",
         "src/engcore/domains/kinetics/cstr/",
@@ -577,7 +585,8 @@ def test_g5_frozen_domain_trees_are_byte_unchanged():
             ["git", "diff", "--name-only", "HEAD", "--", path],
             cwd=str(REPO_ROOT), capture_output=True, text=True, check=True,
         )
-        assert diff.stdout.strip() == "", f"{path} was modified: {diff.stdout}"
+        changed = set(diff.stdout.split()) - DOMAIN_FILES
+        assert changed == set(), f"{path} was modified: {sorted(changed)}"
 
 
 def test_g6_no_schema_string_moved():
@@ -597,7 +606,10 @@ def test_g6_no_schema_string_moved():
     from engcore.scientific.ir.problem import PROBLEM_SCHEMA
 
     assert DATA_REFERENCE_SCHEMA == "scientific_data_reference/1"
-    assert RESULT_SCHEMA == "scientific_result/2"
+    # Moved to /3 by CORE-MECHANISMS: `applicability` is scientific
+    # content, so the version moves and an old reader fails loudly
+    # rather than dropping it. The reader accepts /1, /2 and /3.
+    assert RESULT_SCHEMA == "scientific_result/3"
     assert CHECK_SCHEMA == "validation_check/1"
     assert REPORT_SCHEMA == "validation_report/1"
     assert PROBLEM_SCHEMA == "scientific_problem/2"

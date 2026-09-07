@@ -176,13 +176,20 @@ def test_a2_the_writer_emits_the_bumped_schema_and_the_reader_accepts_both():
 
     The cost is paid on the reader side, once: this reader accepts both.
     """
-    assert RESULT_SCHEMA == "scientific_result/2"
+    # Moved to /3 by CORE-MECHANISMS, by the identical rule this test states:
+    # `applicability` is scientific content, so a reader that accepted a
+    # payload carrying it and then ignored it would return a result
+    # understating what was claimed. The reader accepts /1, /2 and /3; the
+    # writer emits /3. This milestone's own claim — that the version moves
+    # when scientific content is added — is confirmed, not weakened.
+    assert RESULT_SCHEMA == "scientific_result/3"
     assert RESULT_SCHEMA_V1 == "scientific_result/1"
     assert SUPPORTED_RESULT_SCHEMAS == (
         "scientific_result/1",
         "scientific_result/2",
+        "scientific_result/3",
     )
-    assert scalar_result().to_dict()["schema"] == "scientific_result/2"
+    assert scalar_result().to_dict()["schema"] == "scientific_result/3"
 
     assert RAW_OUTPUT_SCHEMA == "raw_solver_output/2"
     assert RAW_OUTPUT_SCHEMA_V1 == "raw_solver_output/1"
@@ -203,12 +210,12 @@ def test_a2b_an_old_reader_refuses_a_new_payload_rather_than_losing_data():
     """
     result, _ = solve_slab_with_bulk_field(make_slab(64, 80), run_id="v2-only")
     payload = result.to_dict()
-    assert payload["schema"] == "scientific_result/2"
+    assert payload["schema"] == "scientific_result/3"
     assert payload["data_references"], "the payload must actually carry one"
 
     with pytest.raises(ScientificCoreError) as excinfo:
         require_schema(payload, RESULT_SCHEMA_V1)
-    assert "scientific_result/2" in str(excinfo.value)
+    assert "scientific_result/3" in str(excinfo.value)
 
     raw_payload = RawSolverOutput(
         convergence=ConvergenceState.CONVERGED,
@@ -218,9 +225,13 @@ def test_a2b_an_old_reader_refuses_a_new_payload_rather_than_losing_data():
         require_schema(raw_payload, RAW_OUTPUT_SCHEMA_V1)
 
     # And an unknown future version is refused by the new reader too: the
-    # accept-set is exact strings, not a range.
+    # accept-set is exact strings, not a range. `/3` was the unknown future
+    # version when this was written and is the CURRENT one since
+    # CORE-MECHANISMS added `applicability`, so the probe moves to `/4` —
+    # which is the test working, not the test being weakened: the accept-set
+    # grew by exactly the one version that now exists.
     with pytest.raises(ScientificCoreError):
-        ScientificResult.from_dict({**payload, "schema": "scientific_result/3"})
+        ScientificResult.from_dict({**payload, "schema": "scientific_result/4"})
 
 
 def test_a2c_a_v2_payload_round_trips_its_references():
@@ -244,7 +255,7 @@ def test_a3_a_payload_written_before_this_milestone_still_loads():
     assert restored.data_references == ()
     assert restored.value("v:out").magnitude_in("volt") == pytest.approx(1.6612)
     # Re-serializing upgrades it: the writer emits one version only.
-    assert restored.to_dict()["schema"] == "scientific_result/2"
+    assert restored.to_dict()["schema"] == "scientific_result/3"
 
 
 def test_a3b_a_v1_payload_carries_no_references_even_if_a_key_appears():

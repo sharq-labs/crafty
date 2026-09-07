@@ -914,10 +914,13 @@ _FIELD_SUPPORT_FOUNDATION_EXCEPTIONS = {
 
 def test_no_universal_core_file_was_added_or_edited():
     """FAIL CONDITION 1."""
+    from core_mechanisms_scope import CORE_FILES
+
     core_changed = (
         set(_diff("src/engcore/scientific/").split())
         - _PLANNER_DISCOVERY_EXCEPTIONS
         - _FIELD_SUPPORT_FOUNDATION_EXCEPTIONS
+        - CORE_FILES
     )
     assert core_changed == set(), sorted(core_changed)
     current = sorted(
@@ -958,11 +961,16 @@ def test_no_thermal_control_or_prior_probe_file_was_edited():
     milestone's probe pack — which is committed evidence for an accepted
     milestone — are all byte-unchanged.
     """
+    from core_mechanisms_scope import DOMAIN_FILES
+
+    # `domains/thermal/` stays byte-unchanged: CORE-MECHANISMS may not edit it,
+    # and does not. That is why its result reports applicability as UNDECLARED
+    # rather than as an assessment — a limit, recorded here as one.
     assert _diff("src/engcore/domains/thermal/") == ""
     assert _diff("src/engcore/domains/thermal_lumped.py") == ""
     electrical_changed = set(
         _diff("src/engcore/domains/electrical/").split()
-    ) - {_PORTABILITY_EXCEPTION}
+    ) - {_PORTABILITY_EXCEPTION} - DOMAIN_FILES
     assert electrical_changed == set(), sorted(electrical_changed)
     assert _diff("experiments/hostile_core_stress/") == ""
 

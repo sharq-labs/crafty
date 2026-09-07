@@ -397,7 +397,7 @@ def test_d_an_unsupported_schema_version_fails_loudly():
         "crafty_execution_request/2",
         "crafty_execution_request/0",
         "crafty_execution_request",
-        "scientific_result/2",
+        "scientific_result/3",
         "coupling_fixed_point_run/1",
         None,
     ):
@@ -1103,7 +1103,7 @@ def test_universal_core_coupling_and_the_other_pack_are_untouched():
     # core; its files are subtracted from one shared declaration in
     # tests/core_mechanisms_scope.py, which must match the tree exactly in
     # both directions. `coupling/` and `fluidthermal/` stay fully covered.
-    from core_mechanisms_scope import CORE_FILES
+    from core_mechanisms_scope import CORE_FILES, DOMAIN_FILES
 
     for path in (
         "src/engcore/scientific/",
@@ -1113,7 +1113,7 @@ def test_universal_core_coupling_and_the_other_pack_are_untouched():
         assert set(_diff(path).split()) - CORE_FILES == set(), path
     assert set(_diff("src/engcore/domains/").split()) - (
         _LATER_MILESTONE_ADDITIONS
-    ) == {_RCE_REPAIR}
+    ) - DOMAIN_FILES == {_RCE_REPAIR}
 
 
 def test_the_provider_adapter_change_is_the_rce_repair_and_nothing_else():
@@ -1169,12 +1169,12 @@ def test_exactly_three_pre_existing_source_files_were_edited():
             cwd=str(REPO_ROOT), capture_output=True, text=True, check=True,
         ).stdout.split()
     )
-    from core_mechanisms_scope import CORE_FILES
+    from core_mechanisms_scope import CORE_FILES, DOMAIN_FILES
 
     edited = {
         path for path in changed
         if not any(path.startswith(tree) for tree in NEW_TREES)
-    } - _LATER_MILESTONE_ADDITIONS - CORE_FILES
+    } - _LATER_MILESTONE_ADDITIONS - CORE_FILES - DOMAIN_FILES
     assert edited == {
         # the additive execution seam
         "src/engcore/systems/electrothermal/coupled.py",
@@ -1339,7 +1339,10 @@ def test_no_core_schema_string_moved():
     from engcore.scientific.results.provenance import PROVENANCE_SCHEMA
     from engcore.scientific.results.result import RESULT_SCHEMA
 
-    assert RESULT_SCHEMA == "scientific_result/2"
+    # Moved to /3 by CORE-MECHANISMS: `applicability` is scientific
+    # content, so the version moves and an old reader fails loudly
+    # rather than dropping it. The reader accepts /1, /2 and /3.
+    assert RESULT_SCHEMA == "scientific_result/3"
     assert PROVENANCE_SCHEMA == "provenance_record/2"
     assert PROBLEM_SCHEMA == "scientific_problem/2"
     assert COUPLED_RUN_SCHEMA == "coupling_fixed_point_run/1"
@@ -1641,12 +1644,35 @@ def test_the_projection_refuses_to_understate_a_computation():
         results=(poisoned,) + tuple(run.final.results[1:]),
     )
     doctored = dataclasses.replace(run, iterations=run.iterations[:-1] + (iteration,))
+    from engcore.scientific.results.applicability import ApplicabilityReport
+
     with pytest.raises(ScientificCoreError, match="bulk data"):
-        contract.project_run(doctored)
+        # Applicability is declared so that THIS test still measures the bulk
+        # refusal. Without it CORE-MECHANISMS' applicability refusal fires
+        # first and the assertion passes for the wrong reason — which is a
+        # `pytest.raises` hazard worth naming: the same exception type from a
+        # different cause reads as success until the `match=` is checked.
+        contract.project_run(
+            doctored,
+            applicability=ApplicabilityReport.not_assessed(
+                "this probe exercises the bulk-data refusal, not applicability"
+            ),
+        )
 
 
 def project_run_ok(run) -> bool:
-    contract.project_run(run)
+    # CORE-MECHANISMS: `project_run` refuses SILENCE about model
+    # applicability. This helper exercises the `data_references` refusal, not
+    # applicability, so it states the position rather than saying nothing —
+    # which is the whole point of the three states.
+    from engcore.scientific.results.applicability import ApplicabilityReport
+
+    contract.project_run(
+        run,
+        applicability=ApplicabilityReport.not_assessed(
+            "this probe exercises the bulk-data refusal, not applicability"
+        ),
+    )
     return True
 
 

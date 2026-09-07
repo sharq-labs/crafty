@@ -20,6 +20,7 @@ from ..serialization import require_schema_any, schema_string
 from ..solvers.protocol import ConvergenceState, SolverIdentity
 from ..units.quantity import Quantity
 from ..units.validation import check_unit_map
+from .applicability import ApplicabilityReport, ApplicabilityState
 from .data_reference import ScientificDataReference
 from .provenance import ProvenanceRecord
 from .uncertainty import Uncertainty
@@ -29,13 +30,26 @@ from .validation import ValidationLevel, ValidationOutcome, ValidationReport
 #: ``data_references`` is **scientific content**, not decoration: a reader that
 #: silently ignored it would report a result while dropping part of what that
 #: result claims. A version bump makes that reader fail loudly instead.
-RESULT_SCHEMA = schema_string("scientific_result", 2)
+RESULT_SCHEMA = schema_string("scientific_result", 3)
 
 #: The version before ``data_references`` existed. Still read, never written.
 RESULT_SCHEMA_V1 = schema_string("scientific_result", 1)
 
+#: The version before ``applicability`` existed. Still read, never written.
+#:
+#: Bumped to /3 by CORE-MECHANISMS for the same reason /2 was bumped for
+#: ``data_references``, and stated again because it is the rule and not a
+#: habit: applicability is **scientific content**. A reader that accepted a /3
+#: payload while ignoring the field would report a result while dropping its
+#: statement about whether the model even applied — which is worse than
+#: refusing to read it. A /2 payload still loads, as ``UNDECLARED``: it is
+#: honest that the writer never reached the question, and inventing
+#: ``NOT_ASSESSED`` for it would put a stated position into a record whose
+#: author stated nothing.
+RESULT_SCHEMA_V2 = schema_string("scientific_result", 2)
+
 #: Exactly the versions this reader knows how to interpret. Not a range.
-SUPPORTED_RESULT_SCHEMAS = (RESULT_SCHEMA_V1, RESULT_SCHEMA)
+SUPPORTED_RESULT_SCHEMAS = (RESULT_SCHEMA_V1, RESULT_SCHEMA_V2, RESULT_SCHEMA)
 
 
 @dataclass(frozen=True)
@@ -50,6 +64,23 @@ class ScientificResult:
     solver: SolverIdentity | None = None
     convergence: ConvergenceState = ConvergenceState.NOT_APPLICABLE
     validation: ValidationReport = field(default_factory=ValidationReport)
+    #: Whether the model was applicable to the case it was run on — a
+    #: different claim from "the numbers validated", and one that four of the
+    #: five shipped paths were making nowhere.
+    #:
+    #: There is no way to have a result without this field saying something.
+    #: It defaults to ``UNDECLARED``, which is not a pass and not an empty
+    #: assessment: it is "the producing path never reached the question".
+    #: ``NOT_ASSESSED`` is the *stated position* — deliberately not assessed,
+    #: with a reason — and ``ASSESSED`` with an empty mapping is a third,
+    #: different answer. See :mod:`.applicability`.
+    #:
+    #: The default is a declaration rather than a refusal because making the
+    #: field mandatory would require editing ``src/engcore/domains/thermal/``,
+    #: which this milestone may not touch. Enforcement therefore lives at the
+    #: consumer boundary — :meth:`require_applicability` and the application
+    #: projection — and that limit is stated rather than papered over.
+    applicability: ApplicabilityReport = field(default_factory=ApplicabilityReport)
     uncertainty: Mapping[str, Uncertainty] = field(default_factory=dict)
     assumptions: tuple[str, ...] = ()
     warnings: tuple[str, ...] = ()
@@ -93,6 +124,13 @@ class ScientificResult:
             raise ScientificCoreError(
                 "result requires a ProvenanceRecord: an unattributable number "
                 "is not a scientific result"
+            )
+
+        if not isinstance(self.applicability, ApplicabilityReport):
+            raise ScientificCoreError(
+                f"result applicability must be an ApplicabilityReport, got "
+                f"{type(self.applicability).__name__}; a bare mapping cannot "
+                f"distinguish 'assessed and empty' from 'not assessed'"
             )
 
         object.__setattr__(self, "convergence", ConvergenceState(self.convergence))
@@ -174,6 +212,20 @@ class ScientificResult:
             and self.validation.status is not ValidationOutcome.FAIL
         )
 
+    def require_applicability(self, *, context: str = "") -> None:
+        """Raise unless this result's model applicability was assessed.
+
+        The enforcement primitive for the applicability field, deliberately
+        shaped like ``ValidationReport.require_admission``: a consumer opts in
+        by calling it, and gets a refusal naming which of the two non-answers
+        it hit. ``is_usable`` deliberately does **not** consult it — that
+        property reports the absence of known problems, and an unassessed
+        applicability is an unknown, not a known problem.
+        """
+        self.applicability.require_assessed(
+            context=context or f"result {self.result_id!r}"
+        )
+
     def check_units_against(self, expected_units: Mapping[str, str]) -> None:
         """Verify reported values carry the dimensionality the problem declared."""
         check_unit_map(self.values, expected_units, context=f"result {self.result_id!r}")
@@ -189,6 +241,7 @@ class ScientificResult:
             "solver": self.solver.to_dict() if self.solver else None,
             "convergence": self.convergence.value,
             "validation": self.validation.to_dict(),
+            "applicability": self.applicability.to_dict(),
             "uncertainty": {
                 k: self.uncertainty[k].to_dict() for k in sorted(self.uncertainty)
             },
@@ -217,6 +270,12 @@ class ScientificResult:
             validation=ValidationReport.from_dict(payload["validation"])
             if payload.get("validation")
             else ValidationReport(),
+            # A /1 or /2 payload predates the field and loads as UNDECLARED —
+            # never as NOT_ASSESSED, which is a position its author never
+            # took. Absence stays absence.
+            applicability=ApplicabilityReport.from_dict(payload["applicability"])
+            if version == RESULT_SCHEMA and payload.get("applicability")
+            else ApplicabilityReport.undeclared(),
             uncertainty={
                 k: Uncertainty.from_dict(v)
                 for k, v in (payload.get("uncertainty") or {}).items()
@@ -235,7 +294,7 @@ class ScientificResult:
             # payload fails loudly on an old reader, and an old payload still
             # loads on the new one. See docs/data-boundary0-evidence.md.
             data_references=()
-            if version == RESULT_SCHEMA_V1
+            if version == RESULT_SCHEMA_V1  # noqa: E501 - see the note above
             else tuple(
                 ScientificDataReference.from_dict(r)
                 for r in payload.get("data_references", ())

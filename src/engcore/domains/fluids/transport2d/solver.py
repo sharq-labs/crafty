@@ -53,6 +53,7 @@ import scipy.sparse as sp
 import scipy.sparse.linalg as spla
 
 from ....scientific.ir.problem import ScientificProblem
+from ....scientific.results.applicability import ApplicabilityReport
 from ....scientific.results.data_reference import ScientificDataReference
 from ....scientific.results.provenance import ProvenanceRecord
 from ....scientific.results.result import ScientificResult
@@ -629,6 +630,14 @@ def solve_transport2d(
         solver=solver.identity,
         convergence=raw.convergence,
         validation=report,
+        # The verdict this solver has always computed. It reached the record
+        # only as `metadata["mesh_validity_assessment"]` — an untyped
+        # side-channel that nothing could check and no reader was obliged to
+        # look at. That key is left in place (it is read by existing
+        # consumers); this is now the typed statement of the same fact.
+        applicability=ApplicabilityReport.assessed(
+            {TRANSPORT2D_MODELS[0].model_id: mesh_validity}
+        ),
         uncertainty={
             name: Uncertainty.unknown(
                 "no uncertainty quantification performed; discretization "

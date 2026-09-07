@@ -1,5 +1,6 @@
 """Scientific results: value + unit + model + solver + validation + provenance."""
 
+from .applicability import ApplicabilityReport, ApplicabilityState
 from .data_reference import ScientificDataReference
 from .provenance import ExecutionBinding, ProvenanceRecord
 from .result import ScientificResult
@@ -18,6 +19,8 @@ from .variable_binding import (
 )
 
 __all__ = [
+    "ApplicabilityReport",
+    "ApplicabilityState",
     "ExecutionBinding",
     "ProvenanceRecord",
     "ScientificDataReference",

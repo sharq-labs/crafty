@@ -1242,10 +1242,13 @@ def test_no_universal_core_file_was_added_or_edited():
         "src/engcore/scientific/ir/orientation.py",
         "src/engcore/scientific/results/variable_binding.py",
     }
+    from core_mechanisms_scope import CORE_FILES
+
     changed = (
         set(diff.stdout.split())
         - planner_discovery_exceptions
         - field_support_foundation_exceptions
+        - CORE_FILES
     )
     assert changed == set(), f"universal core was modified: {sorted(changed)}"
 

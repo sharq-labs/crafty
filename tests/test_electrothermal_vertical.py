@@ -1727,7 +1727,10 @@ def test_o3_no_existing_schema_version_moved():
     assert QUANTITY_DEPENDENCY_SCHEMA == "quantity_dependency/1"
     assert PROVENANCE_SCHEMA == "provenance_record/2"
     assert EXECUTION_BINDING_SCHEMA == "execution_binding/1"
-    assert RESULT_SCHEMA == "scientific_result/2"
+    # Moved to /3 by CORE-MECHANISMS: `applicability` is scientific
+    # content, so the version moves and an old reader fails loudly
+    # rather than dropping it. The reader accepts /1, /2 and /3.
+    assert RESULT_SCHEMA == "scientific_result/3"
     assert RAW_OUTPUT_SCHEMA == "raw_solver_output/2"
     # The four coupling schemas keep version /1 and changed NAME once, in
     # `COUPLING-PACK-RELOCATION`, when a second production consumer made

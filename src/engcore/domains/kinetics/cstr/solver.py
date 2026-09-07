@@ -79,6 +79,8 @@ import numpy as np
 from scipy.integrate import solve_ivp
 
 from ....scientific.ir.problem import ScientificProblem
+from ....scientific.models.definition import ValidityAssessment
+from ....scientific.results.applicability import ApplicabilityReport
 from ....scientific.results.provenance import ProvenanceRecord
 from ....scientific.results.result import ScientificResult
 from ....scientific.results.uncertainty import Uncertainty
@@ -172,6 +174,20 @@ class PreparedCSTRSystem:
         return np.array(
             [self.run.ca0_mol_per_m3, self.run.t0_k], dtype=np.float64
         )
+
+
+def assess_run_applicability(run: ReactorRun) -> ValidityAssessment:
+    """The model's verdict on whether it applies to ``run``.
+
+    ONE function with two callers — :meth:`CSTRSolver.prepare`, which renders
+    the status into a human note, and :func:`solve_reactor_bundle`, which puts
+    the structured verdict on the result. Before CORE-MECHANISMS only the note
+    existed: `prepare` computed the whole assessment, rendered
+    ``assessment.status.value`` into a string, and dropped the satisfied,
+    violated and unknown condition names on the floor. A reader of the result
+    could see that *something* had been judged and not what.
+    """
+    return CSTR_MODEL.assess_validity(run.validity_context())
 
 
 def assemble(run: ReactorRun) -> PreparedCSTRSystem:
@@ -344,7 +360,7 @@ class CSTRSolver:
         # here, before any integration. The constructors already refuse the
         # gross violations; this records the model's verdict as evidence rather
         # than relying on the constructors having been the only gate.
-        assessment = CSTR_MODEL.assess_validity(run.validity_context())
+        assessment = assess_run_applicability(run)
 
         system = assemble(run)
         integration = run.integration
@@ -903,6 +919,12 @@ def solve_reactor_bundle(
         solver=solver.identity,
         convergence=raw.convergence,
         validation=report,
+        # The verdict `prepare` has always computed, no longer discarded after
+        # being rendered into a note. Keyed by the model it is about, because
+        # "which model was judged" is part of the claim.
+        applicability=ApplicabilityReport.assessed(
+            {CSTR_MODEL.model_id: assess_run_applicability(run)}
+        ),
         # No uncertainty quantification is performed by a single solve. The
         # tolerance ladder quantifies the numerical component and nothing here
         # quantifies the model component, so anything but UNKNOWN would be

@@ -72,6 +72,7 @@ from typing import Any, Mapping
 
 from ..coupling import CoupledRun, is_ratio_scale
 from ..scientific.models.definition import ValidityAssessment
+from ..scientific.results.applicability import ApplicabilityReport
 from ..scientific.errors import ScientificCoreError, UnitCompatibilityError
 from ..scientific.results.result import ScientificResult
 from ..scientific.results.uncertainty import Uncertainty
@@ -530,7 +531,7 @@ def _participant(result: ScientificResult) -> dict[str, Any]:
 def project_run(
     run: CoupledRun,
     *,
-    applicability: Mapping[str, ValidityAssessment] | None = None,
+    applicability: ApplicabilityReport | Mapping[str, ValidityAssessment] | None = None,
 ) -> dict[str, Any]:
     """The whole external result. Domain-neutral: it reads a ``CoupledRun`` and,
     when the execution produced one, the model-applicability verdict beside it.
@@ -542,10 +543,32 @@ def project_run(
 
     **This projects a verdict; it never forms one.** ``applicability`` is
     computed by the system pack that executed the science and is reported here
-    verbatim. When it is absent the response continues to say so, because an
-    application layer that synthesised a verdict would be performing a
-    scientific act it did not perform, and NOT_RUN is not PASS.
+    verbatim. An application layer that synthesised a verdict would be
+    performing a scientific act it did not perform, and NOT_RUN is not PASS.
+
+    **And it refuses to project one that was never formed.** This is where
+    CORE-MECHANISMS' applicability field is *enforced* rather than merely
+    declared: four of the five shipped paths said nothing about applicability
+    because the core permitted silence, and a sixth would have done the same.
+    An execution that reaches an external consumer without declaring
+    applicability is refused here, at the boundary where its numbers become an
+    answer somebody builds on.
+
+    Only **silence** is refused. ``NOT_ASSESSED`` with a reason projects, and
+    the consumer is told which state it is looking at, because a path that
+    legitimately does not assess applicability must still be able to report —
+    refusing a stated position would destroy a real capability rather than
+    protect anything.
     """
+    report = (
+        applicability
+        if isinstance(applicability, ApplicabilityReport)
+        else ApplicabilityReport.undeclared()
+        if applicability is None
+        else ApplicabilityReport.assessed(applicability)
+    )
+    report.require_declared(context="projecting an execution result")
+
     final = run.final
     outputs: list[dict[str, Any]] = []
     for result in sorted(final.results, key=lambda r: r.problem_id):
@@ -633,31 +656,25 @@ def project_run(
             _participant(result)
             for result in sorted(final.results, key=lambda r: r.problem_id)
         ],
-        "model_validity": (
-            {
-                "assessed": False,
-                "reason": (
-                    "this execution produced no model-applicability verdict, "
-                    "and an application layer that formed one would be "
-                    "performing a scientific assessment the execution did not "
-                    "perform. NOT_RUN is not PASS."
-                ),
-            }
-            if applicability is None
-            else {
-                "assessed": True,
-                "components": [
-                    {
-                        "component_id": component_id,
-                        "status": assessment.status.value,
-                        "satisfied": list(assessment.satisfied),
-                        "violated": list(assessment.violated),
-                        "unknown": list(assessment.unknown),
-                    }
-                    for component_id, assessment in sorted(applicability.items())
-                ],
-            }
-        ),
+        # Payload shape unchanged. It is now DERIVED from the typed
+        # ApplicabilityReport rather than from a bare mapping plus a `None`
+        # check, so the wire format and the in-core record cannot drift apart,
+        # and `state` is carried alongside the legacy boolean so a reader can
+        # tell "assessed and empty" from the two ways of not being assessed.
+        "model_validity": {
+            "assessed": report.was_assessed,
+            "state": report.state.value,
+            "components": [
+                {
+                    "component_id": component_id,
+                    "status": assessment.status.value,
+                    "satisfied": list(assessment.satisfied),
+                    "violated": list(assessment.violated),
+                    "unknown": list(assessment.unknown),
+                }
+                for component_id, assessment in sorted(report.assessments.items())
+            ],
+        },
         "provenance": {
             "run_id": run.provenance.run_id,
             "software_version": run.provenance.software_version,

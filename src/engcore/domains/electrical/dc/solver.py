@@ -37,6 +37,7 @@ from scipy.linalg import LinAlgError, LinAlgWarning, solve as scipy_solve
 
 from ....scientific.errors import ScientificCoreError
 from ....scientific.ir.problem import ScientificProblem
+from ....scientific.results.applicability import ApplicabilityReport
 from ....scientific.results.provenance import ProvenanceRecord
 from ....scientific.results.result import ScientificResult
 from ....scientific.results.uncertainty import Uncertainty
@@ -56,6 +57,7 @@ from .mna import PreparedDCSystem, assemble
 from .models import (
     DC_MODELS,
     ELECTRICAL_DC_LINEAR,
+    RESISTOR_OHM_MODEL,
     assumptions_for_models,
     dc_solver_capabilities,
     models_for_circuit,
@@ -413,6 +415,21 @@ def solve_circuit(
         solver=solver.identity,
         convergence=raw.convergence,
         validation=report,
+        # Per COMPONENT, not per model: `RESISTOR_OHM_MODEL`'s one condition
+        # is `resistance > 0`, and a circuit has many resistances. Keying by
+        # model would force one context to hold several values of the same
+        # name and would report one verdict for a set of components that can
+        # disagree. `component_id` is the granularity the claim is actually
+        # made at, and it is the granularity the coupled electro-thermal path
+        # already uses.
+        applicability=ApplicabilityReport.assessed(
+            {
+                resistor.component_id: RESISTOR_OHM_MODEL.assess_validity(
+                    {"resistance": resistor.resistance}
+                )
+                for resistor in circuit.resistors
+            }
+        ),
         # No uncertainty quantification is performed: element values are
         # taken as exact and no tolerance propagation is done. Reporting
         # anything other than UNKNOWN here would be fabrication.

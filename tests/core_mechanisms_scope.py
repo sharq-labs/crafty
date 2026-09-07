@@ -38,4 +38,23 @@ CORE_FILES = frozenset({
     "src/engcore/scientific/__init__.py",
     # TASK 1 — the per-run check lives where every run already passes.
     "src/engcore/scientific/results/provenance.py",
+    # TASK 2 — applicability becomes a field of the result, with three states
+    # that cannot be confused, instead of a note four domains never wrote.
+    "src/engcore/scientific/results/applicability.py",
+    "src/engcore/scientific/results/result.py",
+    "src/engcore/scientific/results/__init__.py",
+})
+
+#: Files OUTSIDE the universal core that this milestone changes, and the
+#: historical guards that freeze them. Kept separate from :data:`CORE_FILES`
+#: because those guards make a different claim — "this pre-existing domain was
+#: not modified" rather than "the core was not modified" — and one list
+#: excusing both would be a licence rather than a claim.
+DOMAIN_FILES = frozenset({
+    # TASK 2 — the four editable paths of five. `domains/thermal/` is frozen
+    # by the task's own rules and is reported, not worked around.
+    "src/engcore/domains/kinetics/cstr/solver.py",
+    "src/engcore/domains/fluids/transport2d/solver.py",
+    "src/engcore/domains/electrical/dc/solver.py",
+    "src/engcore/application/contract.py",
 })

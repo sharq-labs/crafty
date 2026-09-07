@@ -767,7 +767,10 @@ def test_g3_no_existing_schema_version_moved():
     assert PROBLEM_SCHEMA == "scientific_problem/2"
     assert MODEL_SCHEMA == "scientific_model_definition/1"
     assert REALIZATION_SCHEMA == "model_realization_definition/1"
-    assert RESULT_SCHEMA == "scientific_result/2"
+    # Moved to /3 by CORE-MECHANISMS: `applicability` is scientific
+    # content, so the version moves and an old reader fails loudly
+    # rather than dropping it. The reader accepts /1, /2 and /3.
+    assert RESULT_SCHEMA == "scientific_result/3"
     assert PROVENANCE_SCHEMA == "provenance_record/2"
     assert SCIENTIFIC_TWIN_SCHEMA == "scientific_twin/1"
     assert QUANTITY_DEPENDENCY_SCHEMA == "quantity_dependency/1"

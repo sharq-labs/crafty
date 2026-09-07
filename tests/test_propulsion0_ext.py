@@ -1626,6 +1626,9 @@ def test_ext_gate_universal_core_and_the_coupling_package_are_byte_untouched():
         assert set(_ext_touched(tree)) - CORE_FILES == set(), tree
 
 
+from core_mechanisms_scope import DOMAIN_FILES
+
+
 def test_ext_gate_no_pre_existing_domain_or_pack_was_modified():
     """Fail condition F2.
 
@@ -1660,7 +1663,10 @@ def test_ext_gate_no_pre_existing_domain_or_pack_was_modified():
         "src/crafty_http/",
         "src/crafty_mcp/",
     ):
-        assert set(_ext_touched(tree)) - allowed == set(), tree
+        # CORE-MECHANISMS: the domain files it changes are declared
+        # once in tests/core_mechanisms_scope.py, named individually
+        # there, so a stray edit in these trees is still loud.
+        assert set(_ext_touched(tree)) - allowed - DOMAIN_FILES == set(), tree
 
 
 def test_ext_gate_no_source_file_was_added_and_only_two_were_edited():

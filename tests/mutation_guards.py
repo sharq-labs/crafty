@@ -81,6 +81,61 @@ MUTATIONS: tuple[Mutation, ...] = (
         ),
         why="the check made opt-in again by removing it from the one place every run passes through",
     ),
+    # ---- TASK 2, applicability as a field of the result -------------
+    Mutation(
+        name="applicability-collapses-two-states",
+        path="src/engcore/scientific/results/applicability.py",
+        old="        if state is ApplicabilityState.ASSESSED:\n",
+        new="        if state is not ApplicabilityState.UNDECLARED:\n",
+        breaks=(
+            "tests/test_core_mechanisms.py::test_the_states_cannot_be_constructed_inconsistently",
+        ),
+        why="'not assessed' allowed to carry assessments — the exact confusion the record exists to prevent",
+    ),
+    Mutation(
+        name="applicability-not-serialized",
+        path="src/engcore/scientific/results/applicability.py",
+        old='            "state": self.state.value,\n',
+        new='            "state": ApplicabilityState.ASSESSED.value,\n',
+        breaks=(
+            "tests/test_core_mechanisms.py::test_the_three_states_are_impossible_to_confuse",
+            "tests/test_core_mechanisms.py::test_every_result_says_something_about_applicability",
+            "tests/test_core_mechanisms.py::test_the_frozen_thermal_path_is_visibly_undeclared",
+        ),
+        why="a reader holding only the payload can no longer tell the three states apart",
+    ),
+    Mutation(
+        name="result-accepts-a-bare-mapping",
+        path="src/engcore/scientific/results/result.py",
+        old="        if not isinstance(self.applicability, ApplicabilityReport):\n",
+        new="        if False:\n",
+        breaks=(
+            "tests/test_core_mechanisms.py::test_a_bare_mapping_is_refused_as_the_applicability_field",
+        ),
+        why="the untyped `{}` four domains would have reached for, admitted again",
+    ),
+    Mutation(
+        name="projection-accepts-silence",
+        path="src/engcore/application/contract.py",
+        old='    report.require_declared(context="projecting an execution result")\n',
+        new="",
+        breaks=(
+            "tests/test_core_mechanisms.py::test_the_projection_refuses_an_undeclared_applicability",
+        ),
+        why="the one place TASK 2 is ENFORCED rather than declared, made inert",
+    ),
+    Mutation(
+        name="cstr-discards-its-assessment-again",
+        path="src/engcore/domains/kinetics/cstr/solver.py",
+        old="        applicability=ApplicabilityReport.assessed(\n"
+            "            {CSTR_MODEL.model_id: assess_run_applicability(run)}\n"
+            "        ),\n",
+        new="",
+        breaks=(
+            "tests/test_core_mechanisms.py::test_every_result_producer_is_accounted_for",
+        ),
+        why="the original defect restored: the verdict computed, rendered into a note, and dropped",
+    ),
 )
 
 

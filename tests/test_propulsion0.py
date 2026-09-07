@@ -1336,6 +1336,9 @@ def test_gate_universal_core_and_the_coupling_package_are_byte_untouched():
         assert set(_touched(tree)) - CORE_FILES == set(), tree
 
 
+from core_mechanisms_scope import DOMAIN_FILES
+
+
 def test_gate_no_pre_existing_domain_or_pack_was_modified():
     """Fail condition F3.
 
@@ -1371,7 +1374,10 @@ def test_gate_no_pre_existing_domain_or_pack_was_modified():
         "src/crafty_mcp/",
     )
     for tree in protected:
-        assert set(_touched(tree)) - allowed == set(), tree
+        # CORE-MECHANISMS: the domain files it changes are declared
+        # once in tests/core_mechanisms_scope.py, named individually
+        # there, so a stray edit in these trees is still loud.
+        assert set(_touched(tree)) - allowed - DOMAIN_FILES == set(), tree
 
 
 #: The trees this milestone owns. The meta-test below is scoped to THESE and
