@@ -1110,7 +1110,7 @@ def test_universal_core_coupling_and_the_other_pack_are_untouched():
         "src/engcore/coupling/",
         "src/engcore/systems/fluidthermal/",
     ):
-        assert set(_diff(path).split()) - CORE_FILES == set(), path
+        assert set(_diff(path).split()) - CORE_FILES - DOMAIN_FILES == set(), path
     assert set(_diff("src/engcore/domains/").split()) - (
         _LATER_MILESTONE_ADDITIONS
     ) - DOMAIN_FILES == {_RCE_REPAIR}
@@ -1171,17 +1171,23 @@ def test_exactly_three_pre_existing_source_files_were_edited():
     )
     from core_mechanisms_scope import CORE_FILES, DOMAIN_FILES
 
-    edited = {
-        path for path in changed
-        if not any(path.startswith(tree) for tree in NEW_TREES)
-    } - _LATER_MILESTONE_ADDITIONS - CORE_FILES - DOMAIN_FILES
-    assert edited == {
+    expected = {
         # the additive execution seam
         "src/engcore/systems/electrothermal/coupled.py",
         "src/engcore/systems/electrothermal/__init__.py",
         # the RCE repair
         _RCE_REPAIR,
-    }, sorted(edited)
+    }
+    # CORE-MECHANISMS' files are subtracted EXCEPT the ones this test already
+    # names. Subtracting the whole declared list would have removed
+    # `coupled.py` from the set this test exists to assert, quietly turning a
+    # three-file claim into a two-file one — a guard weakened by the very
+    # exception meant to keep it honest.
+    edited = {
+        path for path in changed
+        if not any(path.startswith(tree) for tree in NEW_TREES)
+    } - _LATER_MILESTONE_ADDITIONS - CORE_FILES - (DOMAIN_FILES - expected)
+    assert edited == expected, sorted(edited)
 
 
 def test_the_seam_changed_no_number():

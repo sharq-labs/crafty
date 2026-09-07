@@ -116,7 +116,7 @@ from ...domains.electrical.dc import (
 # sibling's constant rather than re-deriving the convention a second time keeps
 # one source of truth per name inside this pack.
 from ...domains.electrical.dc.problem import resistance_name
-from ...scientific.composition import QuantityDependency
+from ...scientific.composition import QuantityDependency, TransferInstant
 from ...scientific.errors import (
     InvalidScientificProblem,
     ScientificValidationError,
@@ -385,6 +385,14 @@ def coupled_dependencies(
     and the two converge to different temperatures. A dimension check cannot
     distinguish them; only the enumerated name can.
     """
+    # DERIVED from the metric, not passed alongside it, so the declaration and
+    # the value it describes cannot disagree. The table lives in the domain
+    # that publishes the metrics, not here, so the four system packs that
+    # transport a temperature out of a lumped body cannot hold four different
+    # opinions about when `final_temperature` is true. An unknown metric is
+    # refused there rather than defaulted.
+    temperature_instant = lump.transfer_instant_of(temperature_metric)
+
     declared = {p.problem_id for p in problems}
     electrical = next(
         (p for p in problems if p.problem_id.startswith("electrical_dc:")), None
@@ -412,6 +420,9 @@ def coupled_dependencies(
                 target_problem_id=thermal.problem_id,
                 target_quantity=lump.HEAT_INPUT,
                 unit_exemplar=lump.POWER_UNIT,
+                # Dissipation at the operating point the circuit solved; it
+                # has no time extent of its own.
+                source_instant=TransferInstant.INSTANTANEOUS,
                 name=f"{DEPENDENCY_HEAT}:{cid}",
                 description=(
                     "The power absorbed by this element is the heat delivered "
@@ -426,6 +437,9 @@ def coupled_dependencies(
                 target_problem_id=prop.problem_id,
                 target_quantity=mat.TEMPERATURE,
                 unit_exemplar=mat.TEMPERATURE_UNIT,
+                # THE CROSSING THIS TASK IS ABOUT. Derived above from the
+                # metric actually being transported.
+                source_instant=temperature_instant,
                 name=f"{DEPENDENCY_TEMPERATURE}:{cid}",
                 description=(
                     "The body temperature is the state coordinate at which "
@@ -440,6 +454,9 @@ def coupled_dependencies(
                 target_problem_id=electrical.problem_id,
                 target_quantity=resistance_name(cid),
                 unit_exemplar=mat.RESISTANCE_UNIT,
+                # A resistance AT a temperature: a property evaluated at a
+                # state, with no time extent.
+                source_instant=TransferInstant.INSTANTANEOUS,
                 name=f"{DEPENDENCY_RESISTANCE}:{cid}",
                 description=(
                     "The evaluated resistance is the value this circuit "

@@ -972,6 +972,153 @@ def test_the_existence_check_is_opt_in_and_says_so():
     assert callers == ["scientific/results/provenance.py"], callers
 
 
+# =====================================================================
+# TASK 6 — a crossing must state WHEN the value it carries is true
+#
+# The premise was that the crossing is undeclared and matched by
+# `component_id`. Measured: it is ALREADY a `QuantityDependency` naming source
+# problem, source quantity, target problem, target quantity and dimension. The
+# association is structural, not by id match.
+#
+# What was genuinely missing is the INSTANT. A lumped body publishes two
+# kelvin-valued metrics that converge to different numbers, a coupling picks
+# between them by passing a NAME, and a dimension check passes on either. That
+# gap is what this closes.
+# =====================================================================
+
+
+def _electrothermal_problems():
+    from api_v0_case import canonical_request
+    from engcore.application.executions import electrothermal_series as ets
+    from engcore.systems.electrothermal import coupled as cp
+
+    request = canonical_request()
+    prepared = ets.prepare(request["inputs"], request["coupling"], "native")
+    system = prepared.system
+    problems = cp.coupled_problems(
+        system,
+        {s.component_id: s.conductor.reference_resistance for s in system.stages},
+    )
+    return cp, system, problems
+
+
+def test_the_crossing_states_its_source_quantity_and_instant():
+    """The record, read back. Not a comment and not a component-id match."""
+    from engcore.domains import thermal_lumped as lump
+
+    cp, system, problems = _electrothermal_problems()
+    edges = cp.coupled_dependencies(
+        system, problems, temperature_metric=lump.TEMPERATURE_METRIC
+    )
+    crossing = next(
+        e for e in edges if e.source_quantity == lump.TEMPERATURE_METRIC
+    )
+    payload = crossing.to_dict()
+    assert payload["schema"] == "quantity_dependency/2"
+    assert payload["source_problem_id"].startswith("thermal-lumped-")
+    assert payload["source_quantity"] == "final_temperature"
+    assert payload["target_quantity"] == "temperature"
+    assert payload["unit_exemplar"] == "kelvin"
+    assert payload["source_instant"] == "end_of_interval"
+
+
+def test_the_two_configurations_now_differ_in_the_record():
+    """THE MEASUREMENT. Before this, the only difference between transporting
+    the end-of-interval temperature and the steady-state one was which name a
+    caller passed. Both carry kelvin, so no check could tell them apart."""
+    from engcore.domains import thermal_lumped as lump
+
+    cp, system, problems = _electrothermal_problems()
+    transient = cp.coupled_dependencies(
+        system, problems, temperature_metric=lump.TEMPERATURE_METRIC
+    )
+    steady = cp.coupled_dependencies(
+        system, problems,
+        temperature_metric=lump.STEADY_STATE_TEMPERATURE_METRIC,
+    )
+    differing = [
+        (a.name, a.source_instant.value, b.source_instant.value)
+        for a, b in zip(transient, steady)
+        if a.source_instant != b.source_instant
+    ]
+    assert differing, "the two configurations are indistinguishable in the record"
+    for name, first, second in differing:
+        assert first == "end_of_interval"
+        assert second == "asymptotic_steady_state"
+
+    # ...and the dimension check, which is what used to be the only check,
+    # still passes on both — so it was never going to be the thing that
+    # separated them.
+    assert {e.dimension for e in transient} == {e.dimension for e in steady}
+
+
+def test_a_metric_with_no_declared_instant_is_refused_not_defaulted():
+    """FAIL-CLOSED. The next kelvin-valued metric this domain publishes must
+    state its time level or no coupling will wire it."""
+    from engcore.domains import thermal_lumped as lump
+    from engcore.scientific.errors import InvalidScientificProblem
+
+    cp, system, problems = _electrothermal_problems()
+    with pytest.raises(InvalidScientificProblem, match="no transfer instant"):
+        cp.coupled_dependencies(
+            system, problems, temperature_metric=lump.TIME_CONSTANT_METRIC
+        )
+    with pytest.raises(InvalidScientificProblem, match="no transfer instant"):
+        lump.transfer_instant_of("some_metric_nobody_declared")
+
+
+def test_a_coupling_that_does_not_state_the_instant_does_not_construct():
+    """THE FAIL-CLOSED PROOF. The field is required with NO default, so a
+    domain that does not use the mechanism gets an error rather than a silent
+    pass. This is the error the sixth domain gets."""
+    from engcore.scientific.composition import QuantityDependency
+
+    with pytest.raises(TypeError, match="source_instant"):
+        QuantityDependency(
+            source_problem_id="a", source_quantity="x",
+            target_problem_id="b", target_quantity="y",
+            unit_exemplar="kelvin",
+        )
+
+
+def test_an_older_crossing_payload_is_refused_rather_than_defaulted():
+    """There is no honest instant to invent for a record whose author never
+    stated one, and guessing is the exact defect the field removes."""
+    from engcore.scientific.composition import (
+        QUANTITY_DEPENDENCY_SCHEMA_V1, QuantityDependency, TransferInstant,
+    )
+
+    good = QuantityDependency(
+        source_problem_id="a", source_quantity="x",
+        target_problem_id="b", target_quantity="y",
+        unit_exemplar="kelvin",
+        source_instant=TransferInstant.END_OF_INTERVAL,
+    )
+    assert QuantityDependency.from_dict(good.to_dict()) == good
+
+    old = {k: v for k, v in good.to_dict().items() if k != "source_instant"}
+    old["schema"] = QUANTITY_DEPENDENCY_SCHEMA_V1
+    with pytest.raises(ScientificCoreError, match="unsupported schema"):
+        QuantityDependency.from_dict(old)
+
+
+def test_the_instant_table_lives_in_the_domain_that_publishes_the_metrics():
+    """One table, not five opinions.
+
+    Four system packs transport a temperature out of a lumped body. If each
+    kept its own metric -> instant mapping, they could disagree about when
+    `final_temperature` is true — which is the defect one level up from the
+    one this task is about.
+    """
+    root = pathlib.Path(__file__).resolve().parents[1] / "src" / "engcore"
+    holders = sorted(
+        path.relative_to(root).as_posix()
+        for path in root.rglob("*.py")
+        if "_TRANSFER_INSTANTS" in path.read_text(encoding="utf-8")
+    )
+    assert holders == ["domains/thermal_lumped.py"], holders
+
+
 _INFLUENCE = """
 import json
 from engcore.scientific.units.quantity import registry, Quantity

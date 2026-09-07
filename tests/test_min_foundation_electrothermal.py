@@ -29,6 +29,7 @@ from src.engcore.domains.electrical.dc.solver import ElectricalDCSolver
 from src.engcore.scientific.composition import (
     QUANTITY_DEPENDENCY_SCHEMA,
     QuantityDependency,
+    TransferInstant,
     externally_imposed,
     unresolved_inputs,
 )
@@ -335,6 +336,7 @@ def test_b3_a_dimensionally_wrong_wiring_is_refused(executed):
         target_problem_id=thermal.problem_id,
         target_quantity=lump.HEAT_INPUT,     # watts
         unit_exemplar=lump.POWER_UNIT,
+        source_instant=TransferInstant.INSTANTANEOUS,
     )
     issues = wrong.check_against(
         target_problem=thermal,
@@ -364,6 +366,7 @@ def test_b4_a_missing_quantity_is_reported_not_invented(executed):
         target_problem_id=prop.problem_id,
         target_quantity="no_such_quantity",
         unit_exemplar="kelvin",
+        source_instant=TransferInstant.INSTANTANEOUS,
     )
     issues = absent.check_against(target_problem=prop)
     assert [i.kind for i in issues] == [BindingIssueKind.MISSING]
@@ -452,6 +455,7 @@ def test_b8_fan_in_is_representable_and_its_combination_rule_is_not(executed):
             target_problem_id=thermal.problem_id,
             target_quantity=lump.HEAT_INPUT,
             unit_exemplar=lump.POWER_UNIT,
+            source_instant=TransferInstant.INSTANTANEOUS,
         )
         for source in ("heater-a", "heater-b")
     )
@@ -590,6 +594,7 @@ def test_d3_another_domain_pair_can_use_the_contract_unchanged():
         target_problem_id="lubricant-film",
         target_quantity="dissipated_power",
         unit_exemplar="watt",
+        source_instant=TransferInstant.INSTANTANEOUS,
     )
     assert dependency.dimension == dimensionality("watt")
     assert QuantityDependency.from_dict(dependency.to_dict()) == dependency
@@ -660,7 +665,12 @@ def test_f_the_twin_is_the_only_instance_state_authority(executed):
     assert fields == {
         "source_problem_id", "source_quantity",
         "target_problem_id", "target_quantity",
-        "unit_exemplar", "name", "description",
+        # `source_instant` says WHEN the transported value is true. It is a
+        # time LEVEL, not a time value, and carries no magnitude — so this
+        # test's claim, that the record holds no state and cannot be a second
+        # authority for it, is unweakened. The assertion below still stands:
+        # nothing in a serialized dependency is a Quantity.
+        "unit_exemplar", "source_instant", "name", "description",
     }
     for dependency in executed.dependencies:
         assert not any(
@@ -721,6 +731,13 @@ def test_f2_no_system_or_component_instance_type_was_created():
 
     assert set(composition.__all__) == {
         "QUANTITY_DEPENDENCY_SCHEMA",
+        # CORE-MECHANISMS: the superseded schema string, named so a refusal
+        # can say what it refused, and `TransferInstant` — the time level a
+        # crossing is declared at. Neither is a system, component, port or
+        # connector: the eleven abstractions asserted absent above are still
+        # absent, and this record still holds no instance state.
+        "QUANTITY_DEPENDENCY_SCHEMA_V1",
+        "TransferInstant",
         "QuantityDependency",
         "externally_imposed",
         "unresolved_inputs",
@@ -741,8 +758,18 @@ def test_g_the_new_record_round_trips_deterministically(executed):
 
 
 def test_g2_an_unknown_schema_is_refused_rather_than_guessed(executed):
+    # `/2` was the unknown future version when this was written and is the
+    # CURRENT one since CORE-MECHANISMS added `source_instant`, so the probe
+    # moves to `/3`. That is the test working, not the test being weakened:
+    # the accepted set grew by exactly the one version that now exists — and
+    # `/1` is asserted below to be refused too, because there is no honest
+    # instant to invent for a record whose author never stated one.
     payload = dict(executed.dependencies[0].to_dict())
-    payload["schema"] = "quantity_dependency/2"
+    payload["schema"] = "quantity_dependency/3"
+    with pytest.raises(ScientificCoreError):
+        QuantityDependency.from_dict(payload)
+
+    payload["schema"] = "quantity_dependency/1"
     with pytest.raises(ScientificCoreError):
         QuantityDependency.from_dict(payload)
 
@@ -773,7 +800,12 @@ def test_g3_no_existing_schema_version_moved():
     assert RESULT_SCHEMA == "scientific_result/3"
     assert PROVENANCE_SCHEMA == "provenance_record/2"
     assert SCIENTIFIC_TWIN_SCHEMA == "scientific_twin/1"
-    assert QUANTITY_DEPENDENCY_SCHEMA == "quantity_dependency/1"
+    # Moved to /2 by CORE-MECHANISMS: `source_instant` is scientific
+    # content — two crossings identical in source, target, quantity and
+    # dimension but differing in time level are not the same crossing —
+    # so an old reader must fail loudly rather than transport a value
+    # from the wrong moment and check clean.
+    assert QUANTITY_DEPENDENCY_SCHEMA == "quantity_dependency/2"
 
 
 def test_g4_the_whole_representation_serializes(executed):
@@ -844,6 +876,7 @@ def test_h2_reduction_the_supplier_cannot_live_on_the_model(executed):
         target_problem_id=thermal.problem_id,
         target_quantity=lump.HEAT_INPUT,
         unit_exemplar=lump.POWER_UNIT,
+        source_instant=TransferInstant.INSTANTANEOUS,
     )
     assert combustion.check_against(target_problem=thermal) == ()
     # unchanged model, unchanged problem, different supplier

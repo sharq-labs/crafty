@@ -252,6 +252,49 @@ MUTATIONS: tuple[Mutation, ...] = (
         ),
         why="the opt-in check made inert, so a caller that DOES ask gets a false yes",
     ),
+    # ---- TASK 6, the declared crossing -------------------------------
+    Mutation(
+        name="instant-gets-a-default",
+        path="src/engcore/scientific/composition/dependency.py",
+        old="    source_instant: TransferInstant\n",
+        new="    source_instant: TransferInstant = TransferInstant.INSTANTANEOUS\n",
+        breaks=(
+            "tests/test_core_mechanisms.py::test_a_coupling_that_does_not_state_the_instant_does_not_construct",
+        ),
+        why="the field made OPT-IN — the sixth domain silently inherits somebody else's instant",
+    ),
+    Mutation(
+        name="instant-not-serialized",
+        path="src/engcore/scientific/composition/dependency.py",
+        old='            "source_instant": self.source_instant.value,\n',
+        new="",
+        breaks=(
+            "tests/test_core_mechanisms.py::test_the_crossing_states_its_source_quantity_and_instant",
+            "tests/test_core_mechanisms.py::test_an_older_crossing_payload_is_refused_rather_than_defaulted",
+        ),
+        why="the instant declared in memory and absent from the record anyone reads",
+    ),
+    Mutation(
+        name="unknown-metric-silently-defaulted",
+        path="src/engcore/domains/thermal_lumped.py",
+        old="        return _TRANSFER_INSTANTS[str(metric)]\n",
+        new="        return _TRANSFER_INSTANTS.get(str(metric), TransferInstant.INSTANTANEOUS)\n",
+        breaks=(
+            "tests/test_core_mechanisms.py::test_a_metric_with_no_declared_instant_is_refused_not_defaulted",
+        ),
+        why="a metric nobody classified quietly transported as if it had no time extent",
+    ),
+    Mutation(
+        name="crossing-instant-hardcoded",
+        path="src/engcore/systems/electrothermal/coupled.py",
+        old="    temperature_instant = lump.transfer_instant_of(temperature_metric)\n",
+        new="    temperature_instant = TransferInstant.END_OF_INTERVAL\n",
+        breaks=(
+            "tests/test_core_mechanisms.py::test_the_two_configurations_now_differ_in_the_record",
+            "tests/test_core_mechanisms.py::test_a_metric_with_no_declared_instant_is_refused_not_defaulted",
+        ),
+        why="the declaration decoupled from the value it describes — the two able to disagree again",
+    ),
 )
 
 

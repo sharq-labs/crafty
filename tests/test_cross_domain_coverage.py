@@ -967,7 +967,14 @@ def test_no_thermal_control_or_prior_probe_file_was_edited():
     # and does not. That is why its result reports applicability as UNDECLARED
     # rather than as an assessment — a limit, recorded here as one.
     assert _diff("src/engcore/domains/thermal/") == ""
-    assert _diff("src/engcore/domains/thermal_lumped.py") == ""
+    # `thermal_lumped.py` publishes the two kelvin-valued metrics four system
+    # packs transport, so CORE-MECHANISMS puts the metric -> transfer-instant
+    # table there — in the domain that owns the fact — rather than letting
+    # four packs hold four opinions about when `final_temperature` is true.
+    # Declared in tests/core_mechanisms_scope.py and named individually there.
+    assert set(
+        _diff("src/engcore/domains/thermal_lumped.py").split()
+    ) - DOMAIN_FILES == set()
     electrical_changed = set(
         _diff("src/engcore/domains/electrical/").split()
     ) - {_PORTABILITY_EXCEPTION} - DOMAIN_FILES

@@ -40,6 +40,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from ..scientific.capabilities import ScientificCapability
+from ..scientific.composition import TransferInstant
 from ..scientific.errors import InvalidScientificProblem
 from ..scientific.ir.conditions import InitialCondition
 from ..scientific.ir.problem import ModelReference, ScientificProblem
@@ -100,6 +101,7 @@ __all__ = [
     "STEADY_STATE_TEMPERATURE_METRIC",
     "TEMPERATURE",
     "TEMPERATURE_UNIT",
+    "transfer_instant_of",
     "TEMPERATURE_METRIC",
     "TIME_CONSTANT_METRIC",
     "ThermalBody",
@@ -138,6 +140,41 @@ DURATION = "duration"
 TEMPERATURE_METRIC = "final_temperature"
 STEADY_STATE_TEMPERATURE_METRIC = "steady_state_temperature"
 TIME_CONSTANT_METRIC = "time_constant"
+
+#: The time level each transportable metric of this body is the value AT.
+#:
+#: This lives here, in the domain that publishes the metrics, because it is
+#: this domain's knowledge — the paragraph above already states the fact in
+#: prose ("its temperature at t = duration"), and CORE-MECHANISMS' only
+#: change is that the fact is now readable by a machine at the point a
+#: crossing is declared. Four system packs transport a temperature out of this
+#: body; before this they each named a metric and stated nothing about when
+#: it was true, and a dimension check passes on either metric.
+_TRANSFER_INSTANTS = {
+    TEMPERATURE_METRIC: TransferInstant.END_OF_INTERVAL,
+    STEADY_STATE_TEMPERATURE_METRIC: TransferInstant.ASYMPTOTIC_STEADY_STATE,
+}
+
+
+def transfer_instant_of(metric: str) -> TransferInstant:
+    """When ``metric`` is the value it is. Refuses an unknown metric.
+
+    **Refuses rather than defaults, and that is the fail-closed part.** The
+    next kelvin-valued metric this domain publishes must state its time level
+    here or no coupling can wire it. A default would have made the next one
+    silently inherit somebody else's instant, which is the defect the field
+    exists to remove.
+    """
+    try:
+        return _TRANSFER_INSTANTS[str(metric)]
+    except KeyError:
+        raise InvalidScientificProblem(
+            f"no transfer instant is declared for lumped-thermal metric "
+            f"{metric!r}. Two kelvin-valued metrics of this body converge to "
+            f"different numbers and a dimension check passes on either, so "
+            f"the time level cannot be guessed — declare it in "
+            f"`_TRANSFER_INSTANTS` or the crossing is not checkable"
+        ) from None
 
 MODEL_VERSION = "0.1.0"
 

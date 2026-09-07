@@ -96,7 +96,7 @@ from ...domains.electrical.dc.problem import (
     source_current_name,
     source_voltage_name,
 )
-from ...scientific.composition import QuantityDependency
+from ...scientific.composition import QuantityDependency, TransferInstant
 from ...scientific.errors import InvalidScientificProblem
 from ...scientific.ir.problem import ModelReference, ScientificProblem
 from ...scientific.models.definition import ValidityAssessment, ValidityStatus
@@ -873,12 +873,20 @@ def drive_dependencies(
     motor = drive.motor
     edges: list[QuantityDependency] = []
 
-    def edge(src, sq, tgt, tq, unit, name, description):
+    def edge(src, sq, tgt, tq, unit, name, description,
+             instant=TransferInstant.INSTANTANEOUS):
+        # `instant` defaults HERE and nowhere in the core. Every edge in this
+        # function transports a value evaluated at a state — a power at an
+        # operating point, a resistivity at a temperature — except the one
+        # that carries a temperature out of a transient body, which passes
+        # its instant explicitly. All call sites are in this one function and
+        # visible together; the core field itself has no default.
         edges.append(
             QuantityDependency(
                 source_problem_id=src, source_quantity=sq,
                 target_problem_id=tgt, target_quantity=tq,
-                unit_exemplar=unit, name=name, description=description,
+                unit_exemplar=unit, source_instant=instant,
+                name=name, description=description,
             )
         )
 
@@ -906,7 +914,8 @@ def drive_dependencies(
         edge(thermal, temperature_metric, resistivity, cmat.TEMPERATURE,
              cmat.TEMPERATURE_UNIT, f"{DEPENDENCY_TEMPERATURE}:{cid}",
              "The body temperature is the state coordinate at which this "
-             "material's resistivity is evaluated.")
+             "material's resistivity is evaluated.",
+             instant=lump.transfer_instant_of(temperature_metric))
         edge(resistivity, cmat.RESISTIVITY_METRIC, resistance,
              cmat.RESISTIVITY_METRIC, cmat.RESISTIVITY_UNIT,
              f"{DEPENDENCY_GEOMETRY}:{cid}",

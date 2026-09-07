@@ -108,6 +108,7 @@ missing one. Nothing here infers a supplier for it.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum
 from typing import Any, Iterable, Mapping
 
 from ..errors import InvalidScientificProblem
@@ -116,14 +117,59 @@ from ..serialization import require_schema, schema_string
 from ..units.quantity import Quantity, dimensionality
 from ..units.validation import require_unit
 
-QUANTITY_DEPENDENCY_SCHEMA = schema_string("quantity_dependency")
+#: Bumped to /2 by CORE-MECHANISMS for ``source_instant``. The instant IS
+#: scientific content — two crossings identical in source, target, quantity
+#: and dimension but differing in time level are not the same crossing — so a
+#: reader that accepted a /2 payload while ignoring it would transport a value
+#: from the wrong moment and check clean. A /1 payload is REFUSED rather than
+#: defaulted: there is no honest instant to invent for a record whose author
+#: never stated one, and guessing would be the exact defect this field exists
+#: to remove.
+QUANTITY_DEPENDENCY_SCHEMA = schema_string("quantity_dependency", 2)
+
+#: The version before ``source_instant``. Named so a refusal can say what it
+#: refused, and deliberately NOT accepted by the reader.
+QUANTITY_DEPENDENCY_SCHEMA_V1 = schema_string("quantity_dependency")
 
 __all__ = [
     "QUANTITY_DEPENDENCY_SCHEMA",
+    "QUANTITY_DEPENDENCY_SCHEMA_V1",
     "QuantityDependency",
+    "TransferInstant",
     "externally_imposed",
     "unresolved_inputs",
 ]
+
+
+class TransferInstant(str, Enum):
+    """*When* the transported value is the value it is.
+
+    The gap this closes was measured, not imagined. A transient model can
+    publish two metrics of the same dimension — the value at the end of the
+    simulated interval, and the asymptote it is heading for — and a coupling
+    selects between them by passing a metric NAME. The two converge to
+    different numbers. Both carry the same unit, so the dimension check passes
+    on either, and nothing else looked. The measurement is in
+    ``docs/evidence/core-mechanisms-evidence.md``, which is where a domain may
+    be named and this module may not.
+
+    For a transient composition the time level of the transported quantity is
+    the whole semantic content, which is exactly why it is a field and not a
+    comment: two crossings that agree on source, target, quantity and
+    dimension and disagree on this are not the same crossing. The module
+    docstring above already stated this hazard in prose; the only change is
+    that it is now a field a machine can check.
+
+    ``INSTANTANEOUS`` is not "unspecified". It is the positive statement that
+    the quantity has no time extent — a property evaluated at a state, a rate
+    at an operating point — and it is a real answer rather than a way of
+    declining to give one. There is deliberately NO "unknown" member: a
+    crossing whose instant nobody can state is a crossing nobody can check.
+    """
+
+    INSTANTANEOUS = "instantaneous"
+    END_OF_INTERVAL = "end_of_interval"
+    ASYMPTOTIC_STEADY_STATE = "asymptotic_steady_state"
 
 
 @dataclass(frozen=True)
@@ -145,10 +191,19 @@ class QuantityDependency:
     target_problem_id: str
     target_quantity: str
     unit_exemplar: str
+    #: When the transported value is the value it is. **Required, with no
+    #: default**, and that is the point: a coupling that does not state the
+    #: instant does not construct. A default would have made this opt-in, and
+    #: every future coupling inherits whichever way this goes — the next
+    #: system to be built crosses four quantities across four domains.
+    source_instant: TransferInstant
     name: str = ""
     description: str = ""
 
     def __post_init__(self) -> None:
+        object.__setattr__(
+            self, "source_instant", TransferInstant(self.source_instant)
+        )
         for label in (
             "source_problem_id",
             "source_quantity",
@@ -326,6 +381,7 @@ class QuantityDependency:
             "target_problem_id": self.target_problem_id,
             "target_quantity": self.target_quantity,
             "unit_exemplar": self.unit_exemplar,
+            "source_instant": self.source_instant.value,
             "name": self.name,
             "description": self.description,
         }
@@ -339,6 +395,7 @@ class QuantityDependency:
             target_problem_id=payload["target_problem_id"],
             target_quantity=payload["target_quantity"],
             unit_exemplar=payload["unit_exemplar"],
+            source_instant=TransferInstant(payload["source_instant"]),
             name=payload.get("name", ""),
             description=payload.get("description", ""),
         )

@@ -51,7 +51,7 @@ from ...domains.electrical.dc import (
 )
 from ...domains.electrical.dc.problem import resistance_name
 from ...domains import thermal_lumped as lump
-from ...scientific.composition import QuantityDependency
+from ...scientific.composition import QuantityDependency, TransferInstant
 from ...scientific.errors import InvalidScientificProblem
 from ...scientific.ir.problem import ModelReference, ScientificProblem
 from ...scientific.realizations.definition import ModelRealizationDefinition
@@ -318,6 +318,7 @@ def electrothermal_dependencies(
             target_problem_id=thermal.problem_id,
             target_quantity=lump.HEAT_INPUT,
             unit_exemplar=lump.POWER_UNIT,
+            source_instant=TransferInstant.INSTANTANEOUS,
             name=DEPENDENCY_HEAT,
             description=(
                 "The power absorbed by the resistor is the heat delivered to "
@@ -330,6 +331,7 @@ def electrothermal_dependencies(
             target_problem_id=prop.problem_id,
             target_quantity=mat.TEMPERATURE,
             unit_exemplar=mat.TEMPERATURE_UNIT,
+            source_instant=lump.transfer_instant_of(lump.TEMPERATURE_METRIC),
             name=DEPENDENCY_TEMPERATURE,
             description=(
                 "The body temperature is the state coordinate at which the "
@@ -345,6 +347,7 @@ def electrothermal_dependencies(
             target_problem_id=electrical.problem_id,
             target_quantity=resistance_name(system.component_id),
             unit_exemplar=mat.RESISTANCE_UNIT,
+            source_instant=TransferInstant.INSTANTANEOUS,
             name=DEPENDENCY_RESISTANCE,
             description=(
                 "The evaluated resistance is the value the circuit element "

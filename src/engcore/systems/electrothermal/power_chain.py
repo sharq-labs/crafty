@@ -97,7 +97,7 @@ from ...domains.electrical.dc import (
 # C-11); the sibling modules in this pack already reuse this constant rather
 # than re-deriving the convention, and so does this one.
 from ...domains.electrical.dc.problem import resistance_name
-from ...scientific.composition import QuantityDependency
+from ...scientific.composition import QuantityDependency, TransferInstant
 from ...scientific.errors import InvalidScientificProblem
 from ...scientific.ir.problem import ModelReference, ScientificProblem
 from ...scientific.models.definition import ValidityAssessment
@@ -540,6 +540,7 @@ def chain_dependencies(
                 target_problem_id=thermal.problem_id,
                 target_quantity=lump.HEAT_INPUT,
                 unit_exemplar=lump.POWER_UNIT,
+                source_instant=TransferInstant.INSTANTANEOUS,
                 name=f"{DEPENDENCY_HEAT}:{cid}",
                 description=(
                     "The power absorbed by this element is the heat delivered "
@@ -554,6 +555,7 @@ def chain_dependencies(
                 target_problem_id=resistivity.problem_id,
                 target_quantity=cmat.TEMPERATURE,
                 unit_exemplar=cmat.TEMPERATURE_UNIT,
+                source_instant=lump.transfer_instant_of(temperature_metric),
                 name=f"{DEPENDENCY_TEMPERATURE}:{cid}",
                 description=(
                     "The body temperature is the state coordinate at which "
@@ -568,6 +570,7 @@ def chain_dependencies(
                 target_problem_id=resistance.problem_id,
                 target_quantity=cmat.RESISTIVITY_METRIC,
                 unit_exemplar=cmat.RESISTIVITY_UNIT,
+                source_instant=TransferInstant.INSTANTANEOUS,
                 name=f"{DEPENDENCY_GEOMETRY}:{cid}",
                 description=(
                     "The evaluated material resistivity is the value the "
@@ -582,6 +585,7 @@ def chain_dependencies(
                 target_problem_id=electrical,
                 target_quantity=resistance_name(cid),
                 unit_exemplar=cmat.RESISTANCE_UNIT,
+                source_instant=TransferInstant.INSTANTANEOUS,
                 name=f"{DEPENDENCY_RESISTANCE}:{cid}",
                 description=(
                     "The computed resistance is the value this circuit "

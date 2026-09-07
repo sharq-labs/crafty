@@ -48,6 +48,9 @@ CORE_FILES = frozenset({
     # TASK 4 — one acceptance rule, run at construction instead of crashing
     # inside json.dumps.
     "src/engcore/scientific/serialization.py",
+    # TASK 6 — a crossing must state WHEN the value it carries is true.
+    "src/engcore/scientific/composition/dependency.py",
+    "src/engcore/scientific/composition/__init__.py",
 })
 
 #: Files OUTSIDE the universal core that this milestone changes, and the
@@ -62,4 +65,13 @@ DOMAIN_FILES = frozenset({
     "src/engcore/domains/fluids/transport2d/solver.py",
     "src/engcore/domains/electrical/dc/solver.py",
     "src/engcore/application/contract.py",
+    # TASK 6 — the five packs that declare a cross-domain crossing, plus the
+    # domain that publishes the metrics and therefore owns the metric ->
+    # instant table (one table, not five opinions).
+    "src/engcore/domains/thermal_lumped.py",
+    "src/engcore/systems/electrothermal/coupled.py",
+    "src/engcore/systems/electrothermal/power_chain.py",
+    "src/engcore/systems/electrothermal/resistor_body.py",
+    "src/engcore/systems/fluidthermal/coupled.py",
+    "src/engcore/systems/propulsion/drive.py",
 })

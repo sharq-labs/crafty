@@ -28,6 +28,7 @@ from engcore.data.resolver import BulkDataResolver, relocate
 from engcore.data.store import FilesystemBulkStore, InMemoryBulkStore
 from engcore.scientific.composition.dependency import (
     QuantityDependency,
+    TransferInstant,
     externally_imposed,
     unresolved_inputs,
 )
@@ -997,6 +998,7 @@ def test_probe_f_a_field_endpoint_cannot_be_declared_as_a_dependency(case_t_run)
         target_problem_id="thermal-body-1",
         target_quantity="species_concentration",
         unit_exemplar="dimensionless",
+        source_instant=TransferInstant.INSTANTANEOUS,
     )
     issues = dependency.check_against(
         source_problem=case_t_run.problem, source_result=case_t_run.result
@@ -1015,6 +1017,7 @@ def test_probe_f_a_field_endpoint_cannot_be_declared_as_a_dependency(case_t_run)
         target_problem_id="thermal-body-1",
         target_quantity="species_concentration",
         unit_exemplar="dimensionless",
+        source_instant=TransferInstant.INSTANTANEOUS,
     )
     assert scalar.check_against(source_result=case_t_run.result) == (), (
         "a scalar reduction of the field checks clean — which is the trap: the "

@@ -30,7 +30,7 @@ from src.engcore.domains import thermal_lumped as lump
 from src.engcore.domains.electrical import conductor_material as cmat
 from src.engcore.domains.electrical import material as legacy_mat
 from src.engcore.domains.electrical.dc import ElectricalDCSolver
-from src.engcore.scientific.composition import QuantityDependency
+from src.engcore.scientific.composition import QuantityDependency, TransferInstant
 from src.engcore.scientific.errors import (
     InvalidScientificProblem,
     ScientificCoreError,
@@ -723,6 +723,7 @@ def _broken_edge_setup():
         target_problem_id=target.electrical_problem_id,
         target_quantity="R:wire_A",
         unit_exemplar=cmat.RESISTANCE_UNIT,
+        source_instant=TransferInstant.INSTANTANEOUS,
         name="broken",
     )
     mangled = (ghost,) + tuple(

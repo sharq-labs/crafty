@@ -23,7 +23,7 @@ from engcore.coupling import (
     FixedPointCouplingPlan,
     TornEndpoint,
 )
-from engcore.scientific.composition import QuantityDependency
+from engcore.scientific.composition import QuantityDependency, TransferInstant
 from engcore.domains import mechanical_rotational as rot
 from engcore.domains import thermal_lumped as lump
 from engcore.domains.electrical import conductor_material as cmat
@@ -1104,6 +1104,7 @@ def test_t13_a_wrongly_dimensioned_edge_is_refused_before_the_first_iteration(
             target_problem_id=drive.motor.thermal_problem_id,
             target_quantity=lump.HEAT_INPUT,
             unit_exemplar=rot.TORQUE_UNIT,
+            source_instant=TransferInstant.INSTANTANEOUS,
             name="a torque miswired into a heat input",
         )
         if d.name == pd.DEPENDENCY_TOTAL_HEAT
@@ -1477,6 +1478,7 @@ def test_the_naive_fan_in_composition_is_refused_by_the_unedited_plan(reference)
                 target_problem_id=drive.motor.thermal_problem_id,
                 target_quantity=lump.HEAT_INPUT,
                 unit_exemplar=lump.POWER_UNIT,
+                source_instant=TransferInstant.INSTANTANEOUS,
                 name=f"naive-{label}-heat",
             )
         )
@@ -1506,6 +1508,7 @@ def test_the_naive_loop_resistance_fan_in_is_refused_too(reference):
                 target_problem_id=drive.motor.operating_point_problem_id,
                 target_quantity=pmod.LOOP_RESISTANCE,
                 unit_exemplar=cmat.RESISTANCE_UNIT,
+                source_instant=TransferInstant.INSTANTANEOUS,
                 name=f"naive-loop-{element.component_id}",
             )
         )

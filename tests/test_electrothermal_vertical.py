@@ -25,7 +25,7 @@ from src.engcore.domains import thermal_lumped as lump
 from src.engcore.domains.electrical import material as mat
 from src.engcore.domains.electrical.dc import ElectricalDCSolver
 from src.engcore.domains.electrical.dc.errors import CircuitBindingError
-from src.engcore.scientific.composition import QuantityDependency
+from src.engcore.scientific.composition import QuantityDependency, TransferInstant
 from src.engcore.scientific.errors import (
     InvalidScientificProblem,
     ScientificCoreError,
@@ -734,6 +734,7 @@ def test_g_a_dimensionally_wrong_edge_is_refused_before_the_first_iteration():
         target_problem_id=problems[2].problem_id,
         target_quantity=lump.HEAT_INPUT,
         unit_exemplar="volt",
+        source_instant=TransferInstant.INSTANTANEOUS,
         name="wrong-dimension",
     )
     # Replaces the correct heat edge rather than joining it: two edges into one
@@ -764,6 +765,7 @@ def test_g2_an_undeclared_quantity_is_refused_before_the_first_iteration():
         target_problem_id=problems[2].problem_id,
         target_quantity="heat_flux",
         unit_exemplar=lump.POWER_UNIT,
+        source_instant=TransferInstant.INSTANTANEOUS,
         name="undeclared-target",
     )
     plan = cpl.FixedPointCouplingPlan(
@@ -840,6 +842,7 @@ def test_g6_an_uncut_cycle_and_an_unknown_tear_are_both_refused():
     foreign = QuantityDependency(
         source_problem_id="a", source_quantity="x",
         target_problem_id="b", target_quantity="y", unit_exemplar=KELVIN,
+        source_instant=TransferInstant.INSTANTANEOUS,
     )
     with pytest.raises(InvalidScientificProblem, match="not one of"):
         cpl.FixedPointCouplingPlan(
@@ -953,6 +956,7 @@ def test_h4_fan_in_remains_representable_unreported_and_uncombined():
         target_problem_id=thermal_one,
         target_quantity=lump.HEAT_INPUT,
         unit_exemplar=lump.POWER_UNIT,
+        source_instant=TransferInstant.INSTANTANEOUS,
         name="second-source-on-one-body",
     )
     assert fan_in.check_against(target_problem=by_id[thermal_one]) == ()
@@ -991,6 +995,7 @@ def test_h4b_a_plan_refuses_fan_in_rather_than_resolving_it_by_declaration_order
         target_problem_id="thermal-lumped-R1",
         target_quantity=lump.HEAT_INPUT,
         unit_exemplar=lump.POWER_UNIT,
+        source_instant=TransferInstant.INSTANTANEOUS,
         name="second-source-on-one-body",
     )
     torn = cp.nominal_plan(
@@ -1038,6 +1043,7 @@ def test_x1_cycle_edges_reports_only_the_cyclic_core():
         return QuantityDependency(
             source_problem_id=a, source_quantity="x",
             target_problem_id=b, target_quantity="y", unit_exemplar=KELVIN,
+            source_instant=TransferInstant.INSTANTANEOUS,
         )
 
     # the milestone's own graph: a pure 3-cycle, every edge on it
@@ -1081,6 +1087,7 @@ def test_x2_one_notion_of_edge_identity_is_used_everywhere():
         target_problem_id=edge.target_problem_id,
         target_quantity=edge.target_quantity,
         unit_exemplar="rankine",          # same edge, different exemplar
+        source_instant=TransferInstant.INSTANTANEOUS,
         name="near-duplicate",
     )
     assert cpl.edge_key(twin) == cpl.edge_key(edge)
@@ -1148,6 +1155,7 @@ def test_x4_seeding_over_a_declared_condition_is_refused():
         target_problem_id=thermal.problem_id,
         target_quantity=lump.TEMPERATURE,
         unit_exemplar=KELVIN,
+        source_instant=TransferInstant.INSTANTANEOUS,
         name="time-marching",
     )
     plan = cpl.FixedPointCouplingPlan(
@@ -1291,6 +1299,14 @@ def test_i_universal_core_gained_nothing():
 
     assert set(composition.__all__) == {
         "QUANTITY_DEPENDENCY_SCHEMA",
+        # CORE-MECHANISMS: the superseded schema string, named so a refusal
+        # can say what it refused, and `TransferInstant` — WHEN a transported
+        # value is the value it is. Neither names a domain; both are the same
+        # kind of thing this test already admits, and the file-set assertion
+        # below is unchanged, so ET-VERTICAL's own claim (it added no file
+        # and no export) is still true of ET-VERTICAL.
+        "QUANTITY_DEPENDENCY_SCHEMA_V1",
+        "TransferInstant",
         "QuantityDependency",
         "externally_imposed",
         "unresolved_inputs",
@@ -1416,6 +1432,7 @@ def test_i4_the_plan_and_the_graph_readers_work_for_an_unrelated_domain_pair():
         target_problem_id="lubricant-film",
         target_quantity="dissipated_power",
         unit_exemplar="watt",
+        source_instant=TransferInstant.INSTANTANEOUS,
     )
     viscosity = QuantityDependency(
         source_problem_id="lubricant-film",
@@ -1423,6 +1440,7 @@ def test_i4_the_plan_and_the_graph_readers_work_for_an_unrelated_domain_pair():
         target_problem_id="lubricant-viscosity",
         target_quantity="temperature",
         unit_exemplar=KELVIN,
+        source_instant=TransferInstant.INSTANTANEOUS,
     )
     drag = QuantityDependency(
         source_problem_id="lubricant-viscosity",
@@ -1430,6 +1448,7 @@ def test_i4_the_plan_and_the_graph_readers_work_for_an_unrelated_domain_pair():
         target_problem_id="mechanical-shaft",
         target_quantity="mu",
         unit_exemplar="pascal*second",
+        source_instant=TransferInstant.INSTANTANEOUS,
     )
     nodes = ["mechanical-shaft", "lubricant-film", "lubricant-viscosity"]
     edges = (friction, viscosity, drag)
@@ -1724,7 +1743,12 @@ def test_o3_no_existing_schema_version_moved():
     from src.engcore.scientific.results.result import RESULT_SCHEMA
     from src.engcore.scientific.solvers.protocol import RAW_OUTPUT_SCHEMA
 
-    assert QUANTITY_DEPENDENCY_SCHEMA == "quantity_dependency/1"
+    # Moved to /2 by CORE-MECHANISMS: `source_instant` is scientific
+    # content — two crossings identical in source, target, quantity and
+    # dimension but differing in time level are not the same crossing —
+    # so an old reader must fail loudly rather than transport a value
+    # from the wrong moment and check clean.
+    assert QUANTITY_DEPENDENCY_SCHEMA == "quantity_dependency/2"
     assert PROVENANCE_SCHEMA == "provenance_record/2"
     assert EXECUTION_BINDING_SCHEMA == "execution_binding/1"
     # Moved to /3 by CORE-MECHANISMS: `applicability` is scientific
@@ -1902,7 +1926,12 @@ def test_r5_the_policy_is_not_a_property_of_the_dependency(case_a):
         QUANTITY_DEPENDENCY_SCHEMA,
     )
 
-    assert QUANTITY_DEPENDENCY_SCHEMA == "quantity_dependency/1"
+    # Moved to /2 by CORE-MECHANISMS: `source_instant` is scientific
+    # content — two crossings identical in source, target, quantity and
+    # dimension but differing in time level are not the same crossing —
+    # so an old reader must fail loudly rather than transport a value
+    # from the wrong moment and check clean.
+    assert QUANTITY_DEPENDENCY_SCHEMA == "quantity_dependency/2"
     for dependency in dependencies:
         payload = dependency.to_dict()
         for banned in ("tolerance", "seed", "max_iterations", "outcome",

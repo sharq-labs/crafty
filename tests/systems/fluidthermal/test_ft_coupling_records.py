@@ -21,6 +21,7 @@ from engcore.domains import thermal_lumped as lump
 from engcore.domains.fluids import transport2d as fluid
 from engcore.scientific.composition import (
     QuantityDependency,
+    TransferInstant,
     unresolved_inputs,
 )
 from engcore.scientific.errors import InvalidScientificProblem
@@ -212,6 +213,7 @@ def test_n3_a_watt_valued_edge_into_the_conductance_endpoint_is_refused():
         target_problem_id=system.thermal_problem_id,
         target_quantity=lump.AMBIENT_CONDUCTANCE,
         unit_exemplar="watt",
+        source_instant=TransferInstant.INSTANTANEOUS,
     )
     issues = wrong.check_against(
         target_problem=problems[system.thermal_problem_id]
@@ -230,6 +232,7 @@ def test_n3_a_kelvin_valued_edge_into_the_diffusivity_endpoint_is_refused():
         target_problem_id=system.fluid_problem_id,
         target_quantity="diffusivity",
         unit_exemplar="kelvin",
+        source_instant=TransferInstant.INSTANTANEOUS,
     )
     issues = wrong.check_against(target_problem=problems[system.fluid_problem_id])
     assert issues and any(i.kind.value == "wrong_dimension" for i in issues)
@@ -245,6 +248,7 @@ def test_n3_the_plan_refuses_a_mis_dimensioned_edge_before_the_first_sweep():
         target_problem_id=system.wall_problem_id,
         target_quantity=prop.WALL_EFFLUX,
         unit_exemplar="kelvin",
+        source_instant=TransferInstant.INSTANTANEOUS,
         name=ftc.DEPENDENCY_EFFLUX,
     )
     good[0] = bad
@@ -267,6 +271,7 @@ def test_the_scale_restoration_cannot_be_bypassed_by_wiring_efflux_to_conductanc
         target_problem_id=system.thermal_problem_id,
         target_quantity=lump.AMBIENT_CONDUCTANCE,
         unit_exemplar="m**2/s",
+        source_instant=TransferInstant.INSTANTANEOUS,
     )
     issues = shortcut.check_against(
         target_problem=problems[system.thermal_problem_id]
@@ -302,6 +307,7 @@ def test_n2_a_field_endpoint_still_checks_clean_and_this_milestone_does_not_fix_
         target_problem_id=system.wall_problem_id,
         target_quantity=prop.WALL_EFFLUX,
         unit_exemplar="dimensionless",
+        source_instant=TransferInstant.INSTANTANEOUS,
     )
     # It checks CLEAN as a source. That is the leak.
     assert field_edge.check_against(source_problem=fluid_problem) == ()

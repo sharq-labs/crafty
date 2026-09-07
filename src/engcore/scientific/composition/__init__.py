@@ -29,14 +29,18 @@ anything. Composition is stated; running it is a later milestone's contract.
 
 from .dependency import (
     QUANTITY_DEPENDENCY_SCHEMA,
+    QUANTITY_DEPENDENCY_SCHEMA_V1,
     QuantityDependency,
+    TransferInstant,
     externally_imposed,
     unresolved_inputs,
 )
 
 __all__ = [
     "QUANTITY_DEPENDENCY_SCHEMA",
+    "QUANTITY_DEPENDENCY_SCHEMA_V1",
     "QuantityDependency",
+    "TransferInstant",
     "externally_imposed",
     "unresolved_inputs",
 ]

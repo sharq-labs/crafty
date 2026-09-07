@@ -89,7 +89,7 @@ from ...domains.fluids.transport2d import (
     read_wall_efflux_with_admission,
     solve_transport2d,
 )
-from ...scientific.composition import QuantityDependency
+from ...scientific.composition import QuantityDependency, TransferInstant
 from ...scientific.errors import InvalidScientificProblem
 from ...scientific.ir.problem import ModelReference, ScientificProblem
 from ...scientific.results.provenance import ExecutionBinding, ProvenanceRecord
@@ -489,6 +489,9 @@ def coupled_dependencies(
             target_problem_id=system.wall_problem_id,
             target_quantity=prop.WALL_EFFLUX,
             unit_exemplar=prop.EFFLUX_UNIT,
+            # The fluid participant is steady by construction, so its
+            # boundary-integrated efflux has no time extent.
+            source_instant=TransferInstant.INSTANTANEOUS,
             name=DEPENDENCY_EFFLUX,
             description=(
                 "The boundary-integrated diffusive efflux of the transport "
@@ -502,6 +505,7 @@ def coupled_dependencies(
             target_problem_id=system.thermal_problem_id,
             target_quantity=lump.AMBIENT_CONDUCTANCE,
             unit_exemplar=lump.CONDUCTANCE_UNIT,
+            source_instant=TransferInstant.INSTANTANEOUS,
             name=DEPENDENCY_CONDUCTANCE,
             description=(
                 "The restored wall conductance is the body's single exchange "
@@ -514,6 +518,9 @@ def coupled_dependencies(
             target_problem_id=system.diffusivity_problem_id,
             target_quantity=prop.TEMPERATURE,
             unit_exemplar=prop.TEMPERATURE_UNIT,
+            # The docstring above already argues this leg must be the
+            # steady limit; now the record says so too.
+            source_instant=lump.transfer_instant_of(temperature_metric),
             name=DEPENDENCY_TEMPERATURE,
             description=(
                 "The body temperature is the state coordinate at which the "
@@ -526,6 +533,7 @@ def coupled_dependencies(
             target_problem_id=system.fluid_problem_id,
             target_quantity="diffusivity",
             unit_exemplar=prop.DIFFUSIVITY_UNIT,
+            source_instant=TransferInstant.INSTANTANEOUS,
             name=DEPENDENCY_DIFFUSIVITY,
             description=(
                 "The evaluated diffusivity is the transport coefficient the "

@@ -102,6 +102,7 @@ from .models import (
 from .composition import (
     QUANTITY_DEPENDENCY_SCHEMA,
     QuantityDependency,
+    TransferInstant,
     externally_imposed,
     unresolved_inputs,
 )
@@ -232,6 +233,7 @@ __all__ = [
     "RealizationRegistry",
     # system composition
     "QuantityDependency",
+    "TransferInstant",
     "QUANTITY_DEPENDENCY_SCHEMA",
     "unresolved_inputs",
     "externally_imposed",
