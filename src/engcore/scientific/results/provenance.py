@@ -193,8 +193,41 @@ class ProvenanceRecord:
         # exists. Measured at 216 us per record.
         require_pristine_registry(context=f"provenance {run_id!r}")
 
+        # ---- claims about sources ------------------------------------
+        #
+        # A provenance record making a claim about a source that was never
+        # there is the central claim of this project, violated in its own
+        # record type. Three of those claims the record can judge ALONE, with
+        # no registry and nothing collected — and it did not judge any of them.
+        parent = self.parent_run_id
+        if parent is not None:
+            parent = str(parent).strip()
+            if not parent:
+                raise ScientificCoreError(
+                    f"provenance {run_id!r}: parent_run_id is present but "
+                    f"blank. That is a lineage claim naming nothing. `None` is "
+                    f"how a record says it has no parent, and it is a complete "
+                    f"answer rather than a missing one"
+                )
+            if parent == run_id:
+                raise ScientificCoreError(
+                    f"provenance {run_id!r}: parent_run_id names this same "
+                    f"run. A record cannot be its own source — the source has "
+                    f"to have existed before the thing derived from it"
+                )
+        object.__setattr__(self, "parent_run_id", parent)
+
         models = tuple((str(a), str(b)) for a, b in self.models)
         solvers = tuple((str(a), str(b)) for a, b in self.solvers)
+        for label, participants in (("model", models), ("solver", solvers)):
+            for identifier, version in participants:
+                if not identifier.strip() or not version.strip():
+                    raise ScientificCoreError(
+                        f"provenance {run_id!r}: {label} participant "
+                        f"({identifier!r}, {version!r}) has a blank identity. "
+                        f"A participant that cannot be named is a claim that "
+                        f"something took part without saying what"
+                    )
 
         bindings = tuple(self.bindings)
         for binding in bindings:
@@ -319,6 +352,34 @@ class ProvenanceRecord:
             and (version is None or b.realization.version == str(version))
         )
 
+    def require_sources_exist(self, known_run_ids: Any) -> None:
+        """Refuse a lineage claim naming a run that is not in ``known_run_ids``.
+
+        **This one is OPT-IN, and that is a real limit rather than an
+        oversight.** Existence is not a property of this record — the module
+        collects nothing on its own, by an explicit privacy and determinism
+        position stated at the top of this file — so a record cannot know
+        which runs happened. Only a caller holding the set can answer it, and
+        only a caller can call this.
+
+        What is NOT opt-in is everything the record can judge alone: a blank
+        parent, a record naming itself as its own source, a participant with
+        no identity, and — through :meth:`derived` — a lineage claim
+        contradicting the record it was derived from. Those are refused at
+        construction, for everyone, always.
+        """
+        if self.parent_run_id is None:
+            return
+        known = {str(identifier) for identifier in known_run_ids}
+        if self.parent_run_id not in known:
+            raise ScientificCoreError(
+                f"provenance {self.run_id!r} claims to derive from "
+                f"{self.parent_run_id!r}, which is not among the "
+                f"{len(known)} run(s) known to this caller. A record making a "
+                f"claim about a source that was never there is worse than one "
+                f"making no claim at all"
+            )
+
     def derived(self, run_id: str, **overrides: Any) -> "ProvenanceRecord":
         """A child record that keeps the lineage link explicit.
 
@@ -328,6 +389,21 @@ class ProvenanceRecord:
         refusing early says what the caller has to decide instead of letting
         the consistency check phrase it as a contradiction.
         """
+        # A false lineage claim through the SANCTIONED api. `derived` means
+        # "a child of THIS record", so it holds the truth about the parent —
+        # and it was letting a caller overwrite that truth with any string at
+        # all, including the id of a run that never existed. This is the one
+        # existence claim about a source that a record CAN check by itself,
+        # because the source is the object the method was called on.
+        if "parent_run_id" in overrides and overrides["parent_run_id"] != self.run_id:
+            raise ScientificCoreError(
+                f"provenance {self.run_id!r}: derived() was asked to record "
+                f"{overrides['parent_run_id']!r} as the parent, but the record "
+                f"it is being derived FROM is {self.run_id!r}. A lineage claim "
+                f"naming a source this child does not have is exactly the "
+                f"claim provenance exists to prevent; construct the record "
+                f"directly if the parent really is something else"
+            )
         if "models" in overrides and "bindings" not in overrides and self.bindings:
             raise ScientificCoreError(
                 f"provenance {self.run_id!r}: rebinding 'models' while "

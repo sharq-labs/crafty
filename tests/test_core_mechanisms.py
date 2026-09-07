@@ -864,6 +864,114 @@ def test_design_memory_canonical_bytes_still_has_no_explicit_refusal():
         memory._canonical_bytes({"x": object()})
 
 
+# =====================================================================
+# TASK 5 — provenance claiming a source that was never there
+#
+# There is no `dependencies` field on ProvenanceRecord in this tree, and no
+# `from_execution`. What there IS, and what carries the same defect, is every
+# claim the record makes about a source: `parent_run_id`, and the participant
+# tuples. Measured before the fix, ALL of these were accepted:
+#
+#   parent_run_id = ""                    a lineage claim naming nothing
+#   parent_run_id = "   "                 the same, wearing whitespace
+#   parent_run_id = <its own run_id>      a record that is its own source
+#   models = (("", ""),)                  a participant with no identity
+#   derived(..., parent_run_id="never")   a false lineage claim through the
+#                                         sanctioned API, which HELD the truth
+# =====================================================================
+
+
+def _provenance(**kwargs):
+    from engcore.scientific.results.provenance import ProvenanceRecord
+
+    return ProvenanceRecord(**kwargs)
+
+
+def test_a_record_cannot_claim_a_source_it_can_see_is_not_there():
+    """The four claims the record can judge ALONE — no registry, nothing
+    collected, no world model. It judged none of them before."""
+    with pytest.raises(ScientificCoreError, match="blank"):
+        _provenance(run_id="r", parent_run_id="")
+    with pytest.raises(ScientificCoreError, match="blank"):
+        _provenance(run_id="r", parent_run_id="   ")
+    with pytest.raises(ScientificCoreError, match="its own source"):
+        _provenance(run_id="r", parent_run_id="r")
+    with pytest.raises(ScientificCoreError, match="its own source"):
+        # ...and stripping happens BEFORE the comparison, so padding is not a
+        # way around it.
+        _provenance(run_id="r", parent_run_id="  r  ")
+    with pytest.raises(ScientificCoreError, match="blank identity"):
+        _provenance(run_id="r", models=(("", ""),))
+    with pytest.raises(ScientificCoreError, match="blank identity"):
+        _provenance(run_id="r", solvers=(("solver", "  "),))
+
+    # `None` remains how a record says it has no parent, and that is a
+    # complete answer rather than a missing one.
+    assert _provenance(run_id="r").parent_run_id is None
+
+
+def test_the_refusal_is_reachable_through_deserialization():
+    """MADE TO FAIL ON PURPOSE, through the route that is not a keyword
+    argument. A stored payload is the way a claim about a source that was
+    never there actually arrives — nobody types one."""
+    from engcore.scientific.results.provenance import ProvenanceRecord
+
+    payload = _provenance(run_id="r", parent_run_id="p").to_dict()
+    assert ProvenanceRecord.from_dict(payload).parent_run_id == "p"
+
+    payload["parent_run_id"] = payload["run_id"]
+    with pytest.raises(ScientificCoreError, match="its own source"):
+        ProvenanceRecord.from_dict(payload)
+
+
+def test_derived_refuses_a_lineage_claim_it_knows_is_false():
+    """`derived` means "a child of THIS record", so it HOLDS the truth about
+    the parent — and it was letting a caller overwrite that truth with any
+    string at all. This is the one existence claim a record can check by
+    itself, because the source is the object the method was called on."""
+    base = _provenance(run_id="parent-1")
+    child = base.derived("child-1")
+    assert child.parent_run_id == "parent-1"
+
+    with pytest.raises(ScientificCoreError, match="does not have"):
+        base.derived("child-2", parent_run_id="a-run-that-never-was")
+
+    # Restating the truth is not a false claim, so it is allowed.
+    assert base.derived("child-3", parent_run_id="parent-1").parent_run_id == (
+        "parent-1"
+    )
+
+
+def test_the_existence_check_is_opt_in_and_says_so():
+    """The honest limit. Existence is not a property of this record — the
+    module collects nothing on its own, by an explicit position — so only a
+    caller holding the set of runs can answer it, and only a caller can ask.
+
+    This one IS opt-in, and no shipped path calls it: every production
+    lineage claim in this repository is taken from a record already in hand
+    (`resistor_body.py` and `multirotor/study.py` both pass the `run_id` of a
+    result they are holding), so it would never fire there. Recorded as a
+    limit rather than presented as enforcement.
+    """
+    record = _provenance(run_id="child", parent_run_id="parent-1")
+    record.require_sources_exist({"parent-1", "other"})
+
+    with pytest.raises(ScientificCoreError, match="never there"):
+        record.require_sources_exist({"other"})
+
+    # A record with no parent claims no source, so there is nothing to check.
+    _provenance(run_id="orphan").require_sources_exist(set())
+
+    # And the claim about the shipped paths is measured, not asserted.
+    root = pathlib.Path(__file__).resolve().parents[1] / "src" / "engcore"
+    callers = [
+        path.relative_to(root).as_posix()
+        for path in root.rglob("*.py")
+        if "require_sources_exist" in path.read_text(encoding="utf-8")
+    ]
+    assert callers == ["scientific/results/provenance.py"], callers
+
+
 _INFLUENCE = """
 import json
 from engcore.scientific.units.quantity import registry, Quantity

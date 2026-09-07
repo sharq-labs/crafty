@@ -210,6 +210,48 @@ MUTATIONS: tuple[Mutation, ...] = (
         ),
         why="a SECOND acceptance rule that looks equivalent and is not — json.dumps refuses the Enum that encode accepts",
     ),
+    # ---- TASK 5, claims about sources --------------------------------
+    Mutation(
+        name="record-may-be-its-own-source",
+        path="src/engcore/scientific/results/provenance.py",
+        old="            if parent == run_id:\n",
+        new="            if False:\n",
+        breaks=(
+            "tests/test_core_mechanisms.py::test_a_record_cannot_claim_a_source_it_can_see_is_not_there",
+            "tests/test_core_mechanisms.py::test_the_refusal_is_reachable_through_deserialization",
+        ),
+        why="a provenance record deriving from itself — a source that cannot have existed first",
+    ),
+    Mutation(
+        name="blank-lineage-claim-permitted",
+        path="src/engcore/scientific/results/provenance.py",
+        old="            if not parent:\n",
+        new="            if False:\n",
+        breaks=(
+            "tests/test_core_mechanisms.py::test_a_record_cannot_claim_a_source_it_can_see_is_not_there",
+        ),
+        why="a lineage claim naming nothing, indistinguishable in meaning from None but not in the record",
+    ),
+    Mutation(
+        name="derived-accepts-a-false-parent",
+        path="src/engcore/scientific/results/provenance.py",
+        old='        if "parent_run_id" in overrides and overrides["parent_run_id"] != self.run_id:\n',
+        new="        if False:\n",
+        breaks=(
+            "tests/test_core_mechanisms.py::test_derived_refuses_a_lineage_claim_it_knows_is_false",
+        ),
+        why="the sanctioned API overwriting the one lineage truth it actually holds",
+    ),
+    Mutation(
+        name="existence-check-never-refuses",
+        path="src/engcore/scientific/results/provenance.py",
+        old="        if self.parent_run_id not in known:\n",
+        new="        if False:\n",
+        breaks=(
+            "tests/test_core_mechanisms.py::test_the_existence_check_is_opt_in_and_says_so",
+        ),
+        why="the opt-in check made inert, so a caller that DOES ask gets a false yes",
+    ),
 )
 
 
