@@ -1613,9 +1613,17 @@ def _ext_touched(tree: str) -> list[str]:
 
 
 def test_ext_gate_universal_core_and_the_coupling_package_are_byte_untouched():
-    """Fail condition F1. Two motors, five operating points, four refusals — zero."""
+    """Fail condition F1. Two motors, five operating points, four refusals — zero.
+
+    `CORE-MECHANISMS` is the first milestone whose subject IS the universal
+    core; its files are subtracted from one shared declaration in
+    tests/core_mechanisms_scope.py, which must match the tree exactly in both
+    directions. `src/engcore/coupling/` remains fully covered.
+    """
+    from core_mechanisms_scope import CORE_FILES
+
     for tree in ("src/engcore/scientific/", "src/engcore/coupling/"):
-        assert _ext_touched(tree) == [], tree
+        assert set(_ext_touched(tree)) - CORE_FILES == set(), tree
 
 
 def test_ext_gate_no_pre_existing_domain_or_pack_was_modified():

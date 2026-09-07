@@ -1099,12 +1099,18 @@ _LATER_MILESTONE_ADDITIONS = _COMPOSITE_SYSTEM0_ADDITIONS | _PROPULSION0_ADDITIO
 
 def test_universal_core_coupling_and_the_other_pack_are_untouched():
     """Fail conditions 1 and 2 of the preregistration, with one exception."""
+    # `CORE-MECHANISMS` is the first milestone whose subject IS the universal
+    # core; its files are subtracted from one shared declaration in
+    # tests/core_mechanisms_scope.py, which must match the tree exactly in
+    # both directions. `coupling/` and `fluidthermal/` stay fully covered.
+    from core_mechanisms_scope import CORE_FILES
+
     for path in (
         "src/engcore/scientific/",
         "src/engcore/coupling/",
         "src/engcore/systems/fluidthermal/",
     ):
-        assert _diff(path) == "", path
+        assert set(_diff(path).split()) - CORE_FILES == set(), path
     assert set(_diff("src/engcore/domains/").split()) - (
         _LATER_MILESTONE_ADDITIONS
     ) == {_RCE_REPAIR}
@@ -1163,10 +1169,12 @@ def test_exactly_three_pre_existing_source_files_were_edited():
             cwd=str(REPO_ROOT), capture_output=True, text=True, check=True,
         ).stdout.split()
     )
+    from core_mechanisms_scope import CORE_FILES
+
     edited = {
         path for path in changed
         if not any(path.startswith(tree) for tree in NEW_TREES)
-    } - _LATER_MILESTONE_ADDITIONS
+    } - _LATER_MILESTONE_ADDITIONS - CORE_FILES
     assert edited == {
         # the additive execution seam
         "src/engcore/systems/electrothermal/coupled.py",

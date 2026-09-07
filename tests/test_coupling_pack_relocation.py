@@ -125,12 +125,22 @@ def _string_literals(source: str) -> set[str]:
 # =====================================================================
 
 def test_r_universal_core_is_untouched():
-    """Prereg §4 and §18 F6. Predicted 0 files; loudly reported otherwise."""
-    changed = subprocess.run(
+    """Prereg §4 and §18 F6. Predicted 0 files; loudly reported otherwise.
+
+    Reads ``git diff <this milestone's own baseline> HEAD``, so it fails for
+    every LATER milestone that changes the core however correct that work is.
+    `CORE-MECHANISMS` is the first milestone whose subject IS the core, and its
+    files are subtracted from one shared declaration in
+    ``tests/core_mechanisms_scope.py`` — which must match the tree exactly in
+    both directions, so a stray core edit is still loud here.
+    """
+    from core_mechanisms_scope import CORE_FILES
+
+    changed = set(subprocess.run(
         ["git", "diff", "--name-only", BASELINE, "--", "src/engcore/scientific/"],
         cwd=REPO_ROOT, capture_output=True, text=True, check=True,
-    ).stdout.strip()
-    assert changed == "", changed
+    ).stdout.split()) - CORE_FILES
+    assert changed == set(), sorted(changed)
 
 
 def test_r2_no_coupling_name_was_promoted_into_core():

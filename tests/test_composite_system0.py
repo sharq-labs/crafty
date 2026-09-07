@@ -1513,6 +1513,13 @@ def test_t6e_the_new_modules_hold_no_untyped_property_dictionary():
         ), f"{path} carries an untyped mapping field"
 
 
+#: `CORE-MECHANISMS`'s universal-core scope, imported rather than copied. It
+#: is a claim, not a licence: `test_core_mechanisms.py` requires it to match
+#: the tree exactly in both directions, so a name parked here that nothing
+#: changed fails just as loudly as an undeclared core edit.
+from core_mechanisms_scope import CORE_FILES as _CORE_MECHANISMS_CORE_FILES
+
+
 def test_t6f_the_working_tree_changed_only_where_the_prereg_said_it_would():
     """Nothing outside the allowed set moved.
 
@@ -1633,7 +1640,24 @@ def test_t6f_the_working_tree_changed_only_where_the_prereg_said_it_would():
         # unquoted Windows path to `shlex.split`. Named individually, as above.
         "tests/test_executable_scientific_spec.py",
         "tests/test_api_mcp_v0_transports.py",
+        # ...and `CORE-MECHANISMS`, the eighth milestone to need this repair
+        # and the first whose subject IS the universal core: six mechanisms
+        # that are silently in all five domains and in the sixth nobody has
+        # written. The universal-core files are NOT listed here individually —
+        # they are declared once in `tests/core_mechanisms_scope.py`, which
+        # must match the tree exactly in both directions, and that module is
+        # what this entry admits.
+        "tests/core_mechanisms_scope.py",
+        "tests/test_core_mechanisms.py",
+        "tests/mutation_guards.py",
+        "tests/test_mutation_guards.py",
+        "tests/test_coupling_pack_relocation.py",
+        "tests/systems/fluidthermal/test_ft_coupling_records.py",
+        "tests/test_propulsion0.py",
+        "tests/test_propulsion0_ext.py",
+        "docs/evidence/core-mechanisms-evidence.md",
     }
+    allowed |= _CORE_MECHANISMS_CORE_FILES
     stray = sorted(set(diff) - allowed)
     assert not stray, f"files changed outside the preregistered set: {stray}"
 

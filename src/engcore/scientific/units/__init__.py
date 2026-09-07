@@ -6,6 +6,8 @@ from .quantity import (
     dimensionality,
     normalize_unit,
     registry,
+    require_pristine_registry,
+    units_fingerprint,
 )
 from .validation import (
     check_unit_map,
@@ -20,6 +22,8 @@ __all__ = [
     "dimensionality",
     "normalize_unit",
     "registry",
+    "require_pristine_registry",
+    "units_fingerprint",
     "check_unit_map",
     "require_expected_dimension",
     "require_same_dimension",

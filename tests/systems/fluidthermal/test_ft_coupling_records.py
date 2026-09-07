@@ -571,13 +571,19 @@ def _diff(path: str) -> str:
 
 def test_universal_core_was_not_touched_by_this_milestone():
     """§9's hard ceiling. Zero files changed under ``src/engcore/scientific``."""
+    # `CORE-MECHANISMS` is the first milestone whose subject IS the universal
+    # core; its files are subtracted from one shared declaration in
+    # tests/core_mechanisms_scope.py, which must match the tree exactly in
+    # both directions. A stray core edit is still loud here.
+    from core_mechanisms_scope import CORE_FILES
+
     base = "6caa11395b1033802ab101b2c024857bff0ae305"
-    changed = subprocess.run(
+    changed = set(subprocess.run(
         ["git", "diff", "--name-only", base, "--", "src/engcore/scientific/"],
         cwd=REPO_ROOT, capture_output=True, text=True, check=True,
-    ).stdout.strip()
-    assert changed == "", changed
-    assert _diff("src/engcore/scientific/") == ""
+    ).stdout.split()) - CORE_FILES
+    assert changed == set(), sorted(changed)
+    assert set(_diff("src/engcore/scientific/").split()) - CORE_FILES == set()
 
 
 #: The commit at which `ET-VERTICAL` minted the coupling machinery inside the

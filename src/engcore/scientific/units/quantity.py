@@ -25,18 +25,167 @@ Invariants:
 
 from __future__ import annotations
 
+import hashlib
 import math
 from dataclasses import dataclass
 from typing import Any, Mapping
 
 import pint
 
-from ..errors import UnitCompatibilityError
+from ..errors import UnitCompatibilityError, UnitRegistryFrozen
 from ..serialization import require_schema, schema_string
 
 QUANTITY_SCHEMA = schema_string("quantity")
 
 _REGISTRY: pint.UnitRegistry | None = None
+
+#: Fingerprint of the registry's definitional content, taken at seal time.
+_SEALED_FINGERPRINT: str | None = None
+
+#: The definition OBJECTS themselves, at seal time.
+#:
+#: Compared by VALUE, and the reason is measured rather than assumed: pint
+#: legitimately *rebinds* an existing name during ordinary lazy expansion —
+#: parsing ``kg/m**3`` replaces ``_units['kilogram']`` with a new but
+#: value-equal ``UnitDefinition``. Comparing by identity therefore fires on
+#: correct arithmetic. A real redefinition is not value-equal (redefining
+#: ``millivolt`` changes ``ScaleConverter(scale=0.001)`` to ``scale=1e-06``),
+#: so equality separates the two exactly.
+#:
+#: Holding the objects rather than a rendering of them is only sound because
+#: pint's three definition types are frozen dataclasses — an in-place change
+#: would otherwise move both sides of the comparison at once. That premise is
+#: asserted by the accompanying test, not assumed.
+_SEALED_OBJECTS: dict[str, dict[str, Any]] | None = None
+
+#: Name-shape rules identifying an entry point that can change what a unit
+#: MEANS. Derived by matching against ``dir(registry)`` rather than written out
+#: as a list of method names, so a mutator introduced by a future pint release
+#: is sealed the moment it appears instead of the moment somebody remembers it.
+#: A guard from a hand-maintained list guards only what someone remembered.
+_MUTATOR_PREFIXES = (
+    "define",
+    "_define",
+    "_redefine",
+    "load_definitions",
+    "_add_",
+    "add_",
+    "remove_",
+    "enable_",
+    "disable_",
+    "set_",
+    "_switch_",
+)
+
+#: Members whose names match the shapes above but which change no definition.
+#:
+#: An over-broad sweep fails LOUDLY — it breaks ordinary arithmetic, which is
+#: how ``_add_ref_of_log_or_offset_unit`` was found: sealing it broke every
+#: degC and log-unit conversion in the suite. That is the correct direction to
+#: be wrong in, and it is why the sweep is a shape rule with named exceptions
+#: rather than a list of known mutators. A missed mutator would be silent.
+#:
+#: Each exception was decided by reading pint's source, not by its name:
+#: ``_add_ref_of_log_or_offset_unit`` (pint/facets/nonmultiplicative/registry.py)
+#: reads ``self._units[offset_unit]`` and RETURNS a ``UnitsContainer``. The
+#: "add" is to that container — a value — not to the registry. It writes
+#: nothing.
+_NOT_MUTATORS = frozenset({
+    "define",  # replaced explicitly below, not by the prefix sweep
+    "_add_ref_of_log_or_offset_unit",
+})
+
+
+def _mutator_names(reg: pint.UnitRegistry) -> tuple[str, ...]:
+    """Every attribute of ``reg`` whose name has the shape of a mutator."""
+    found = []
+    for name in dir(reg):
+        if not any(name.startswith(p) for p in _MUTATOR_PREFIXES):
+            continue
+        try:
+            if not callable(getattr(reg, name)):
+                continue
+        except Exception:  # pragma: no cover - defensive: pint lazy attributes
+            continue
+        found.append(name)
+    return tuple(sorted(found))
+
+
+#: The definitional tables that decide what a unit means.
+_DEFINITION_TABLES = ("_units", "_prefixes", "_dimensions")
+
+
+def _definitions(reg: pint.UnitRegistry) -> dict[str, dict[str, Any]]:
+    """``{table: {name: definition object}}`` — the content, not a count.
+
+    A count is blind to the dangerous case: *redefining* an existing unit
+    leaves the number of units unchanged and changes every conversion that
+    uses it. Measured on pint 0.25.3 — redefining ``millivolt`` turns
+    ``1 V -> 1000 mV`` into ``1 V -> 1000000 mV``.
+    """
+    return {
+        table: {str(key): value for key, value in getattr(reg, table, {}).items()}
+        for table in _DEFINITION_TABLES
+    }
+
+
+def _digest_of(definitions: Mapping[str, Mapping[str, Any]]) -> str:
+    digest = hashlib.sha256()
+    for table in _DEFINITION_TABLES:
+        digest.update(table.encode("utf-8"))
+        entries = definitions.get(table, {})
+        for key in sorted(entries):
+            digest.update(key.encode("utf-8"))
+            digest.update(b"\x00")
+            digest.update(repr(entries[key]).encode("utf-8"))
+            digest.update(b"\x01")
+    return digest.hexdigest()
+
+
+def units_fingerprint() -> str:
+    """Stable digest of the sealed definitional content.
+
+    Taken once, at seal time, over the definitions pint loaded from its own
+    files. It does **not** move as a process runs, so it is safe to record in
+    provenance: two runs that report the same fingerprint were computed under
+    the same unit algebra.
+    """
+    registry()  # ensure sealed
+    assert _SEALED_FINGERPRINT is not None
+    return _SEALED_FINGERPRINT
+
+
+def _seal(reg: pint.UnitRegistry) -> pint.UnitRegistry:
+    """Refuse every route by which ``reg``'s definitions could change.
+
+    Sealing is applied to the *instance*, not to a wrapper, because pint hands
+    the registry back out: ``registry().Quantity(1, "V")._REGISTRY`` is the
+    real object. A proxy would be bypassed by any code holding a quantity — and
+    every quantity this module returns held one.
+    """
+
+    def _refuse(name: str):
+        def refuse(*_args: Any, **_kwargs: Any):
+            raise UnitRegistryFrozen(
+                f"the Scientific Core unit registry is sealed; "
+                f"{name}() would change what a unit means for every "
+                f"calculation in this process, including ones that have "
+                f"already reported an answer. Units are declared once, at "
+                f"import; there is no supported runtime redefinition."
+            )
+        return refuse
+
+    for name in _mutator_names(reg):
+        if name in _NOT_MUTATORS:
+            continue
+        try:
+            object.__setattr__(reg, name, _refuse(name))
+        except Exception:  # pragma: no cover - read-only descriptor
+            pass
+    # `define` is sealed by name rather than by sweep so that the single most
+    # important route is never dependent on the shape rule matching.
+    object.__setattr__(reg, "define", _refuse("define"))
+    return reg
 
 
 def registry() -> pint.UnitRegistry:
@@ -45,11 +194,93 @@ def registry() -> pint.UnitRegistry:
     Deliberately *not* pint's application registry: that is process-global and
     mutable by any co-resident library, which would make our dimensional
     guarantees depend on unrelated code.
+
+    **The registry is sealed on construction and never changes afterwards.**
+    That is the answer to "two runs share one registry": isolation is only
+    needed when state can change, and here it cannot, so a shared registry is
+    observationally identical to a per-run one — unit algebra over a fixed
+    definition set is a pure function of ``(magnitude, unit string)``. The
+    alternative, a fresh registry per run, was measured at **101.8 ms** each
+    and buys nothing that sealing does not already give.
+
+    The cost of this choice is real and is stated here rather than discovered
+    later: a domain that needs a unit pint does not define cannot add one at
+    runtime. It must be declared here, before the seal, where it is reviewable
+    and applies to every run identically.
     """
-    global _REGISTRY
+    global _REGISTRY, _SEALED_FINGERPRINT, _SEALED_OBJECTS
     if _REGISTRY is None:
-        _REGISTRY = pint.UnitRegistry()
+        built = pint.UnitRegistry()
+        _SEALED_OBJECTS = _definitions(built)
+        _SEALED_FINGERPRINT = _digest_of(_SEALED_OBJECTS)
+        _REGISTRY = _seal(built)
     return _REGISTRY
+
+
+def _unexplained_changes(reg: pint.UnitRegistry) -> tuple[str, ...]:
+    """Every difference from the sealed baseline that is not pint's own lazy
+    materialization of a prefixed unit.
+
+    pint creates ``millivolt`` in ``_units`` the first time anything asks for
+    it, from the sealed prefix ``milli`` and the sealed unit ``volt``. That is
+    an expansion of sealed content, not a new definition, and it is the only
+    difference an untouched registry ever shows — measured across 22 prefixed
+    and symbol forms, every one of which decomposed. Anything that does *not*
+    decompose that way was put there by something other than pint's reader.
+    """
+    assert _SEALED_OBJECTS is not None
+    problems: list[str] = []
+    for table in _DEFINITION_TABLES:
+        sealed = _SEALED_OBJECTS[table]
+        now = getattr(reg, table, {})
+        for name, definition in sealed.items():
+            try:
+                current = now[name]
+            except KeyError:
+                problems.append(f"{table}: {name!r} was removed")
+                continue
+            # Equality, not identity. pint rebinds `kilogram` with a new but
+            # value-equal definition while parsing `kg/m**3`, so identity
+            # would fire on correct arithmetic; a real redefinition changes
+            # the converter and is not equal. See _SEALED_OBJECTS.
+            if current != definition:
+                problems.append(f"{table}: {name!r} was redefined")
+    prefixes = [p for p in _SEALED_OBJECTS["_prefixes"] if p]
+    sealed_units = _SEALED_OBJECTS["_units"]
+    for name in set(map(str, getattr(reg, "_units", {}))) - set(sealed_units):
+        if not any(
+            name.startswith(p) and name[len(p):] in sealed_units for p in prefixes
+        ):
+            problems.append(f"_units: {name!r} was defined after sealing")
+    for table in ("_prefixes", "_dimensions"):
+        added = set(map(str, getattr(reg, table, {}))) - set(_SEALED_OBJECTS[table])
+        problems.extend(f"{table}: {name!r} was defined after sealing" for name in added)
+    return tuple(sorted(problems))
+
+
+def require_pristine_registry(*, context: str = "") -> None:
+    """Refuse to proceed if the registry's definitions have moved.
+
+    :func:`_seal` refuses every *call* that could change a definition. This
+    refuses on the *content*, and so does not care how a change arrived — a
+    route the shape rule failed to match, a direct write into ``reg._units``, a
+    future pint internal. It is the difference between a guard that knows the
+    ways in and a guard that knows the answer.
+
+    Called at the execution boundary, this is what makes "two runs in one
+    process cannot influence each other's arithmetic" enforced rather than
+    hoped: run two is refused before it computes, not audited after it
+    reported.
+    """
+    problems = _unexplained_changes(registry())
+    if problems:
+        prefix = f"{context}: " if context else ""
+        raise UnitRegistryFrozen(
+            f"{prefix}the unit registry's definitions changed after it was "
+            f"sealed: {'; '.join(problems)}. Every quantity computed in this "
+            f"process is now of unknown meaning; this run is refused rather "
+            f"than reported."
+        )
 
 
 def normalize_unit(unit: str) -> str:

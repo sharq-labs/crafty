@@ -1323,9 +1323,17 @@ def _touched(tree: str) -> list[str]:
 
 
 def test_gate_universal_core_and_the_coupling_package_are_byte_untouched():
-    """Fail condition F2, read from git and from the working tree."""
+    """Fail condition F2, read from git and from the working tree.
+
+    `CORE-MECHANISMS` is the first milestone whose subject IS the universal
+    core; its files are subtracted from one shared declaration in
+    tests/core_mechanisms_scope.py, which must match the tree exactly in both
+    directions. `src/engcore/coupling/` remains fully covered.
+    """
+    from core_mechanisms_scope import CORE_FILES
+
     for tree in ("src/engcore/scientific/", "src/engcore/coupling/"):
-        assert _touched(tree) == [], tree
+        assert set(_touched(tree)) - CORE_FILES == set(), tree
 
 
 def test_gate_no_pre_existing_domain_or_pack_was_modified():

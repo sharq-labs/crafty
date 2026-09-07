@@ -64,3 +64,15 @@ class DuplicateRegistrationError(ScientificCoreError):
 class ScientificValidationError(ScientificCoreError):
     """A validation report is malformed, or claims a validation level that was
     not actually established by a passing check."""
+
+
+class UnitRegistryFrozen(ScientificCoreError):
+    """Something tried to change the unit registry's definitions.
+
+    Deliberately its own class rather than a :class:`UnitCompatibilityError`:
+    "these two units do not match" is a fact about one calculation, and a
+    caller can reasonably handle it. "the meaning of a unit was changed
+    underneath a process" is a fact about *every* calculation in that process,
+    including ones that already finished, and the only correct handling is to
+    stop. See :mod:`engcore.scientific.units.quantity`.
+    """

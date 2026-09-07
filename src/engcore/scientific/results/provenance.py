@@ -20,7 +20,7 @@ from ..ir.problem import ModelReference
 from ..realizations.definition import RealizationReference
 from ..serialization import require_schema, require_schema_any, schema_string
 from ..solvers.protocol import SolverIdentity
-from ..units.quantity import Quantity
+from ..units.quantity import Quantity, require_pristine_registry
 
 #: Bumped for ``bindings``. A record carrying only participant *sets* cannot
 #: state which realization computed which model on which solver once any of
@@ -177,6 +177,15 @@ class ProvenanceRecord:
         if not run_id:
             raise ScientificCoreError("provenance requires a non-empty run_id")
         object.__setattr__(self, "run_id", run_id)
+
+        # The unit algebra this run was computed under must still be the one
+        # the process was sealed with. Checked HERE, and not at the API
+        # boundary, because this is the only place every run passes through:
+        # provenance is mandatory on every ScientificResult, so a domain
+        # cannot opt out of this check by not calling something, and the
+        # sixth domain nobody has written yet inherits it without knowing it
+        # exists. Measured at 216 us per record.
+        require_pristine_registry(context=f"provenance {run_id!r}")
 
         models = tuple((str(a), str(b)) for a, b in self.models)
         solvers = tuple((str(a), str(b)) for a, b in self.solvers)

@@ -38,6 +38,7 @@ from .errors import (
     ScientificValidationError,
     SolverNotFoundError,
     UnitCompatibilityError,
+    UnitRegistryFrozen,
 )
 from .capabilities import (
     ScientificCapability,
@@ -141,7 +142,14 @@ from .solvers import (
     SolverSettings,
 )
 from .twins import ScientificTwin, TwinDatum, TwinDatumRole, TwinKind, TwinReference
-from .units import Quantity, coerce_quantity, dimensionality, normalize_unit
+from .units import (
+    Quantity,
+    coerce_quantity,
+    dimensionality,
+    normalize_unit,
+    require_pristine_registry,
+    units_fingerprint,
+)
 
 SCIENTIFIC_CORE_VERSION = "0.1.0-v0-foundation"
 
@@ -151,6 +159,7 @@ __all__ = [
     "ScientificCoreError",
     "InvalidScientificProblem",
     "UnitCompatibilityError",
+    "UnitRegistryFrozen",
     "ModelNotFoundError",
     "ModelValidityError",
     "SolverNotFoundError",
@@ -165,6 +174,8 @@ __all__ = [
     "coerce_quantity",
     "dimensionality",
     "normalize_unit",
+    "require_pristine_registry",
+    "units_fingerprint",
     # ir
     "ScientificProblem",
     "ScientificVariable",
