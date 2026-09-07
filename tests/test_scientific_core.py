@@ -956,11 +956,17 @@ def test_validation_level_requires_a_passing_check():
     )
     assert not failed.claims(ValidationLevel.BENCHMARK_VALIDATED)
 
+    # The passing check now has to carry what it claims agreement with.
+    # CORE-MECHANISMS: a PASSING check establishing a quantitative level must
+    # bring a residual against a tolerance, or named evidence. The two
+    # non-passing constructions above are unchanged and still legal — they
+    # record what was ATTEMPTED, which is not the same as a claim.
     passed = ValidationReport(
         checks=(
             ValidationCheck(
                 "benchmark", ValidationOutcome.PASS,
                 establishes=ValidationLevel.BENCHMARK_VALIDATED,
+                evidence=("NIST SRM 1234 case 3",),
             ),
         )
     )

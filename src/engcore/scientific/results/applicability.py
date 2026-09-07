@@ -2,9 +2,12 @@
 
 A result says what was computed. This says whether the model it was computed
 with was *applicable to the case it was computed for* — a different claim, and
-one that four of the five shipped paths were making nowhere. The CSTR solver
-computed a full :class:`ValidityAssessment`, rendered ``assessment.status.value``
-into a free-text note, and dropped the rest on the floor.
+one that four of the five shipped paths were making nowhere. One of them
+computed a full :class:`ValidityAssessment`, rendered
+``assessment.status.value`` into a free-text note, and dropped the condition
+names on the floor; the measurement is in
+``docs/evidence/core-mechanisms-evidence.md``, which is where a domain may be
+named and this module may not.
 
 **Why this is in the core rather than in four domains.** Four domains omitted
 it because the core permitted omission. A fifth would omit it for the same

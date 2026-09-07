@@ -1668,6 +1668,13 @@ def test_t6f_the_working_tree_changed_only_where_the_prereg_said_it_would():
         "tests/test_hostile_core_domain_stress.py",
         "tests/test_min_cross_domain_foundation.py",
         "tests/test_min_foundation_electrothermal.py",
+        # TASK 3 installs the evidentiary rule the constructor never had, and
+        # surfaced two records in the suite that could not survive it: a
+        # passing benchmark check claiming a level with nothing attached, and
+        # a helper that rebuilt every check from four fields and silently
+        # dropped residual, tolerance and evidence from all of them.
+        "tests/test_scientific_core.py",
+        "tests/test_admission_gate_repair.py",
     }
     allowed |= _CORE_MECHANISMS_CORE_FILES
     allowed |= _CORE_MECHANISMS_DOMAIN_FILES

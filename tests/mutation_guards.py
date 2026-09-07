@@ -136,6 +136,48 @@ MUTATIONS: tuple[Mutation, ...] = (
         ),
         why="the original defect restored: the verdict computed, rendered into a note, and dropped",
     ),
+    # ---- TASK 3, every route into a ValidationCheck -----------------
+    Mutation(
+        name="unbacked-level-claim-permitted",
+        path="src/engcore/scientific/results/validation.py",
+        old="            and self.establishes.value in _LEVELS_REQUIRING_BACKING\n",
+        new="            and False\n",
+        breaks=(
+            "tests/test_core_mechanisms.py::test_a_passing_check_cannot_claim_a_level_it_cannot_back",
+        ),
+        why="the route the task names, reopened: an evidentiary claim with nothing attached",
+    ),
+    Mutation(
+        name="copy-launders-a-check",
+        path="src/engcore/scientific/results/validation.py",
+        old="    def __reduce__(self):\n",
+        new="    def _disabled__reduce__(self):\n",
+        breaks=(
+            "tests/test_core_mechanisms.py::test_the_enumeration_of_routes_into_a_validation_check_is_complete",
+            "tests/test_core_mechanisms.py::test_copy_cannot_launder_a_check_past_the_rule",
+        ),
+        why="copy/deepcopy/pickle rebuilding a frozen record without running one rule",
+    ),
+    Mutation(
+        name="self-contradicting-pass-permitted",
+        path="src/engcore/scientific/results/validation.py",
+        old="            and not (self.residual <= self.tolerance)\n",
+        new="            and False\n",
+        breaks=(
+            "tests/test_core_mechanisms.py::test_a_passing_check_cannot_contradict_its_own_tolerance",
+        ),
+        why="a PASS whose residual exceeds its own bound",
+    ),
+    Mutation(
+        name="report-accepts-a-non-check",
+        path="src/engcore/scientific/results/validation.py",
+        old="            if not isinstance(check, ValidationCheck):\n",
+        new="            if False:\n",
+        breaks=(
+            "tests/test_core_mechanisms.py::test_the_report_refuses_a_non_check_for_a_stated_reason",
+        ),
+        why="route 7 back to refusing only incidentally, via AttributeError",
+    ),
 )
 
 

@@ -109,13 +109,17 @@ def _withhold(report: ValidationReport, name: str) -> ValidationReport:
     assert any(c.name == name for c in report.checks), (
         f"{name!r} is not emitted by this solver; the test is testing nothing"
     )
+    # `dataclasses.replace`, not a rebuild from four fields. The rebuild
+    # silently dropped `residual`, `tolerance` and `evidence` from EVERY
+    # check, not just the withheld one — so this helper claimed to change one
+    # outcome and was actually stripping the quantitative backing off all six.
+    # Surfaced by CORE-MECHANISMS' evidentiary rule, which refuses a passing
+    # check that establishes a level with nothing attached.
     return ValidationReport(
         checks=tuple(
-            ValidationCheck(
-                name=c.name,
+            dataclasses.replace(
+                c,
                 outcome=ValidationOutcome.NOT_RUN if c.name == name else c.outcome,
-                detail=c.detail,
-                establishes=c.establishes,
             )
             for c in report.checks
         ),

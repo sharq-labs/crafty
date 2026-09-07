@@ -46,6 +46,24 @@ class ValidationOutcome(str, Enum):
     NOT_RUN = "not_run"
 
 
+#: Levels whose claim is *quantitative* — "the numbers agree to within
+#: something" — and which therefore cannot be established by a check that
+#: carries no comparison and names no artefact.
+#:
+#: ``DIMENSIONALLY_VALID`` is deliberately NOT in this set: dimensional
+#: consistency is established by the check having run and passed, and there is
+#: no residual to report because it is not a numerical claim. ``UNVERIFIED``
+#: claims nothing. Every other level asserts agreement with something, and an
+#: assertion of agreement with nothing attached is the defect this guards.
+_LEVELS_REQUIRING_BACKING: frozenset[str] = frozenset({
+    "numerically_converged",
+    "analytically_verified",
+    "benchmark_validated",
+    "cross_solver_validated",
+    "experimentally_validated",
+})
+
+
 class ValidationLevel(str, Enum):
     """What has been established, in increasing evidentiary strength.
 
@@ -88,6 +106,69 @@ class ValidationCheck:
         if self.tolerance is not None:
             object.__setattr__(self, "tolerance", float(self.tolerance))
 
+        # ---- the evidentiary rule -----------------------------------
+        #
+        # Before CORE-MECHANISMS there was NO rule here on any axis: a check
+        # could claim `establishes=BENCHMARK_VALIDATED` while carrying no
+        # residual, no tolerance and no evidence, and `attained_levels` would
+        # report `benchmark_validated`. Every shipped producer already obeyed
+        # both rules below by hand — the convention existed and nothing
+        # enforced it, which is the difference between a habit and a contract.
+        # Scoped to a PASSING check, and deliberately so. A stronger form —
+        # forbidding `establishes` on any non-passing check — was written
+        # first and backed out: on a NOT_RUN or FAIL check the field records
+        # *what was attempted*, and "we tried to establish benchmark
+        # validation and could not" is genuinely different from "we never
+        # tried". Only a passing check reaches `attained_levels`, so only a
+        # passing check can make an unbacked claim count.
+        if (
+            self.establishes is not None
+            and self.outcome is ValidationOutcome.PASS
+            and self.establishes.value in _LEVELS_REQUIRING_BACKING
+            and not (
+                (self.residual is not None and self.tolerance is not None)
+                or bool(self.evidence)
+            )
+        ):
+            raise ScientificValidationError(
+                f"check {self.name!r} passed and claims to establish "
+                f"{self.establishes.value!r}, but carries neither a residual "
+                f"against a tolerance nor any evidence. That level asserts "
+                f"agreement with something; a claim of agreement with nothing "
+                f"attached is not evidence"
+            )
+        if (
+            self.outcome is ValidationOutcome.PASS
+            and self.residual is not None
+            and self.tolerance is not None
+            and not (self.residual <= self.tolerance)
+        ):
+            raise ScientificValidationError(
+                f"check {self.name!r} passed with residual {self.residual!r} "
+                f"above its own tolerance {self.tolerance!r}; a record that "
+                f"contradicts itself is worse than a failing one"
+            )
+
+    # A frozen dataclass is reconstructed by ``copy``, ``deepcopy`` and
+    # ``pickle`` WITHOUT calling ``__init__`` — measured, not assumed — so
+    # every rule above was bypassable by three routes that look like they
+    # copy a record rather than build one. Reconstructing through the
+    # constructor closes all three at once, and any future protocol that
+    # goes through ``__reduce__`` inherits it.
+    def __reduce__(self):
+        return (
+            self.__class__,
+            (
+                self.name,
+                self.outcome,
+                self.detail,
+                self.establishes,
+                self.residual,
+                self.tolerance,
+                self.evidence,
+            ),
+        )
+
     @property
     def passed(self) -> bool:
         return self.outcome is ValidationOutcome.PASS
@@ -127,7 +208,21 @@ class ValidationReport:
     notes: str = ""
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "checks", tuple(self.checks))
+        checks = tuple(self.checks)
+        for check in checks:
+            # Stated, not incidental. This previously refused a non-check only
+            # by accident — the duplicate-name scan below reached `.name` and
+            # raised `AttributeError`, which is not a scientific error, does
+            # not say what is wrong, and would have stopped refusing the day
+            # anything with a `.name` was passed instead.
+            if not isinstance(check, ValidationCheck):
+                raise ScientificValidationError(
+                    f"validation report entries must be ValidationCheck "
+                    f"records, got {type(check).__name__}; a report is what "
+                    f"its checks establish, so an entry that is not a check "
+                    f"establishes nothing and cannot be counted"
+                )
+        object.__setattr__(self, "checks", checks)
         names = [c.name for c in self.checks]
         duplicates = {n for n in names if names.count(n) > 1}
         if duplicates:

@@ -555,6 +555,194 @@ def test_every_result_producer_is_accounted_for():
     }, sorted(silent)
 
 
+# =====================================================================
+# TASK 3 — every route into a ValidationCheck
+#
+# The task's premise was that `record_check` bypassed a constructor rule
+# called GUARD 2. Neither exists in this repository: there is no
+# `record_check`, and the constructor enforced NO evidentiary rule on ANY
+# axis. So the guard that was "complete on one axis" was complete on none,
+# and the work is to install the rule and cover every route at once.
+#
+# THE ENUMERATION, measured rather than reasoned about:
+#
+#   1. ValidationCheck(...)              __post_init__ ran
+#   2. ValidationCheck.from_dict(...)    __post_init__ ran (delegates to 1)
+#   3. dataclasses.replace(...)          __post_init__ ran (calls __init__)
+#   4. copy.copy(...)                    DID NOT RUN  -> closed by __reduce__
+#   5. copy.deepcopy(...)                DID NOT RUN  -> closed by __reduce__
+#   6. pickle round-trip                 DID NOT RUN  -> closed by __reduce__
+#   7. ValidationReport(checks=(...))    accepted a non-check, refusing it
+#                                        only incidentally via AttributeError
+#   8. ValidationReport.with_check(...)  takes an already-built check (1-6)
+#   9. object.__new__ + object.__setattr__   reachable by NO construction
+#                                        rule; this is vandalism, not a route
+# =====================================================================
+
+
+def test_the_enumeration_of_routes_into_a_validation_check_is_complete():
+    """Routes 1-6: every one now goes through the constructor.
+
+    4, 5 and 6 did not, and that is the finding: three routes that look like
+    they COPY a record rather than build one, each of which reconstructed a
+    frozen dataclass without running a single rule.
+    """
+    import dataclasses
+    import pickle
+    from engcore.scientific.results.validation import (
+        ValidationCheck, ValidationLevel, ValidationOutcome,
+    )
+
+    ran: list[str] = []
+    original = ValidationCheck.__post_init__
+
+    def spy(self):
+        ran.append(self.name)
+        original(self)
+
+    good = ValidationCheck(
+        name="c", outcome=ValidationOutcome.PASS,
+        establishes=ValidationLevel.NUMERICALLY_CONVERGED,
+        residual=1e-12, tolerance=1e-9,
+    )
+    ValidationCheck.__post_init__ = spy
+    try:
+        routes = {
+            "constructor": lambda: ValidationCheck(name="x", outcome="pass"),
+            "from_dict": lambda: ValidationCheck.from_dict(good.to_dict()),
+            "replace": lambda: dataclasses.replace(good, name="y"),
+            "copy": lambda: copy.copy(good),
+            "deepcopy": lambda: copy.deepcopy(good),
+            "pickle": lambda: pickle.loads(pickle.dumps(good)),
+        }
+        for label, build in routes.items():
+            before = len(ran)
+            rebuilt = build()
+            assert isinstance(rebuilt, ValidationCheck), label
+            assert len(ran) > before, f"{label} bypassed __post_init__"
+    finally:
+        ValidationCheck.__post_init__ = original
+
+
+def test_copy_cannot_launder_a_check_past_the_rule():
+    """Route 4/5/6, exercised against the rule rather than against a spy.
+
+    A record that could not be constructed must not be reachable by copying
+    one that could — otherwise `copy` is a laundering step.
+    """
+    import pickle
+    from engcore.scientific.errors import ScientificValidationError
+    from engcore.scientific.results.validation import (
+        ValidationCheck, ValidationLevel, ValidationOutcome,
+    )
+
+    backed = ValidationCheck(
+        name="benchmark", outcome=ValidationOutcome.PASS,
+        establishes=ValidationLevel.BENCHMARK_VALIDATED,
+        evidence=("NIST SRM 1234 case 3",),
+    )
+    # Strip the backing behind the constructor's back, exactly as a
+    # __dict__-level copy would have produced before __reduce__ existed.
+    object.__setattr__(backed, "evidence", ())
+    for rebuild in (copy.copy, copy.deepcopy,
+                    lambda c: pickle.loads(pickle.dumps(c))):
+        with pytest.raises(ScientificValidationError, match="not evidence"):
+            rebuild(backed)
+
+
+def test_a_passing_check_cannot_claim_a_level_it_cannot_back():
+    """THE ROUTE THE TASK NAMES. It was open on every axis, not one."""
+    from engcore.scientific.errors import ScientificValidationError
+    from engcore.scientific.results.validation import (
+        ValidationCheck, ValidationLevel, ValidationOutcome, ValidationReport,
+    )
+
+    for level in (
+        ValidationLevel.NUMERICALLY_CONVERGED,
+        ValidationLevel.ANALYTICALLY_VERIFIED,
+        ValidationLevel.BENCHMARK_VALIDATED,
+        ValidationLevel.CROSS_SOLVER_VALIDATED,
+        ValidationLevel.EXPERIMENTALLY_VALIDATED,
+    ):
+        with pytest.raises(ScientificValidationError, match="not evidence"):
+            ValidationCheck(name="claims", outcome=ValidationOutcome.PASS,
+                            establishes=level)
+
+    # Either form of backing satisfies it: a comparison, or named artefacts.
+    ValidationCheck(name="a", outcome=ValidationOutcome.PASS,
+                    establishes=ValidationLevel.NUMERICALLY_CONVERGED,
+                    residual=1e-12, tolerance=1e-9)
+    ValidationCheck(name="b", outcome=ValidationOutcome.PASS,
+                    establishes=ValidationLevel.BENCHMARK_VALIDATED,
+                    evidence=("NIST SRM 1234 case 3",))
+
+    # DIMENSIONALLY_VALID is exempt on purpose: it is not a numerical claim,
+    # and it is established by the check having run and passed.
+    ValidationCheck(name="dimensional_consistency", outcome=ValidationOutcome.PASS,
+                    establishes=ValidationLevel.DIMENSIONALLY_VALID)
+
+    # ...and a residual alone is not a comparison. It needs its bound.
+    with pytest.raises(ScientificValidationError, match="not evidence"):
+        ValidationCheck(name="half", outcome=ValidationOutcome.PASS,
+                        establishes=ValidationLevel.NUMERICALLY_CONVERGED,
+                        residual=1e-12)
+
+
+def test_a_non_passing_check_may_still_record_what_was_attempted():
+    """The capability a stricter rule would have destroyed.
+
+    Forbidding `establishes` on any non-passing check was written first and
+    backed out. "We tried to establish benchmark validation and could not" is
+    genuinely different from "we never tried", and only a PASSING check
+    reaches `attained_levels`, so only a passing check can make an unbacked
+    claim count.
+    """
+    from engcore.scientific.results.validation import (
+        ValidationCheck, ValidationLevel, ValidationOutcome, ValidationReport,
+    )
+
+    for outcome in (ValidationOutcome.NOT_RUN, ValidationOutcome.FAIL):
+        check = ValidationCheck(name="benchmark", outcome=outcome,
+                                establishes=ValidationLevel.BENCHMARK_VALIDATED)
+        report = ValidationReport(checks=(check,))
+        assert not report.claims(ValidationLevel.BENCHMARK_VALIDATED)
+        assert report.attained_levels == frozenset()
+
+
+def test_a_passing_check_cannot_contradict_its_own_tolerance():
+    """A PASS whose residual exceeds its own bound is a self-contradicting
+    record, and worse than a failing one."""
+    from engcore.scientific.errors import ScientificValidationError
+    from engcore.scientific.results.validation import (
+        ValidationCheck, ValidationOutcome,
+    )
+
+    with pytest.raises(ScientificValidationError, match="contradicts itself"):
+        ValidationCheck(name="r", outcome=ValidationOutcome.PASS,
+                        residual=1.0, tolerance=1e-9)
+    # A FAILING check with the same numbers is exactly what a failure looks
+    # like, and is not refused.
+    ValidationCheck(name="r", outcome=ValidationOutcome.FAIL,
+                    residual=1.0, tolerance=1e-9)
+
+
+def test_the_report_refuses_a_non_check_for_a_stated_reason():
+    """Route 7. It refused before — by AttributeError, from a duplicate-name
+    scan reaching `.name`. That is not a scientific error, says nothing about
+    what is wrong, and would have stopped refusing the day anything with a
+    `.name` was passed instead."""
+    from engcore.scientific.errors import ScientificValidationError
+    from engcore.scientific.results.validation import ValidationReport
+
+    class LooksLikeACheck:
+        name = "plausible"
+        outcome = "pass"
+
+    for entry in ("not a check at all", LooksLikeACheck()):
+        with pytest.raises(ScientificValidationError, match="must be ValidationCheck"):
+            ValidationReport(checks=(entry,))
+
+
 _INFLUENCE = """
 import json
 from engcore.scientific.units.quantity import registry, Quantity
