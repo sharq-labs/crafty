@@ -181,7 +181,11 @@ def test_the_boundary_condition_channel_works_and_is_unused_in_production():
     assert len(encoding.problem.boundary_conditions) == 2
     domains = REPO_ROOT / "src" / "engcore" / "domains"
     producers = [
-        str(path.relative_to(REPO_ROOT))
+        # `.as_posix()` rather than `str()`: `str(PurePath)` renders the NATIVE
+        # separator, so this guard compared backslash paths against a POSIX
+        # literal and could not pass on Windows at all. A guard that cannot pass
+        # measures nothing — it is the mirror of one that cannot fail.
+        path.relative_to(REPO_ROOT).as_posix()
         for path in domains.rglob("*.py")
         if "BoundaryCondition(" in path.read_text(encoding="utf-8")
     ]

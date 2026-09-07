@@ -1621,6 +1621,18 @@ def test_t6f_the_working_tree_changed_only_where_the_prereg_said_it_would():
         # untracked working-tree file — was declared. Named here so the count is
         # honest; that milestone is still open.
         "docs/evidence/execution-identity-preregistration.md",
+        # Two read-only architecture studies, present untracked in the working
+        # tree and named here so this guard stops reporting them every run. They
+        # add no source and authorize nothing; study 09 is what produced the
+        # CORE-MECHANISMS finding list.
+        "docs/architecture-study/08_CRAFTY_SELF_AUDIT.md",
+        "docs/architecture-study/09_RUNTIME_TRUST_AI_AUDIT.md",
+        # ...and the two guards `CORE-MECHANISMS` repaired before it could
+        # measure anything, both of which could not PASS on Windows: one
+        # compared `str(PurePath)` against a POSIX literal, the other handed an
+        # unquoted Windows path to `shlex.split`. Named individually, as above.
+        "tests/test_executable_scientific_spec.py",
+        "tests/test_api_mcp_v0_transports.py",
     }
     stray = sorted(set(diff) - allowed)
     assert not stray, f"files changed outside the preregistered set: {stray}"

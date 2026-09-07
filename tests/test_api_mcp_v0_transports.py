@@ -23,6 +23,7 @@ from __future__ import annotations
 import json
 import os
 import pathlib
+import shlex
 import subprocess
 import sys
 import urllib.error
@@ -608,7 +609,13 @@ def sentinel(tmp_path_factory) -> tuple[pathlib.Path, pathlib.Path]:
 def hostile_http(sentinel):
     script, _ = sentinel
     server = _HttpServer(
-        CRAFTY_NGSPICE_ARGV=f"{sys.executable} {script}"
+        # `shlex.join`, not an f-string: the reader is `shlex.split`, whose
+        # POSIX rules treat `\` as an escape and split on spaces. A bare
+        # f-string therefore corrupted every Windows path — and this repo's own
+        # checkout path contains a space — so the sentinel was never launched
+        # and the guard's second half could not pass here. Quoting is the fix;
+        # the production reader is deployment configuration and is unchanged.
+        CRAFTY_NGSPICE_ARGV=shlex.join([sys.executable, str(script)])
     )
     yield server
     server.close()
